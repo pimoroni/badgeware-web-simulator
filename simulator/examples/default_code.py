@@ -1,14 +1,12 @@
-import math
-
 mode(HIRES)
 
 def update():
   # create a flower shape path
   path1 = []
   for i in range(0, 360, 5):
-    scale = (math.sin(((i + io.ticks / 50)) * 5 * math.pi / 180) * (screen.height // 12)) + (screen.height // 4)
-    x = math.sin(i * math.pi / 180) * scale
-    y = math.cos(i * math.pi / 180) * scale
+    scale = (sin(((i + io.ticks / 50)) * 5 * PI / 180) * (screen.height // 12)) + (screen.height // 4)
+    x = sin(i * PI / 180) * scale
+    y = cos(i * PI / 180) * scale
     path1.append(point(x + (screen.width // 2), y + (screen.height // 2)))
 
   # define a simple square "hole" path

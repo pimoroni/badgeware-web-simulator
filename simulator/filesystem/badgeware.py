@@ -1,6 +1,7 @@
 import os
 import gc
 import sys
+import math
 import picovector
 import builtins
 import simulator
@@ -246,6 +247,7 @@ def warning(title, text):
 
 failed = False
 
+
 def _update(update):
     global failed
     if not failed:
@@ -262,5 +264,12 @@ def _update(update):
     simulator.update(screen.width == 320)
 
 
+# Promote some commonly used Badgeware features to builtins
 for k in ("mode", "LORES", "HIRES", "SpriteSheet", "load_font", "rom_font", "clamp", "rnd", "frnd", "_update"):
     setattr(builtins, k, locals()[k])
+
+# Promote some commonly used math functions to builtins
+for k in ("acos", "asin", "atan", "atan2", "ceil", "cos", "degrees", "exp", "fabs", "floor", "fmod", "log", "log", "log10", "log2", "pow", "radians", "sin", "sqrt", "tan"):
+    setattr(builtins, k, getattr(math, k))
+
+setattr(builtins, "PI", math.pi)

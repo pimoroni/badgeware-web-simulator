@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+		<style type="text/css">
+			.badgeware-simulator {
+				border:1px solid #ccc;
+				width: 640px;
+				height: 480px;
+                display: grid;
+                margin-bottom: 1em;
+			}
+			.badgeware-simulator canvas {
+				width: 100%;
+				height: 100%;
+				image-rendering: pixelated;
+				image-rendering: crisp-edges;
+			}
+
+			.badgeware-simulator canvas:focus {
+                outline: 2px solid #c00;
+            }
+            .badgeware-simulator.stdout {
+                grid-template-columns: 640px 320px;
+                grid-template-areas: "canvas stdout";
+                width: calc(640px * 1.5);
+            }
+            .badgeware-simulator.stdout textarea {
+                grid-area: stdout;
+				padding: 1em;
+				border: none;
+            }
+            .badgeware-simulator.stdout canvas {
+                grid-area: canvas;
+            }
+		</style>
+	</head>
+	<body>
+		<div class="badgeware-simulator stdout" code="/simulator/examples/file_test.py" debug="true"></div>
+		<div class="badgeware-simulator" code="/simulator/examples/default_code.py" debug="false"></div>
+		<div class="badgeware-simulator stdout" code="/simulator/examples/another_code.py" debug="false"></div>
+		<div class="badgeware-simulator" code="/simulator/examples/menu.py" debug="false"></div>
+		<script src="/simulator/badgeware.js"></script>
+		<script type="text/javascript">
+			const simulators = [...document.querySelectorAll(".badgeware-simulator")]
+
+			let simulator_promies = Promise.all(simulators.map(async (element) => {
+				// Launch an instance of the simulator
+				let simulator = await BadgewareSimulator(element)
+				element.simulator = simulator
+				const code_file = element.getAttribute("code");
+				await simulator.fetch_and_run(code_file);
+			}));
+		</script>
+	</body>
+</html>

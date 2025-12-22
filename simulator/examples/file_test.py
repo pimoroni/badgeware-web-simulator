@@ -1,5 +1,7 @@
 import os
 
+print(os.listdir("/"))
+
 def update():
     try:
         print(open("/test.py").read())

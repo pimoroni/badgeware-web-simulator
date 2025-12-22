@@ -185,7 +185,7 @@ def mode(mode, force=False):
 
 
 DEFAULT_FONT = rom_font.sins
-ERROR_FONT = rom_font.desert
+ERROR_FONT = rom_font.nope
 
 BG = color.rgb(20, 30, 40)
 FG = color.rgb(255, 255, 255)
@@ -211,7 +211,7 @@ def message(title, text, window=None):
         screen.blit(temp, rect(0, 0, 320, 240))
 
     error_window = window or screen.window(10, 10, screen.width - 20, screen.height - 20)
-    error_window.font = rom_font.vest
+    error_window.font = ERROR_FONT
 
     # Draw a light grey background
     background = shape.rounded_rectangle(

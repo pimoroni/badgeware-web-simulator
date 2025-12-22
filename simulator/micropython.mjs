@@ -634,8 +634,11 @@ function createExportWrapper(name, nargs) {
 var wasmBinaryFile;
 
 function findWasmBinary() {
+  if (Module['locateFile']) {
+    return locateFile('micropython.wasm');
+  }
   // Use bundler-friendly `new URL(..., import.meta.url)` pattern; works in browsers too.
-  return new URL('/simulator/micropython.wasm', import.meta.url).href;
+  return new URL('micropython.wasm', import.meta.url).href;
 }
 
 function getBinarySync(file) {
@@ -3072,7 +3075,9 @@ async function createWasm() {
         FS.currentPath = lookup.path;
       },
   createDefaultDirectories() {
-      // Created from LazyFiles
+        FS.mkdir('/tmp');
+        FS.mkdir('/home');
+        FS.mkdir('/home/web_user');
       },
   createDefaultDevices() {
         // create /dev
@@ -4708,15 +4713,9 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
 var ASM_CONSTS = {
-  200812: ($0) => {
-    let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4)
-    WorkerGlobalScope.worker.flip_hires(data)
-  },
- 200970: ($0) => {
-  let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4)
-  WorkerGlobalScope.worker.flip_lores(data)
-},  
- 201135: () => { return WorkerGlobalScope.worker.input }
+  201084: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
+ 201187: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
+ 201290: () => { return WorkerGlobalScope.worker.input }
 };
 function proxy_convert_mp_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); proxy_convert_js_to_mp_obj_jsside_force_double_proxy(ret, out); }
 function proxy_convert_mp_to_js_then_js_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); const js_obj = PyProxy.toJs(ret); proxy_convert_js_to_mp_obj_jsside(js_obj, out); }

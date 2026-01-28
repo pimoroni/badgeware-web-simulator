@@ -116,6 +116,9 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
           mp.runPython(program)
         } catch (error) {
           mp.runPython(`badgeware.fatal_error("Error loading code...", """${error}""")`)
+          worker.running = true
+          worker.paused = true
+          return
         }
         worker.running = true
         worker.paused = true

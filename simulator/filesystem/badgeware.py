@@ -346,18 +346,6 @@ def message(title, msg, window=None):
     error_window.pen = color.rgb(255, 100, 100, 240)
     error_window.shape(heading)
 
-    error_window.pen = color.rgb(50, 100, 50)
-    tw = 35
-    error_window.shape(
-        shape.rounded_rectangle(
-            error_window.width - tw - 36, error_window.height - 12, tw, 12, 3, 3, 0, 0
-        )
-    )
-
-    error_window.pen = color.rgb(255, 200, 200)
-    error_window.text(
-        "Okay", error_window.width - tw + 5 - 36, error_window.height - 12
-    )
     y = 0
     error_window.text(title, 5, y)
     y += 17

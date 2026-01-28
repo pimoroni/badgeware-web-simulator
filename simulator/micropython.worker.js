@@ -112,7 +112,11 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
       if (program) {
         if (worker.debug) console.log(`WORKER: Got program`)
         mp.runPython(`import badgeware`)
-        mp.runPython(program)
+        try {
+          mp.runPython(program)
+        } catch (error) {
+          mp.runPython(`badgeware.fatal_error("Error loading code...", """${error}""")`)
+        }
         worker.running = true
         worker.paused = true
         mp.runPython("_update(update)\n")

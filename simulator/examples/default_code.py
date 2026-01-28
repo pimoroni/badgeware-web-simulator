@@ -7,11 +7,11 @@ def update():
     scale = (sin(((i + io.ticks / 50)) * 5 * PI / 180) * (screen.height // 12)) + (screen.height // 4)
     x = sin(i * PI / 180) * scale
     y = cos(i * PI / 180) * scale
-    path1.append(point(x + (screen.width // 2), y + (screen.height // 2)))
+    path1.append(vec2(x + (screen.width // 2), y + (screen.height // 2)))
 
   # define a simple square "hole" path
   scale = 2 if screen.width == 320 else 1
-  path2 = [point(70 * scale, 50 * scale), point(90 * scale, 50 * scale), point(90 * scale, 70 * scale), point(70 * scale, 70 * scale)]
+  path2 = [vec2(70 * scale, 50 * scale), vec2(90 * scale, 50 * scale), vec2(90 * scale, 70 * scale), vec2(70 * scale, 70 * scale)]
 
   # construct a new polygon from the path
   poly = shape.custom(path1, path2)

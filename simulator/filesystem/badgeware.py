@@ -387,13 +387,6 @@ def fatal_error(title, error):
     message(title, error)
 
     simulator.update(screen.width == 320)
-    while True:
-        io.poll()
-        if io.pressed:
-            break
-        time.sleep(0.001)
-    while io.pressed:
-        io.poll()
 
 
 def load_font(font_file):
@@ -435,7 +428,7 @@ def _update(update):
 
 
 # Promote some commonly used Badgeware features to builtins
-for k in ("mode", "LORES", "HIRES", "SpriteSheet", "load_font", "rom_font", "clamp", "rnd", "frnd", "_update"):
+for k in ("mode", "LORES", "HIRES", "SpriteSheet", "load_font", "rom_font", "text_tokenise", "text_draw", "clamp", "rnd", "frnd", "_update"):
     setattr(builtins, k, locals()[k])
 
 # Promote some commonly used math functions to builtins

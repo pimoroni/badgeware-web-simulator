@@ -235,8 +235,9 @@ for k, v in picovector.__dict__.items():
         setattr(builtins, k, v)
 
 
-LORES = 0
-HIRES = 1
+LORES = 0b0000
+HIRES = 0b0001
+DIRTY = 0b0100
 
 def mode(mode, force=False):
     global _current_mode
@@ -250,7 +251,7 @@ def mode(mode, force=False):
     font = getattr(getattr(builtins, "screen", None), "font", None)
     brush = getattr(getattr(builtins, "screen", None), "pen", None)
     antialias = getattr(getattr(builtins, "screen", None), "antialias", None)
-    resolution = (320, 240) if mode == HIRES else (160, 120)
+    resolution = (320, 240) if mode & HIRES else (160, 120)
     setattr(builtins, "screen", image(*resolution, simulator.get_buffer()))
     screen.font = font if font is not None else DEFAULT_FONT
     screen.pen = brush if brush is not None else BG
@@ -365,7 +366,7 @@ def fatal_error(title, error):
         error = get_exception(error)
     print(f"- ERROR: {error}")
 
-    if _current_mode == LORES:
+    if (_current_mode & LORES) == LORES:
         contents = image(160, 120)
         contents.blit(screen, vec2(0, 0))
         mode(HIRES)
@@ -402,8 +403,9 @@ failed = False
 def _update(update):
     global failed
     if not failed:
-        screen.pen = BG
-        screen.clear()
+        if (_current_mode & DIRTY) == 0:
+            screen.pen = BG
+            screen.clear()
         screen.pen = FG
         io.poll()
         try:
@@ -416,7 +418,7 @@ def _update(update):
 
 
 # Promote some commonly used Badgeware features to builtins
-for k in ("mode", "LORES", "HIRES", "SpriteSheet", "load_font", "rom_font", "text_tokenise", "text_draw", "clamp", "rnd", "frnd", "_update"):
+for k in ("mode", "LORES", "HIRES", "DIRTY", "SpriteSheet", "load_font", "rom_font", "text_tokenise", "text_draw", "clamp", "rnd", "frnd", "_update"):
     setattr(builtins, k, locals()[k])
 
 # Promote some commonly used math functions to builtins

@@ -262,8 +262,8 @@ def mode(mode, force=False):
 DEFAULT_FONT = rom_font.sins
 ERROR_FONT = rom_font.nope
 
-BG = color.rgb(20, 30, 40)
-FG = color.rgb(255, 255, 255)
+BG = color.black
+FG = color.white
 
 _current_mode = LORES
 mode(_current_mode, True)

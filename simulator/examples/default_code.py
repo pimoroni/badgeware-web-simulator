@@ -1,12 +1,16 @@
-mode(HIRES)
+badge.mode(HIRES)
+
+from math import sin, cos, pi
+
+print("hi")
 
 def update():
   # create a flower shape path
   path1 = []
   for i in range(0, 360, 5):
-    scale = (sin(((i + io.ticks / 50)) * 5 * PI / 180) * (screen.height // 12)) + (screen.height // 4)
-    x = sin(i * PI / 180) * scale
-    y = cos(i * PI / 180) * scale
+    scale = (sin(((i + badge.ticks / 50)) * 5 * pi / 180) * (screen.height // 12)) + (screen.height // 4)
+    x = sin(i * pi / 180) * scale
+    y = cos(i * pi / 180) * scale
     path1.append(vec2(x + (screen.width // 2), y + (screen.height // 2)))
 
   # define a simple square "hole" path

@@ -4713,9 +4713,9 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
 var ASM_CONSTS = {
-  201988: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
- 202091: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
- 202194: () => { return WorkerGlobalScope.worker.input }
+  204964: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
+ 205067: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
+ 205170: () => { return WorkerGlobalScope.worker.input }
 };
 function proxy_convert_mp_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); proxy_convert_js_to_mp_obj_jsside_force_double_proxy(ret, out); }
 function proxy_convert_mp_to_js_then_js_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); const js_obj = PyProxy.toJs(ret); proxy_convert_js_to_mp_obj_jsside(js_obj, out); }

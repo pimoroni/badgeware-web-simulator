@@ -5,10 +5,10 @@ def update():
   global selected_item
 
   # adjust selected item index based on button presses
-  if io.BUTTON_UP in io.pressed:
+  if BUTTON_UP in badge.pressed():
     selected_item -= 1
 
-  if io.BUTTON_DOWN in io.pressed:
+  if BUTTON_DOWN in badge.pressed():
     selected_item += 1
 
   # wrap and clamp selected index to the range of items in the menu

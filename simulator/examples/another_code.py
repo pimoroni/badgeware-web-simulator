@@ -7,20 +7,22 @@ dir_x, dir_y = 0, 0
 # character's max run speed
 max_dir_x = 2
 
+badge.mode(LORES)
+
 def update():
   global dir_x, dir_y, pos_x, pos_y
 
-  if io.pressed:
-    print(io.pressed)
+  if badge.pressed():
+    print(badge.pressed())
 
-  if io.BUTTON_A in io.held:
+  if BUTTON_A in badge.held():
     # move left
     dir_x = -1
-  elif io.BUTTON_C in io.held:
+  elif BUTTON_C in badge.held():
     # move right
     dir_x = 1
 
-  if io.BUTTON_B in io.pressed:
+  if BUTTON_B in badge.pressed():
     # jump when B is pressed
     dir_y = -3
 

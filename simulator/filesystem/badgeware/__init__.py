@@ -131,18 +131,8 @@ def message(title, msg, window=None):
     error_window.pen = color.rgb(255, 100, 100, 240)
     error_window.shape(heading)
 
-    error_window.pen = color.rgb(50, 100, 50)
-    tw = 35
-    error_window.shape(
-        shape.rounded_rectangle(
-            error_window.width - tw - 36, error_window.height - 12, tw, 12, 3, 3, 0, 0
-        )
-    )
-
     error_window.pen = color.rgb(255, 200, 200)
-    error_window.text(
-        "Okay", error_window.width - tw + 5 - 36, error_window.height - 12
-    )
+
     y = 0
     error_window.text(title, 5, y)
     y += 17
@@ -171,16 +161,7 @@ def fatal_error(title, error):
 
     message(title, error)
 
-    display.update(screen.width == 320)
-    while True:
-        badge.poll()
-        if badge.pressed():
-            break
-        time.sleep(0.001)
-    while badge.pressed():
-        badge.poll()
-
-    machine.reset()
+    simulator.update(screen.width == 320)
 
 
 # display = st7789.ST7789()
@@ -222,7 +203,6 @@ badge.default_clear = color.black
 
 
 failed = False
-
 
 def _update(update):
     global failed

@@ -116,7 +116,7 @@ const BadgewareSimulator = async (target) => {
     /*
         Ask the simulator to run some code.
     */
-    simulator.run = async (code) => {
+    simulator.run = async (code, userFiles = []) => {
         // Stop any old workers
         await simulator.stop()
 
@@ -154,7 +154,7 @@ const BadgewareSimulator = async (target) => {
             if (ready){
                 // Run when the worker is ready to accept a canvas/code
                 const offscreen_canvas = canvas.transferControlToOffscreen()
-                await simulator.micropython.postMessage({canvas: offscreen_canvas, program: code, debug: simulator.debug}, [offscreen_canvas])
+                await simulator.micropython.postMessage({canvas: offscreen_canvas, program: code, debug: simulator.debug, files: userFiles}, [offscreen_canvas])
                 return
             }
 

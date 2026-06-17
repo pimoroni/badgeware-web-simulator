@@ -87,6 +87,4 @@ def update():
 
 
 if __name__ == "__main__":
-  from badgeware import run
-
   run(update)

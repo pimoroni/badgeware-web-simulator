@@ -3,7 +3,6 @@
         "/powman.py",
         "/machine.py",
         "/pcf85063a.py",
-        "/__badgeware.py",
         "/badgeware/memory.py",
         "/badgeware/filesystem.py",
         "/badgeware/__init__.py",

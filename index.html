@@ -234,6 +234,164 @@
 
     .out-dim   { color: var(--dim); }
     .out-error { color: rgba(240, 141, 73, 1); }
+
+    /* ── File panel ──────────────────────────────────────────────── */
+    #file-panel {
+      width: 200px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: rgba(10, 20, 30, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .fp-section {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .fp-section-head {
+      padding: 5px 8px 4px;
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .fp-section-title { flex: 1; }
+
+    .fp-icon-btn {
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-family: inherit;
+    }
+    .fp-icon-btn:hover { color: var(--white); background: rgba(235,245,255,0.06); }
+
+    /* ── User file list ──────────────────────────────────────────── */
+    #fp-user-list {
+      overflow-y: auto;
+      flex-shrink: 0;
+      max-height: 40%;
+    }
+
+    .fp-empty {
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--dim);
+      font-style: italic;
+    }
+
+    /* ── System tree (fills remaining space) ─────────────────────── */
+    #fp-sys-tree {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    #fp-user-list::-webkit-scrollbar,
+    #fp-sys-tree::-webkit-scrollbar { width: 4px; }
+    #fp-user-list::-webkit-scrollbar-track,
+    #fp-sys-tree::-webkit-scrollbar-track { background: transparent; }
+    #fp-user-list::-webkit-scrollbar-thumb,
+    #fp-sys-tree::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.12); border-radius: 2px; }
+
+    /* ── Tree rows ───────────────────────────────────────────────── */
+    .tree-row {
+      display: flex;
+      align-items: center;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--faint);
+      cursor: pointer;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      user-select: none;
+    }
+    .tree-row:hover { background: rgba(235,245,255,0.05); color: var(--white); }
+    .tree-row.active { background: var(--faint-orange); color: var(--orange); }
+
+    .tree-row .row-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tree-row .row-badge {
+      font-size: 9px;
+      color: var(--dim);
+      flex-shrink: 0;
+    }
+
+    .row-actions { display: none; gap: 1px; flex-shrink: 0; }
+    .tree-row:hover .row-actions { display: flex; }
+
+    .row-action {
+      background: none;
+      border: none;
+      color: inherit;
+      opacity: 0.6;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .row-action:hover { opacity: 1; }
+
+    /* ── Collapsible system directories ─────────────────────────── */
+    details.tree-dir { }
+
+    details.tree-dir > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--faint);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    details.tree-dir > summary::-webkit-details-marker { display: none; }
+    details.tree-dir > summary:hover { background: rgba(235,245,255,0.05); color: var(--white); }
+
+    .dir-arrow {
+      font-size: 8px;
+      flex-shrink: 0;
+      transition: transform 0.12s;
+      display: inline-block;
+    }
+    details.tree-dir[open] > summary .dir-arrow { transform: rotate(90deg); }
+
+    .dir-children { padding-left: 10px; }
+
+    /* ── Left resize handle ──────────────────────────────────────── */
+    #left-resize-handle {
+      width: 4px;
+      flex-shrink: 0;
+      background: var(--border);
+      cursor: col-resize;
+      transition: background 0.15s;
+      position: relative;
+    }
+    #left-resize-handle::after { content: ''; position: absolute; inset: 0 -4px; }
+    #left-resize-handle:hover,
+    #left-resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
   </style>
 </head>
 <body>
@@ -253,6 +411,29 @@
 <div id="drag-overlay"></div>
 
 <div id="main">
+  <!-- ── File browser ─────────────────────────────────────────── -->
+  <div id="file-panel">
+    <!-- User files -->
+    <div class="fp-section">
+      <div class="fp-section-head">
+        <span class="fp-section-title">Files</span>
+        <button class="fp-icon-btn" id="fp-new"    title="New file">+</button>
+        <button class="fp-icon-btn" id="fp-upload" title="Upload file">&#8679;</button>
+        <input type="file" id="fp-upload-input" multiple style="display:none">
+      </div>
+      <div id="fp-user-list"></div>
+    </div>
+    <!-- System files -->
+    <div class="fp-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="fp-section-head">
+        <span class="fp-section-title">System</span>
+        <span class="row-badge" title="Read-only">&#128274;</span>
+      </div>
+      <div id="fp-sys-tree"></div>
+    </div>
+  </div>
+  <div id="left-resize-handle"></div>
+
   <div id="editor-panel">
     <div id="editor"></div>
   </div>
@@ -604,6 +785,42 @@ function toCompletionItem(entry, range, monaco) {
     range,
   };
 }
+
+/* ── Base64 helpers ──────────────────────────────────────────────────────── */
+function b64ToBytes(b64) {
+  const s = atob(b64);
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b;
+}
+function bytesToB64(bytes) {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+/* ── User filesystem (localStorage) ─────────────────────────────────────── */
+const USER_FS_KEY = 'badgeware.userfs.v1';
+
+const userFS = (() => {
+  let data = {};
+  try { data = JSON.parse(localStorage.getItem(USER_FS_KEY) || '{}'); } catch {}
+  const persist = () => localStorage.setItem(USER_FS_KEY, JSON.stringify(data));
+  return {
+    get:   (p)    => data[p] ?? null,
+    set:   (p, v) => { data[p] = v; persist(); },
+    del:   (p)    => { delete data[p]; persist(); },
+    paths: ()     => Object.keys(data).sort(),
+    /* Entries suitable for postMessage to the worker */
+    workerFiles: () => Object.entries(data).map(([name, f]) => ({
+      name,
+      content: f.binary ? b64ToBytes(f.data) : f.text,
+    })),
+  };
+})();
+
+/* ── System file list — populated after fetch('/simulator/filesystem.json') */
+let systemPaths = [];
 </script>
 
 <!-- Monaco Editor (AMD loader) — requires CORS-eligible CDN responses.
@@ -630,6 +847,46 @@ require(['vs/editor/editor.main'], async function () {
         endLineNumber: position.lineNumber,
         endColumn: position.column,
       });
+
+      // ── File-path completion inside string literals ─────────────
+      // Matches the partial path after an opening quote, e.g. open("/rom/fon
+      const strMatch = linePrefix.match(/["']((?:\/|\.\/)[^"']*)$/);
+      if (strMatch) {
+        const partial   = strMatch[1];
+        const lastSlash = partial.lastIndexOf('/');
+        const dir       = partial.slice(0, lastSlash + 1);   // "/rom/"
+        const prefix    = partial.slice(lastSlash + 1);       // "fon"
+
+        const allPaths = [...systemPaths, ...userFS.paths()];
+        const seen = new Set();
+        const suggestions = [];
+
+        for (const p of allPaths) {
+          if (!p.startsWith(dir)) continue;
+          const rest  = p.slice(dir.length);
+          const slash = rest.indexOf('/');
+          const seg   = slash === -1 ? rest : rest.slice(0, slash + 1);
+          if (!seg.startsWith(prefix) || seen.has(seg)) continue;
+          seen.add(seg);
+          const isDir = seg.endsWith('/');
+          suggestions.push({
+            label:    seg,
+            kind:     isDir
+              ? monaco.languages.CompletionItemKind.Folder
+              : monaco.languages.CompletionItemKind.File,
+            detail:   isDir ? 'directory' : p,
+            insertText: seg,
+            sortText: (isDir ? '0' : '1') + seg,
+            range: {
+              startLineNumber: position.lineNumber,
+              startColumn:     position.column - prefix.length,
+              endLineNumber:   position.lineNumber,
+              endColumn:       position.column,
+            },
+          });
+        }
+        return { suggestions };
+      }
 
       // Detect "identifier." at end of typed text
       const dotMatch = linePrefix.match(/(\w+)\.\s*$/);
@@ -778,12 +1035,16 @@ require(['vs/editor/editor.main'], async function () {
   /* ── Run action ────────────────────────────────────────────────── */
   const runCode = async () => {
     const code = editor.getValue();
+    // Auto-save to user FS if a named file is open
+    if (currentFilePath && !currentReadOnly) {
+      userFS.set(currentFilePath, { text: code, binary: false });
+    }
     stdoutEl.innerHTML = '';
     appendOut('▶ Running…', 'out-dim');
     statusEl.textContent = 'Running…';
     try {
-      await simulator.run(code);
-      statusEl.textContent = '';
+      await simulator.run(code, userFS.workerFiles());
+      statusEl.textContent = currentFilePath && !currentReadOnly ? currentFilePath : '';
     } catch (err) {
       appendOut('✕ ' + err, 'out-error');
       statusEl.textContent = 'Error';
@@ -815,6 +1076,215 @@ require(['vs/editor/editor.main'], async function () {
   document.getElementById('clear-btn').addEventListener('click', () => {
     stdoutEl.innerHTML = '';
   });
+
+  /* ── Load system file list ─────────────────────────────────────── */
+  try {
+    const fsData = await fetch('/simulator/filesystem.json').then(r => r.json());
+    systemPaths = (fsData.files || []);
+  } catch (_) {}
+
+  /* ── File browser state ────────────────────────────────────────── */
+  let currentFilePath = null;   // null = scratch buffer
+  let currentReadOnly = false;
+
+  function setCurrentFile(path, readOnly = false) {
+    currentFilePath = path;
+    currentReadOnly = readOnly;
+    editor.updateOptions({ readOnly });
+    refreshFileTree();
+  }
+
+  /* ── System file tree ───────────────────────────────────────────── */
+  function buildDirTree(paths) {
+    const root = {};
+    for (const p of paths) {
+      const parts = p.split('/').filter(Boolean);
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!node[parts[i]]) node[parts[i]] = { __dir: true };
+        node = node[parts[i]];
+      }
+      node[parts[parts.length - 1]] = null;
+    }
+    return root;
+  }
+
+  function renderDirNode(node, pathPrefix, depth) {
+    const wrap = document.createElement('div');
+    if (depth > 0) wrap.className = 'dir-children';
+
+    const entries = Object.entries(node)
+      .filter(([k]) => k !== '__dir')
+      .sort(([a, av], [b, bv]) => {
+        const ad = av && av.__dir, bd = bv && bv.__dir;
+        return (ad === bd) ? a.localeCompare(b) : (ad ? -1 : 1);
+      });
+
+    for (const [name, child] of entries) {
+      const fullPath = pathPrefix + '/' + name;
+      if (child && child.__dir) {
+        const details = document.createElement('details');
+        details.className = 'tree-dir';
+        const summary = document.createElement('summary');
+        summary.innerHTML = `<span class="dir-arrow">&#9658;</span><span>${name}/</span>`;
+        details.appendChild(summary);
+        details.appendChild(renderDirNode(child, fullPath, depth + 1));
+        wrap.appendChild(details);
+      } else {
+        const row = document.createElement('div');
+        row.className = 'tree-row';
+        row.dataset.path = fullPath;
+        row.title = fullPath;
+        row.innerHTML = `<span class="row-name">${name}</span><span class="row-badge" title="System file">&#128274;</span>`;
+        row.addEventListener('click', () => openSysFile(fullPath));
+        wrap.appendChild(row);
+      }
+    }
+    return wrap;
+  }
+
+  /* ── Open file helpers ─────────────────────────────────────────── */
+  const TEXT_EXTS = new Set(['.py', '.json', '.txt', '.md', '.csv', '.toml', '.ini']);
+
+  async function openSysFile(path) {
+    const ext = path.slice(path.lastIndexOf('.'));
+    if (!TEXT_EXTS.has(ext)) return;   // binary — skip
+    try {
+      const text = await fetch('/simulator/filesystem' + path).then(r => {
+        if (!r.ok) throw new Error();
+        return r.text();
+      });
+      editor.setValue(text);
+      setCurrentFile(path, true);
+      statusEl.textContent = path + ' — read-only';
+    } catch (_) {}
+  }
+
+  function openUserFile(path) {
+    const entry = userFS.get(path);
+    if (!entry || entry.binary) return;
+    editor.setValue(entry.text);
+    setCurrentFile(path, false);
+  }
+
+  /* ── Render file tree ──────────────────────────────────────────── */
+  function refreshFileTree() {
+    // --- user files ---
+    const userList = document.getElementById('fp-user-list');
+    userList.innerHTML = '';
+    const paths = userFS.paths();
+    if (paths.length === 0) {
+      userList.innerHTML = '<div class="fp-empty">No files yet.</div>';
+    } else {
+      for (const p of paths) {
+        const entry = userFS.get(p);
+        const row = document.createElement('div');
+        row.className = 'tree-row' + (p === currentFilePath ? ' active' : '');
+        row.dataset.path = p;
+        row.title = p;
+        const name = document.createElement('span');
+        name.className = 'row-name';
+        name.textContent = p;
+        const acts = document.createElement('span');
+        acts.className = 'row-actions';
+        if (!entry.binary) {
+          const edit = document.createElement('button');
+          edit.className = 'row-action'; edit.title = 'Open'; edit.textContent = '✎';
+          edit.addEventListener('click', e => { e.stopPropagation(); openUserFile(p); });
+          acts.appendChild(edit);
+        }
+        const del = document.createElement('button');
+        del.className = 'row-action'; del.title = 'Delete'; del.textContent = '✕';
+        del.addEventListener('click', e => {
+          e.stopPropagation();
+          if (!confirm('Delete ' + p + '?')) return;
+          userFS.del(p);
+          if (currentFilePath === p) { setCurrentFile(null); editor.setValue(''); }
+          refreshFileTree();
+        });
+        acts.appendChild(del);
+        row.appendChild(name); row.appendChild(acts);
+        row.addEventListener('click', () => { if (!entry.binary) openUserFile(p); });
+        userList.appendChild(row);
+      }
+    }
+
+    // --- system tree (built once; just update active states) ---
+    const sysTree = document.getElementById('fp-sys-tree');
+    if (!sysTree._built) {
+      sysTree._built = true;
+      const tree = buildDirTree(systemPaths);
+      sysTree.appendChild(renderDirNode(tree, '', 0));
+    }
+    sysTree.querySelectorAll('.tree-row').forEach(el => {
+      el.classList.toggle('active', el.dataset.path === currentFilePath);
+    });
+  }
+
+  /* ── File operations ───────────────────────────────────────────── */
+  document.getElementById('fp-new').addEventListener('click', () => {
+    const path = prompt('File path (e.g. /my_code.py):', '/untitled.py');
+    if (!path || !path.startsWith('/')) return;
+    if (userFS.get(path) && !confirm(path + ' already exists. Overwrite?')) return;
+    userFS.set(path, { text: '', binary: false });
+    refreshFileTree();
+    openUserFile(path);
+  });
+
+  document.getElementById('fp-upload').addEventListener('click', () =>
+    document.getElementById('fp-upload-input').click()
+  );
+
+  document.getElementById('fp-upload-input').addEventListener('change', async e => {
+    for (const file of e.target.files) {
+      const suggested = '/' + file.name;
+      const path = prompt('Save as:', suggested);
+      if (!path) continue;
+      const isText = TEXT_EXTS.has(path.slice(path.lastIndexOf('.'))) ||
+                     file.type.startsWith('text/');
+      if (isText) {
+        userFS.set(path, { text: await file.text(), binary: false });
+      } else {
+        const buf = await file.arrayBuffer();
+        userFS.set(path, { data: bytesToB64(new Uint8Array(buf)), binary: true, mimeType: file.type });
+      }
+    }
+    refreshFileTree();
+    e.target.value = '';
+  });
+
+  /* ── Auto-save on edit (only when a user file is open) ─────────── */
+  editor.onDidChangeModelContent(() => {
+    if (currentFilePath && !currentReadOnly) {
+      userFS.set(currentFilePath, { text: editor.getValue(), binary: false });
+    }
+  });
+
+  /* ── Left resize handle ────────────────────────────────────────── */
+  {
+    const handle  = document.getElementById('left-resize-handle');
+    const panel   = document.getElementById('file-panel');
+    const overlay = document.getElementById('drag-overlay');
+    const MIN_W = 100, MAX_W = 450;
+    let dragging = false, startX = 0, startW = 0;
+
+    handle.addEventListener('mousedown', e => {
+      dragging = true; startX = e.clientX; startW = panel.offsetWidth;
+      handle.classList.add('dragging'); overlay.classList.add('active');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      panel.style.width = Math.max(MIN_W, Math.min(MAX_W, startW + (e.clientX - startX))) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false; handle.classList.remove('dragging'); overlay.classList.remove('active');
+    });
+  }
+
+  /* Initial file tree render */
+  refreshFileTree();
 
   /* ── Panel resize ─────────────────────────────────────────────── */
   {

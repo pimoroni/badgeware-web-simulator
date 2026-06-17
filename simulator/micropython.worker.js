@@ -86,7 +86,7 @@ except NameError:
       }
     }
 
-    worker.onmessage = async ({ data: { program, canvas, stop, buttons, pause, file, debug } }) => {
+    worker.onmessage = async ({ data: { program, canvas, stop, buttons, pause, file, files, debug } }) => {
       if (typeof buttons !== 'undefined') {
         if (worker.debug) console.log(`WORKER: Got buttons`)
         worker.input = buttons
@@ -112,6 +112,16 @@ except NameError:
         worker.lores_canvas_context = worker.lores_canvas.getContext('2d')
         worker.canvas_context.imageSmoothingEnabled = false
         worker.lores_canvas_image = worker.lores_canvas_context.getImageData(0, 0, 160, 120)
+      }
+
+      // Inject user files into the WASM FS before the program runs
+      if (files && files.length) {
+        for (const f of files) {
+          try {
+            mkdir_recursive(dirname(f.name))
+            mp.FS.createDataFile(null, f.name, f.content, true, true)
+          } catch (_) {}
+        }
       }
 
       if (program) {

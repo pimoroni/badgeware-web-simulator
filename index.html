@@ -148,7 +148,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     #sim-label {
@@ -159,8 +159,16 @@
       letter-spacing: 0.1em;
     }
 
+    /* Bezel: canvas on the left, UP/DOWN column on the right */
+    #sim-bezel {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+
     .badgeware-simulator {
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       aspect-ratio: 320 / 240;
       background: #000;
       position: relative;
@@ -178,6 +186,58 @@
 
     .badgeware-simulator canvas:focus {
       outline: 2px solid var(--orange);
+    }
+
+    /* Right column: UP at top, DOWN at bottom, stretches to canvas height */
+    #sim-col-r {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    /* Bottom row: A, B, C centred below the bezel */
+    #sim-row-b {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    /* ── Hardware button style ───────────────────────────────────── */
+    .hw-btn {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      background: rgb(14, 24, 34);
+      border: 1.5px solid rgba(180, 190, 200, 0.18);
+      border-radius: 6px;
+      color: var(--faint);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 400;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.07s, border-color 0.07s, color 0.07s, box-shadow 0.07s;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .hw-btn:hover {
+      border-color: rgba(224, 137, 32, 0.4);
+      color: var(--white);
+    }
+
+    .hw-btn.pressed {
+      background: rgba(224, 137, 32, 0.15);
+      border-color: var(--orange);
+      color: var(--orange);
+      box-shadow: 0 0 10px rgba(224, 137, 32, 0.25), inset 0 2px 4px rgba(0,0,0,0.3);
+      transform: translateY(1px);
     }
 
     /* ── Output ──────────────────────────────────────────────────── */
@@ -441,7 +501,20 @@
   <div id="side-panel">
     <div id="simulator-wrap">
       <div id="sim-label">Simulator</div>
-      <div id="sim-host" class="badgeware-simulator"></div>
+      <!-- Bezel: canvas + right-side UP / DOWN buttons -->
+      <div id="sim-bezel">
+        <div id="sim-host" class="badgeware-simulator"></div>
+        <div id="sim-col-r">
+          <button class="hw-btn" data-mask="2"  title="Up (&#8593; key)">&#9650;</button>
+          <button class="hw-btn" data-mask="1"  title="Down (&#8595; key)">&#9660;</button>
+        </div>
+      </div>
+      <!-- Bottom row: A, B, C -->
+      <div id="sim-row-b">
+        <button class="hw-btn" data-mask="16" title="A (&#8592; key)">A</button>
+        <button class="hw-btn" data-mask="8"  title="B (Space)">B</button>
+        <button class="hw-btn" data-mask="4"  title="C (&#8594; key)">C</button>
+      </div>
     </div>
     <div id="stdout-wrap">
       <div id="stdout-header">
@@ -1063,6 +1136,41 @@ require(['vs/editor/editor.main'], async function () {
 
   /* ── Toolbar wiring ────────────────────────────────────────────── */
   document.getElementById('run-btn').addEventListener('click', runCode);
+
+  /* ── Hardware button UI ────────────────────────────────────────── */
+  {
+    function pressBadgerButton(mask) {
+      if (!simulator.micropython) return;
+      simulator.buttons |= mask;
+      simulator.micropython.postMessage({ buttons: simulator.buttons });
+    }
+    function releaseBadgerButton(mask) {
+      if (!simulator.micropython) return;
+      simulator.buttons &= ~mask;
+      simulator.micropython.postMessage({ buttons: simulator.buttons });
+    }
+
+    document.querySelectorAll('.hw-btn').forEach(btn => {
+      const mask = parseInt(btn.dataset.mask, 10);
+
+      const press = (e) => {
+        btn.classList.add('pressed');
+        pressBadgerButton(mask);
+        e.preventDefault();
+      };
+      const release = () => {
+        btn.classList.remove('pressed');
+        releaseBadgerButton(mask);
+      };
+
+      btn.addEventListener('mousedown',  press);
+      btn.addEventListener('mouseup',    release);
+      btn.addEventListener('mouseleave', release);
+      btn.addEventListener('touchstart', press,   { passive: false });
+      btn.addEventListener('touchend',   release);
+      btn.addEventListener('touchcancel',release);
+    });
+  }
 
   document.getElementById('example-select').addEventListener('change', async (e) => {
     if (!e.target.value) return;

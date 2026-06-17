@@ -3,14 +3,32 @@
 <head>
   <meta charset="utf-8">
   <title>Badgeware Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;700&display=swap" crossorigin>
   <style>
+    :root {
+      --bg:          rgb(10, 20, 30);
+      --panel:       rgba(20, 30, 40, 0.6);
+      --border:      rgba(180, 190, 200, 0.12);
+      --white:       rgba(235, 245, 255);
+      --faint:       rgba(180, 190, 200);
+      --orange:      rgb(224, 137, 32);
+      --green:       rgb(32, 224, 70);
+      --blue:        rgb(32, 189, 224);
+      --faint-orange:rgba(224, 137, 32, 0.15);
+      --faint-green: rgba(32, 224, 70,  0.12);
+      --faint-white: rgba(235, 245, 255, 0.5);
+      --dim:         rgba(180, 190, 200, 0.4);
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #1e1e2e;
-      color: #cdd6f4;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      font-family: Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
+      font-weight: 300;
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -19,9 +37,10 @@
 
     /* ── Toolbar ─────────────────────────────────────────────────── */
     #toolbar {
-      background: #181825;
-      border-bottom: 1px solid #313244;
-      padding: 5px 10px;
+      background: rgba(10, 20, 30, 0.85);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(1rem);
+      padding: 6px 12px;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -29,49 +48,39 @@
       user-select: none;
     }
 
-    #toolbar h1 {
+    #run-btn {
+      background: var(--orange);
+      color: rgb(10, 20, 30);
+      border: none;
+      padding: 4px 14px 4px 10px;
       font-size: 12px;
       font-weight: 700;
-      color: #cba6f7;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .sep {
-      width: 1px;
-      height: 16px;
-      background: #313244;
-    }
-
-    #run-btn {
-      background: #a6e3a1;
-      color: #1e1e2e;
-      border: none;
-      padding: 3px 10px 3px 8px;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 3px;
+      font-family: inherit;
+      border-radius: 0.4rem;
       cursor: pointer;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.02em;
+      transition: filter 0.1s;
     }
-    #run-btn:hover { background: #94e2d5; }
+    #run-btn:hover  { filter: brightness(1.15); }
     #run-btn:active { filter: brightness(0.9); }
 
     #example-select {
-      background: #313244;
-      color: #cdd6f4;
-      border: 1px solid #45475a;
-      padding: 3px 6px;
-      font-size: 11px;
-      border-radius: 3px;
+      background: var(--panel);
+      color: var(--white);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 300;
+      border-radius: 0.4rem;
       cursor: pointer;
     }
-    #example-select:focus { outline: 1px solid #cba6f7; }
+    #example-select:focus { outline: 1px solid var(--orange); }
 
     #status {
       margin-left: auto;
       font-size: 11px;
-      color: #6c7086;
+      color: var(--dim);
     }
 
     /* ── Main layout ─────────────────────────────────────────────── */
@@ -92,55 +101,83 @@
       height: 100%;
     }
 
+    /* ── Resize handle ───────────────────────────────────────────── */
+    #resize-handle {
+      width: 4px;
+      flex-shrink: 0;
+      background: var(--border);
+      cursor: col-resize;
+      transition: background 0.15s;
+      position: relative;
+    }
+    /* Widen the hit area without changing the visual strip */
+    #resize-handle::after {
+      content: '';
+      position: absolute;
+      inset: 0 -4px;
+    }
+    #resize-handle:hover,
+    #resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+
+    /* Transparent overlay absorbs pointer events from Monaco + canvas during drag */
+    #drag-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      cursor: col-resize;
+    }
+    #drag-overlay.active { display: block; }
+
     /* ── Side panel ──────────────────────────────────────────────── */
     #side-panel {
       width: 342px;
       flex-shrink: 0;
-      border-left: 1px solid #313244;
+      border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      background: #181825;
+      background: var(--panel);
       overflow: hidden;
     }
 
     /* ── Simulator ───────────────────────────────────────────────── */
     #simulator-wrap {
-      padding: 10px;
-      border-bottom: 1px solid #313244;
-      background: #11111b;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 20, 30, 0.6);
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
 
     #sim-label {
       font-size: 10px;
-      font-weight: 600;
-      color: #6c7086;
+      font-weight: 400;
+      color: var(--dim);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
     }
 
     .badgeware-simulator {
-      width: 320px;
-      height: 240px;
+      width: 100%;
+      aspect-ratio: 320 / 240;
       background: #000;
       position: relative;
       display: block;
-      outline: 1px solid #313244;
+      outline: 1px solid rgba(224, 137, 32, 0.3);
     }
 
     .badgeware-simulator canvas {
-      width: 320px;
-      height: 240px;
+      width: 100%;
+      height: 100%;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       display: block;
     }
 
     .badgeware-simulator canvas:focus {
-      outline: 2px solid #cba6f7;
+      outline: 2px solid var(--orange);
     }
 
     /* ── Output ──────────────────────────────────────────────────── */
@@ -152,13 +189,13 @@
     }
 
     #stdout-header {
-      padding: 4px 10px;
+      padding: 5px 12px;
       font-size: 10px;
-      font-weight: 600;
-      color: #6c7086;
+      font-weight: 400;
+      color: var(--dim);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      border-bottom: 1px solid #313244;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -168,36 +205,40 @@
     #clear-btn {
       background: none;
       border: none;
-      color: #585b70;
+      color: var(--dim);
       cursor: pointer;
       font-size: 10px;
+      font-family: inherit;
       padding: 0 2px;
       line-height: 1;
+      transition: color 0.15s;
     }
-    #clear-btn:hover { color: #cdd6f4; }
+    #clear-btn:hover { color: var(--white); }
 
     #stdout {
       flex: 1;
       overflow-y: auto;
-      padding: 6px 10px;
-      font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+      padding: 8px 12px;
+      font-family: Consolas, "Cascadia Code", "JetBrains Mono", "Courier New", monospace;
       font-size: 11px;
-      line-height: 1.55;
-      color: #a6e3a1;
+      line-height: 1.6;
+      color: var(--green);
       white-space: pre-wrap;
       word-break: break-all;
-      background: #181825;
+      background: transparent;
     }
 
-    .out-dim   { color: #585b70; }
-    .out-error { color: #f38ba8; }
+    #stdout::-webkit-scrollbar       { width: 6px; }
+    #stdout::-webkit-scrollbar-track { background: transparent; }
+    #stdout::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.15); border-radius: 3px; }
+
+    .out-dim   { color: var(--dim); }
+    .out-error { color: rgba(240, 141, 73, 1); }
   </style>
 </head>
 <body>
 
 <div id="toolbar">
-  <h1>Badgeware</h1>
-  <div class="sep"></div>
   <button id="run-btn" title="Run (F5)">&#9654; Run</button>
   <select id="example-select" title="Load example">
     <option value="">Load example&#x2026;</option>
@@ -209,10 +250,13 @@
   <span id="status"></span>
 </div>
 
+<div id="drag-overlay"></div>
+
 <div id="main">
   <div id="editor-panel">
     <div id="editor"></div>
   </div>
+  <div id="resize-handle" title="Drag to resize"></div>
   <div id="side-panel">
     <div id="simulator-wrap">
       <div id="sim-label">Simulator</div>
@@ -618,11 +662,77 @@ require(['vs/editor/editor.main'], async function () {
     },
   });
 
+  /* ── Custom theme (badgewa.re palette + Prism Tomorrow syntax) ─── */
+  monaco.editor.defineTheme('badgeware', {
+    base:    'vs-dark',
+    inherit: true,
+    rules: [
+      { token: '',                   foreground: 'ebf5ff' },
+      { token: 'comment',            foreground: '4a6070', fontStyle: 'italic' },
+      { token: 'string',             foreground: '7ec699' },
+      { token: 'string.escape',      foreground: 'b4dfc4' },
+      { token: 'keyword',            foreground: 'cc99cd' },
+      { token: 'keyword.operator',   foreground: '67cdcc' },
+      { token: 'number',             foreground: 'f08d49' },
+      { token: 'number.float',       foreground: 'f08d49' },
+      { token: 'operator',           foreground: '67cdcc' },
+      { token: 'delimiter',          foreground: 'b4bcc8' },
+      { token: 'delimiter.parenthesis', foreground: 'b4bcc8' },
+      { token: 'delimiter.bracket',  foreground: 'b4bcc8' },
+      { token: 'type',               foreground: '6196cc' },
+      { token: 'identifier',         foreground: 'ebf5ff' },
+      { token: 'invalid',            foreground: 'e2777a' },
+    ],
+    colors: {
+      'editor.background':                   '#0a141e',
+      'editor.foreground':                   '#ebf5ff',
+      'editor.lineHighlightBackground':      '#0d1924',
+      'editor.lineHighlightBorder':          '#00000000',
+      'editor.selectionBackground':          '#e0892030',
+      'editor.selectionHighlightBackground': '#e0892018',
+      'editor.inactiveSelectionBackground':  '#e0892018',
+      'editor.findMatchBackground':          '#e0892055',
+      'editor.findMatchHighlightBackground': '#e0892028',
+      'editorLineNumber.foreground':         '#1e3040',
+      'editorLineNumber.activeForeground':   '#6a8090',
+      'editorCursor.foreground':             '#e08920',
+      'editorIndentGuide.background1':       '#0d1a26',
+      'editorIndentGuide.activeBackground1': '#1a2d3e',
+      'editorRuler.foreground':              '#0d1a26',
+      'editorBracketMatch.background':       '#e0892028',
+      'editorBracketMatch.border':           '#e08920',
+      'editorOverviewRuler.border':          '#0a141e',
+      'scrollbarSlider.background':          '#1a2838aa',
+      'scrollbarSlider.hoverBackground':     '#1a2838dd',
+      'scrollbarSlider.activeBackground':    '#e0892040',
+      /* Autocomplete / suggestion widget */
+      'editorWidget.background':             '#0c1a26',
+      'editorWidget.border':                 '#1a2d3e',
+      'editorSuggestWidget.background':      '#0c1a26',
+      'editorSuggestWidget.border':          '#1a2d3e',
+      'editorSuggestWidget.foreground':      '#ebf5ff',
+      'editorSuggestWidget.selectedBackground':      '#1a2d3a',
+      'editorSuggestWidget.selectedForeground':      '#ebf5ff',
+      'editorSuggestWidget.highlightForeground':     '#e08920',
+      'editorSuggestWidget.focusHighlightForeground':'#e08920',
+      /* Hover / parameter hints */
+      'editorHoverWidget.background':        '#0c1a26',
+      'editorHoverWidget.border':            '#1a2d3e',
+      /* List selections inside widgets */
+      'list.focusBackground':                '#1a2d3a',
+      'list.hoverBackground':                '#0f1e2c',
+      'list.activeSelectionBackground':      '#1a2d3a',
+      'list.activeSelectionForeground':      '#ebf5ff',
+      'list.inactiveSelectionBackground':    '#0f1e2c',
+      'list.highlightForeground':            '#e08920',
+    },
+  });
+
   /* ── Editor ────────────────────────────────────────────────────── */
   const editor = monaco.editor.create(document.getElementById('editor'), {
     value:          '# Loading…',
     language:       'python',
-    theme:          'vs-dark',
+    theme:          'badgeware',
     fontSize:       14,
     fontFamily:     '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace',
     fontLigatures:  true,
@@ -705,6 +815,40 @@ require(['vs/editor/editor.main'], async function () {
   document.getElementById('clear-btn').addEventListener('click', () => {
     stdoutEl.innerHTML = '';
   });
+
+  /* ── Panel resize ─────────────────────────────────────────────── */
+  {
+    const handle   = document.getElementById('resize-handle');
+    const panel    = document.getElementById('side-panel');
+    const overlay  = document.getElementById('drag-overlay');
+    // Canvas scales with panel width; keep it wide enough to be usable.
+    const MIN_W = 220;
+
+    let dragging = false, startX = 0, startW = 0;
+
+    handle.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX   = e.clientX;
+      startW   = panel.offsetWidth;
+      handle.classList.add('dragging');
+      overlay.classList.add('active');
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const maxW  = Math.floor(window.innerWidth * 0.7);
+      const newW  = Math.max(MIN_W, Math.min(maxW, startW + (startX - e.clientX)));
+      panel.style.width = newW + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      overlay.classList.remove('active');
+    });
+  }
 
   /* ── Auto-run on load ──────────────────────────────────────────── */
   await runCode();

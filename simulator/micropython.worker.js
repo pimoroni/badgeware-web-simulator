@@ -116,11 +116,16 @@ except NameError:
 
       if (program) {
         if (worker.debug) console.log(`WORKER: Got program`)
-        mp.runPython(`import badgeware`)
+        await mp.runPython(`import badgeware`)
         try {
-          mp.runPython(program)
+          await mp.runPython(program)
         } catch (error) {
-          mp.runPython(`badgeware.fatal_error("Error loading code...", """${error}""")`)
+          const msg = error.message ?? String(error)
+          try {
+            await mp.runPython(`badgeware.fatal_error("Error!", ${JSON.stringify(msg)})`)
+          } catch (_) {
+            worker.postMessage({stdout: msg})
+          }
           worker.running = true
           worker.paused = true
           return

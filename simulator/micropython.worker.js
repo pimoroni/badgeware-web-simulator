@@ -72,9 +72,14 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
 
     // Use requestAnimationFrame to pace the update loop, since this will
     // trigger a draw to the canvas element
-    worker.call_user_update_function = (timestamp) => {
+    worker.call_user_update_function = async (timestamp) => {
       if (!worker.paused) {
-        mp.runPython("_update(update)\n")
+        await mp.runPython(`
+try:
+    _update(update)
+except NameError:
+    pass
+`)
       }
       if (worker.running) {
         requestAnimationFrame(worker.call_user_update_function)
@@ -122,7 +127,12 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
         }
         worker.running = true
         worker.paused = true
-        mp.runPython("_update(update)\n")
+        await mp.runPython(`
+try:
+    _update(update)
+except NameError:
+    pass
+`)
         requestAnimationFrame(worker.call_user_update_function)
         worker.postMessage({ running: true })
       }

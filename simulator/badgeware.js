@@ -146,7 +146,7 @@ const BadgewareSimulator = async (target) => {
             }
         }, { threshold: [0] })
 
-        simulator.micropython = new Worker('/simulator/micropython.worker.js', { type: "module" })
+        simulator.micropython = new Worker('/simulator/micropython.worker.js?v=2', { type: "module" })
 
         debug_log("HOST: Running MicroPython code from editor...")
         simulator.micropython.onmessage = async ({ data: { stdout, ready, running } }) => {

@@ -1,4 +1,4 @@
-import _input
+import picovector_io as _input
 import os
 import builtins
 import machine

@@ -3,6 +3,14 @@
 <head>
   <meta charset="utf-8">
   <title>Badgeware Simulator</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three":          "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.min.js",
+      "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+    }
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;700&display=swap" crossorigin>
@@ -242,85 +250,42 @@
       letter-spacing: 0.1em;
     }
 
-    /* Bezel: canvas on the left, UP/DOWN column on the right */
-    #sim-bezel {
-      display: flex;
-      align-items: stretch;
-      gap: 8px;
-    }
-
-    .badgeware-simulator {
+    #badge-3d-wrap {
       flex: 1;
       min-width: 0;
-      aspect-ratio: 320 / 240;
-      background: #000;
+      aspect-ratio: 4 / 3;
+      background: transparent;
       position: relative;
+      overflow: hidden;
+    }
+
+    #badge-3d-wrap > canvas {
       display: block;
-      outline: 1px solid rgba(224, 137, 32, 0.3);
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #badge-3d-wrap > canvas:focus {
+      outline: 2px solid var(--orange);
+      outline-offset: -2px;
+    }
+
+    /* Simulator host stays composited so the OffscreenCanvas renders and
+       CanvasTexture reads succeed. Opacity near-zero keeps it invisible. */
+    .badgeware-simulator {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 320px;
+      height: 240px;
+      opacity: 0.001;
+      pointer-events: none;
     }
 
     .badgeware-simulator canvas {
-      width: 100%;
-      height: 100%;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+      width: 320px;
+      height: 240px;
       display: block;
-    }
-
-    .badgeware-simulator canvas:focus {
-      outline: 2px solid var(--orange);
-    }
-
-    /* Right column: UP at top, DOWN at bottom, stretches to canvas height */
-    #sim-col-r {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 2px 0;
-    }
-
-    /* Bottom row: A, B, C centred below the bezel */
-    #sim-row-b {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-
-    /* ── Hardware button style ───────────────────────────────────── */
-    .hw-btn {
-      width: 34px;
-      height: 34px;
-      flex-shrink: 0;
-      background: rgb(14, 24, 34);
-      border: 1.5px solid rgba(180, 190, 200, 0.18);
-      border-radius: 6px;
-      color: var(--faint);
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 400;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.07s, border-color 0.07s, color 0.07s, box-shadow 0.07s;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-
-    .hw-btn:hover {
-      border-color: rgba(224, 137, 32, 0.4);
-      color: var(--white);
-    }
-
-    .hw-btn.pressed {
-      background: rgba(224, 137, 32, 0.15);
-      border-color: var(--orange);
-      color: var(--orange);
-      box-shadow: 0 0 10px rgba(224, 137, 32, 0.25), inset 0 2px 4px rgba(0,0,0,0.3);
-      transform: translateY(1px);
     }
 
     /* ── Output ──────────────────────────────────────────────────── */
@@ -655,20 +620,10 @@
   <div id="side-panel">
     <div id="simulator-wrap">
       <div id="sim-label">Simulator</div>
-      <!-- Bezel: canvas + right-side UP / DOWN buttons -->
-      <div id="sim-bezel">
-        <div id="sim-host" class="badgeware-simulator"></div>
-        <div id="sim-col-r">
-          <button class="hw-btn" data-mask="2"  title="Up (&#8593; key)">&#9650;</button>
-          <button class="hw-btn" data-mask="1"  title="Down (&#8595; key)">&#9660;</button>
-        </div>
-      </div>
-      <!-- Bottom row: A, B, C -->
-      <div id="sim-row-b">
-        <button class="hw-btn" data-mask="16" title="A (&#8592; key)">A</button>
-        <button class="hw-btn" data-mask="8"  title="B (Space)">B</button>
-        <button class="hw-btn" data-mask="4"  title="C (&#8594; key)">C</button>
-      </div>
+      <!-- sim-host is fixed off-screen; canvas stays alive for OffscreenCanvas transfer -->
+      <div id="sim-host" class="badgeware-simulator"></div>
+      <!-- 3D badge view — buttons are interactive hit areas on the model -->
+      <div id="badge-3d-wrap"></div>
     </div>
     <div id="stdout-wrap">
       <div id="stdout-header">
@@ -1251,11 +1206,234 @@ require(['vs/editor/editor.main'], async function () {
   openScratchTab('default_code.py', defaultCode);
 
   /* ── Simulator ─────────────────────────────────────────────────── */
+  /* Three.js badge refs — set by async setup below */
+  let _three = null, _glbScreenMesh = null, _glbScreenTex = null;
+
+  function applyCanvasToScreen() {
+    if (!_three || !_glbScreenMesh || !simulator.canvas) return;
+    if (_glbScreenTex) _glbScreenTex.dispose();
+    _glbScreenTex = new _three.CanvasTexture(simulator.canvas);
+    _glbScreenTex.magFilter = _three.NearestFilter;
+    _glbScreenTex.minFilter = _three.NearestFilter;
+    _glbScreenTex.flipY     = false;
+    _glbScreenMesh.material.map          = _glbScreenTex;
+    _glbScreenMesh.material.emissiveMap  = _glbScreenTex;
+    _glbScreenMesh.material.emissive.set(1, 1, 1);
+    _glbScreenMesh.material.emissiveIntensity = 1.0;
+    _glbScreenMesh.material.needsUpdate  = true;
+  }
+
   const simHost   = document.getElementById('sim-host');
   const stdoutEl  = document.getElementById('stdout');
   const statusEl  = document.getElementById('status');
 
   const simulator = await BadgewareSimulator(simHost);
+
+  /* ── 3D badge display (non-blocking) ──────────────────────────── */
+  ;(async () => {
+    try {
+      const THREE              = await import('three');
+      const { GLTFLoader }     = await import('three/addons/loaders/GLTFLoader.js');
+      const { OrbitControls }  = await import('three/addons/controls/OrbitControls.js');
+      _three = THREE;
+
+      const wrap = document.getElementById('badge-3d-wrap');
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      renderer.setClearColor(0x000000, 0);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      wrap.appendChild(renderer.domElement);
+
+      const scene  = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(22, wrap.clientWidth / wrap.clientHeight, 0.001, 10);
+
+      /* OrbitControls — drag to rotate, no pan/zoom extremes */
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping  = true;
+      controls.dampingFactor  = 0.06;
+      controls.enablePan      = false;
+      controls.minDistance    = 0.05;
+      controls.maxDistance    = 0.8;
+      controls.rotateSpeed    = 0.6;
+
+      /* Forward badge key events from the 3D canvas */
+      const keyMap = { 38: 2, 40: 1, 37: 16, 39: 4, 32: 8, 27: 32 };
+      renderer.domElement.tabIndex = 0;
+      renderer.domElement.addEventListener('keydown', ev => {
+        const btn = keyMap[ev.keyCode] ?? 0;
+        if (!btn || !simulator.micropython) return;
+        simulator.buttons |= btn;
+        simulator.micropython.postMessage({ buttons: simulator.buttons });
+        ev.preventDefault();
+      });
+      renderer.domElement.addEventListener('keyup', ev => {
+        const btn = keyMap[ev.keyCode] ?? 0;
+        if (!btn || !simulator.micropython) return;
+        simulator.buttons &= ~btn;
+        simulator.micropython.postMessage({ buttons: simulator.buttons });
+        ev.preventDefault();
+      });
+
+      /* Lighting */
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+      keyLight.position.set(0.4, 0.8, 1);
+      scene.add(keyLight);
+      const fillLight = new THREE.DirectionalLight(0x8090d0, 0.6);
+      fillLight.position.set(-0.6, 0.2, 0.3);
+      scene.add(fillLight);
+
+      /* Button raycasting */
+      const allHitMeshes = [];
+      const raycaster    = new THREE.Raycaster();
+      let   heldMask     = 0;
+
+      function buttonMaskAt(ev) {
+        if (!_glbScreenMesh) return 0;
+        const rect  = renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((ev.clientX - rect.left) / rect.width)  *  2 - 1,
+          ((ev.clientY - rect.top)  / rect.height) * -2 + 1,
+        );
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(allHitMeshes, true);
+        if (!hits.length) return 0;
+        const lp = _glbScreenMesh.worldToLocal(hits[0].point.clone());
+        // lp.x = left(-)/right(+), lp.z = up(-)/down(+) in screen-local space
+        // Screen area x∈[-0.029,+0.029], z∈[-0.022,+0.022]
+        if (Math.abs(lp.x) < 0.029 && lp.z < 0.022 && lp.z > -0.022) return 0;
+        if (lp.x > 0.028) return lp.z < 0.005 ? 2 : 1;   // UP / DOWN (right edge)
+        if (lp.z > 0.018) {                                 // A / B / C (bottom row)
+          if (lp.x < -0.008) return 16;
+          if (lp.x < +0.008) return 8;
+          return 4;
+        }
+        if (lp.z < -0.022) return 32;                       // HOME (above screen)
+        return 0;
+      }
+
+      // Capture-phase pointerdown so button hits block OrbitControls entirely
+      renderer.domElement.addEventListener('pointerdown', ev => {
+        const mask = buttonMaskAt(ev);
+        if (!mask) return;
+        heldMask = mask;
+        simulator.buttons |= mask;
+        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+        controls.enabled = false;
+        ev.stopPropagation();
+      }, true);
+
+      renderer.domElement.addEventListener('pointerup', ev => {
+        if (!heldMask) return;
+        simulator.buttons &= ~heldMask;
+        heldMask = 0;
+        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+        controls.enabled = true;
+        ev.stopPropagation();
+      }, true);
+
+      renderer.domElement.addEventListener('pointercancel', () => {
+        if (!heldMask) return;
+        simulator.buttons &= ~heldMask;
+        heldMask = 0;
+        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+        controls.enabled = true;
+      });
+
+      /* Load the Tufty badge model */
+      new GLTFLoader().load('/static/models/badgeware.glb', (gltf) => {
+        const root      = gltf.scene;
+        const tuftyNode = root.getObjectByName('tufty');
+        const caseBack  = root.getObjectByName('badger_case_back');
+        const caseFront = root.getObjectByName('badger_case_front');
+
+        /* Clone orange case for Tufty before hiding Badger */
+        if (caseBack && tuftyNode) {
+          const cb = caseBack.clone(true);
+          cb.traverse(child => {
+            if (child.isMesh) {
+              child.material = child.material.clone();
+              child.material.color.setRGB(1, 0.42, 0);
+            }
+          });
+          tuftyNode.add(cb);
+        }
+        if (caseFront && tuftyNode) {
+          tuftyNode.add(caseFront.clone(true));
+        }
+
+        /* Hide the other two badges */
+        ['badger', 'blinky'].forEach(name => {
+          const n = root.getObjectByName(name);
+          if (n) n.visible = false;
+        });
+
+        scene.add(root);
+        root.updateWorldMatrix(true, true);
+
+        /* Grab the active screen mesh and clone its material */
+        _glbScreenMesh = root.getObjectByName('tufty_screen_active');
+        if (_glbScreenMesh) {
+          _glbScreenMesh.material = _glbScreenMesh.material.clone();
+          if (simulator.canvas) applyCanvasToScreen();
+        }
+
+        /* Slight default Y tilt for visual style */
+        if (tuftyNode) tuftyNode.rotation.y = -0.2;
+
+        /* Position camera along screen's outward normal for a face-on view.
+           The screen mesh lies in the local XZ plane, so local +Y is the face normal. */
+        if (_glbScreenMesh && tuftyNode) {
+          const screenNormal = new THREE.Vector3(0, 1, 0)
+            .transformDirection(_glbScreenMesh.matrixWorld);
+
+          const tuftyBox = new THREE.Box3().setFromObject(tuftyNode);
+          const center   = tuftyBox.getCenter(new THREE.Vector3());
+          const size     = tuftyBox.getSize(new THREE.Vector3());
+          const maxDim   = Math.max(size.x, size.y, size.z);
+          const fovRad   = camera.fov * (Math.PI / 180);
+          const dist     = (maxDim / 2) / Math.tan(fovRad / 2) * 1.0;
+
+          /* Place camera along screen normal, slight X offset for 3/4 angle */
+          camera.position.copy(center)
+            .addScaledVector(screenNormal, dist)
+            .addScaledVector(new THREE.Vector3(1, 0, 0), maxDim * 0.12);
+          camera.lookAt(center);
+          controls.target.copy(center);
+          controls.update();
+        }
+
+        /* Collect all tufty meshes for raycasting — button detection uses hit position */
+        if (tuftyNode) {
+          tuftyNode.traverse(child => {
+            if (child.isMesh) allHitMeshes.push(child);
+          });
+        }
+      });
+
+      /* Keep renderer sized to container */
+      new ResizeObserver(() => {
+        const w = wrap.clientWidth, h = wrap.clientHeight;
+        if (!w || !h) return;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+      }).observe(wrap);
+
+      /* Render loop */
+      ;(function loop() {
+        requestAnimationFrame(loop);
+        controls.update();
+        if (_glbScreenTex) _glbScreenTex.needsUpdate = true;
+        renderer.render(scene, camera);
+      })();
+
+    } catch (e) {
+      console.warn('3D badge setup failed:', e);
+    }
+  })();
 
   const appendOut = (text, cls) => {
     const span = document.createElement('span');
@@ -1344,6 +1522,7 @@ require(['vs/editor/editor.main'], async function () {
     statusEl.textContent = 'Running…';
     try {
       await simulator.run(code, userFS.workerFiles());
+      applyCanvasToScreen();
       statusEl.textContent = currentFilePath && !currentReadOnly ? currentFilePath : '';
     } catch (err) {
       appendOut('✕ ' + err, 'out-error');
@@ -1366,41 +1545,6 @@ require(['vs/editor/editor.main'], async function () {
 
   /* ── Toolbar wiring ────────────────────────────────────────────── */
   document.getElementById('run-btn').addEventListener('click', runCode);
-
-  /* ── Hardware button UI ────────────────────────────────────────── */
-  {
-    function pressBadgerButton(mask) {
-      if (!simulator.micropython) return;
-      simulator.buttons |= mask;
-      simulator.micropython.postMessage({ buttons: simulator.buttons });
-    }
-    function releaseBadgerButton(mask) {
-      if (!simulator.micropython) return;
-      simulator.buttons &= ~mask;
-      simulator.micropython.postMessage({ buttons: simulator.buttons });
-    }
-
-    document.querySelectorAll('.hw-btn').forEach(btn => {
-      const mask = parseInt(btn.dataset.mask, 10);
-
-      const press = (e) => {
-        btn.classList.add('pressed');
-        pressBadgerButton(mask);
-        e.preventDefault();
-      };
-      const release = () => {
-        btn.classList.remove('pressed');
-        releaseBadgerButton(mask);
-      };
-
-      btn.addEventListener('mousedown',  press);
-      btn.addEventListener('mouseup',    release);
-      btn.addEventListener('mouseleave', release);
-      btn.addEventListener('touchstart', press,   { passive: false });
-      btn.addEventListener('touchend',   release);
-      btn.addEventListener('touchcancel',release);
-    });
-  }
 
   document.getElementById('example-select').addEventListener('change', async (e) => {
     if (!e.target.value) return;

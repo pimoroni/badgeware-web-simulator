@@ -3,6 +3,7 @@ const BadgewareSimulator = async (target) => {
     let simulator = {
         target:        target,
         micropython:   null,
+        canvas:        null,
         buttons:       0,
         BUTTON_UP:     0b000010,
         BUTTON_DOWN:   0b000001,
@@ -111,6 +112,7 @@ const BadgewareSimulator = async (target) => {
         [...target.querySelectorAll("canvas")].forEach((node) => {
             target.removeChild(node)
         })
+        simulator.canvas = null
     }
 
     /*
@@ -127,6 +129,7 @@ const BadgewareSimulator = async (target) => {
         canvas.height = 240
         canvas.tabIndex = 1
         target.appendChild(canvas)
+        simulator.canvas = canvas
 
         // Set up keyboard input
         canvas.addEventListener("keydown", onkeydown, true)

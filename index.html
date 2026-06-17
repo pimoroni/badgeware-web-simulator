@@ -1,57 +1,714 @@
 <!DOCTYPE html>
-<html>
-	<head>
-		<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
-		<style type="text/css">
-			.badgeware-simulator {
-				border:1px solid #ccc;
-				width: 640px;
-				height: 480px;
-                display: grid;
-                margin-bottom: 1em;
-			}
-			.badgeware-simulator canvas {
-				width: 100%;
-				height: 100%;
-				image-rendering: pixelated;
-				image-rendering: crisp-edges;
-			}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Badgeware Simulator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-			.badgeware-simulator canvas:focus {
-                outline: 2px solid #c00;
-            }
-            .badgeware-simulator.stdout {
-                grid-template-columns: 640px 320px;
-                grid-template-areas: "canvas stdout";
-                width: calc(640px * 1.5);
-            }
-            .badgeware-simulator.stdout textarea {
-                grid-area: stdout;
-				padding: 1em;
-				border: none;
-            }
-            .badgeware-simulator.stdout canvas {
-                grid-area: canvas;
-            }
-		</style>
-	</head>
-	<body>
-		<div class="badgeware-simulator stdout" code="/simulator/examples/demos.py" debug="true"></div>
-		<div class="badgeware-simulator stdout" code="/simulator/examples/file_test.py" debug="true"></div>
-		<div class="badgeware-simulator stdout" code="/simulator/examples/default_code.py" debug="true"></div>
-		<div class="badgeware-simulator stdout" code="/simulator/examples/another_code.py" debug="false"></div>
-		<div class="badgeware-simulator stdout" code="/simulator/examples/menu.py" debug="true"></div>
-		<script src="/simulator/badgeware.js"></script>
-		<script type="text/javascript">
-			const simulators = [...document.querySelectorAll(".badgeware-simulator")]
+    body {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-			let simulator_promies = Promise.all(simulators.map(async (element) => {
-				// Launch an instance of the simulator
-				let simulator = await BadgewareSimulator(element)
-				element.simulator = simulator
-				const code_file = element.getAttribute("code");
-				await simulator.fetch_and_run(code_file);
-			}));
-		</script>
-	</body>
+    /* ── Toolbar ─────────────────────────────────────────────────── */
+    #toolbar {
+      background: #181825;
+      border-bottom: 1px solid #313244;
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #toolbar h1 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #cba6f7;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .sep {
+      width: 1px;
+      height: 16px;
+      background: #313244;
+    }
+
+    #run-btn {
+      background: #a6e3a1;
+      color: #1e1e2e;
+      border: none;
+      padding: 3px 10px 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+    }
+    #run-btn:hover { background: #94e2d5; }
+    #run-btn:active { filter: brightness(0.9); }
+
+    #example-select {
+      background: #313244;
+      color: #cdd6f4;
+      border: 1px solid #45475a;
+      padding: 3px 6px;
+      font-size: 11px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #example-select:focus { outline: 1px solid #cba6f7; }
+
+    #status {
+      margin-left: auto;
+      font-size: 11px;
+      color: #6c7086;
+    }
+
+    /* ── Main layout ─────────────────────────────────────────────── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Editor panel ────────────────────────────────────────────── */
+    #editor-panel {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #editor {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Side panel ──────────────────────────────────────────────── */
+    #side-panel {
+      width: 342px;
+      flex-shrink: 0;
+      border-left: 1px solid #313244;
+      display: flex;
+      flex-direction: column;
+      background: #181825;
+      overflow: hidden;
+    }
+
+    /* ── Simulator ───────────────────────────────────────────────── */
+    #simulator-wrap {
+      padding: 10px;
+      border-bottom: 1px solid #313244;
+      background: #11111b;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #sim-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #6c7086;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .badgeware-simulator {
+      width: 320px;
+      height: 240px;
+      background: #000;
+      position: relative;
+      display: block;
+      outline: 1px solid #313244;
+    }
+
+    .badgeware-simulator canvas {
+      width: 320px;
+      height: 240px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+    }
+
+    .badgeware-simulator canvas:focus {
+      outline: 2px solid #cba6f7;
+    }
+
+    /* ── Output ──────────────────────────────────────────────────── */
+    #stdout-wrap {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #stdout-header {
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #6c7086;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid #313244;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #clear-btn {
+      background: none;
+      border: none;
+      color: #585b70;
+      cursor: pointer;
+      font-size: 10px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    #clear-btn:hover { color: #cdd6f4; }
+
+    #stdout {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      color: #a6e3a1;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: #181825;
+    }
+
+    .out-dim   { color: #585b70; }
+    .out-error { color: #f38ba8; }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>Badgeware</h1>
+  <div class="sep"></div>
+  <button id="run-btn" title="Run (F5)">&#9654; Run</button>
+  <select id="example-select" title="Load example">
+    <option value="">Load example&#x2026;</option>
+    <option value="/simulator/examples/default_code.py">default_code.py</option>
+    <option value="/simulator/examples/another_code.py">another_code.py</option>
+    <option value="/simulator/examples/menu.py">menu.py</option>
+    <option value="/simulator/examples/file_test.py">file_test.py</option>
+  </select>
+  <span id="status"></span>
+</div>
+
+<div id="main">
+  <div id="editor-panel">
+    <div id="editor"></div>
+  </div>
+  <div id="side-panel">
+    <div id="simulator-wrap">
+      <div id="sim-label">Simulator</div>
+      <div id="sim-host" class="badgeware-simulator"></div>
+    </div>
+    <div id="stdout-wrap">
+      <div id="stdout-header">
+        Output
+        <button id="clear-btn" title="Clear output">&#10005;</button>
+      </div>
+      <div id="stdout"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/simulator/badgeware.js"></script>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   Badgeware API stubs — used by the Monaco completion provider.
+   Derived from:
+     simulator/filesystem/badgeware/__init__.py
+     simulator/filesystem/badgeware/badge.py
+     simulator/filesystem/badgeware/text.py
+     simulator/filesystem/badgeware/sprite.py
+     simulator/filesystem/badgeware/math.py
+     simulator/filesystem/badgeware/state.py
+     simulator/filesystem/badgeware/rtc.py
+     simulator/filesystem/badgeware/memory.py
+     simulator/filesystem/badgeware/filesystem.py
+   ───────────────────────────────────────────────────────────────────────── */
+
+const BADGEWARE_GLOBALS = [
+  // ── Display mode flags ─────────────────────────────────────────
+  { label: 'LORES',         kind: 'Constant', detail: '0b00',     doc: 'Low-resolution mode: 160×120 pixels.' },
+  { label: 'HIRES',         kind: 'Constant', detail: '0b01',     doc: 'High-resolution mode: 320×240 pixels.' },
+  { label: 'VSYNC',         kind: 'Constant', detail: '0b10',     doc: 'Enable vertical sync.' },
+  { label: 'FAST_UPDATE',   kind: 'Constant', detail: '3 << 4',   doc: 'Fast e-ink update speed (Badger).' },
+  { label: 'FULL_UPDATE',   kind: 'Constant', detail: '0 << 4',   doc: 'Full/slow e-ink update (Badger).' },
+  { label: 'MEDIUM_UPDATE', kind: 'Constant', detail: '2 << 4',   doc: 'Medium e-ink update speed (Badger).' },
+  { label: 'DITHER',        kind: 'Constant', detail: '1 << 8',   doc: 'Enable dithering.' },
+  // ── Button constants ───────────────────────────────────────────
+  { label: 'BUTTON_A',      kind: 'Constant', detail: '0b010000', doc: 'Button A (left side button).' },
+  { label: 'BUTTON_B',      kind: 'Constant', detail: '0b001000', doc: 'Button B (select / middle).' },
+  { label: 'BUTTON_C',      kind: 'Constant', detail: '0b000100', doc: 'Button C (right side button).' },
+  { label: 'BUTTON_UP',     kind: 'Constant', detail: '0b000010', doc: 'D-pad Up.' },
+  { label: 'BUTTON_DOWN',   kind: 'Constant', detail: '0b000001', doc: 'D-pad Down.' },
+  { label: 'BUTTON_HOME',   kind: 'Constant', detail: '0b100000', doc: 'Home / Boot button.' },
+  // ── Anti-aliasing constants ────────────────────────────────────
+  { label: 'OFF', kind: 'Constant', detail: 'image.OFF', doc: 'Anti-aliasing disabled.' },
+  { label: 'X2',  kind: 'Constant', detail: 'image.X2',  doc: 'Anti-aliasing: 2× supersample.' },
+  { label: 'X4',  kind: 'Constant', detail: 'image.X4',  doc: 'Anti-aliasing: 4× supersample.' },
+
+  // ── Global instances ───────────────────────────────────────────
+  { label: 'screen',   kind: 'Variable', detail: 'image',     doc: 'The active display canvas (image instance). 160×120 in LORES, 320×240 in HIRES. Set screen.pen and call screen.clear(), screen.text(), screen.shape().' },
+  { label: 'badge',    kind: 'Variable', detail: 'Badge',     doc: 'Badge hardware interface: buttons, battery, display mode, LEDs.' },
+  { label: 'shape',    kind: 'Module',   detail: 'module',    doc: 'Shape factory (picovector): shape.rectangle(), shape.circle(), shape.custom(), …' },
+  { label: 'color',    kind: 'Module',   detail: 'module',    doc: 'Color factory: color.rgb(r, g, b), color.hsv(h, s, v).' },
+  { label: 'rom_font', kind: 'Variable', detail: 'ROMFonts',  doc: 'Built-in ROM pixel fonts. Access by name: rom_font.sins, rom_font.hungry, etc.' },
+  { label: 'text',     kind: 'Module',   detail: '_text',     doc: 'Text layout utilities: text.draw(), text.scroll(), text.tokenise().' },
+  { label: 'rtc',      kind: 'Variable', detail: 'RTC',       doc: 'Real-time clock: get/set datetime, alarms, countdown timers.' },
+  { label: 'loop',     kind: 'Variable', detail: '_run | None', doc: 'Current animation loop context (None outside a loop). Provides loop.ticks and loop.progress.' },
+
+  // ── Types / constructors ───────────────────────────────────────
+  { label: 'vec2',          kind: 'Class', insertText: 'vec2(${1:x}, ${2:y})',
+    doc: '2D vector / point. Fields: .x, .y\nUsage: pos = vec2(80, 60)' },
+  { label: 'rect',          kind: 'Class', insertText: 'rect(${1:x}, ${2:y}, ${3:w}, ${4:h})',
+    doc: 'Rectangle. Fields: .x, .y, .w, .h\nUsage: bounds = rect(0, 0, 160, 120)' },
+  { label: 'image',         kind: 'Class', insertText: 'image(${1:width}, ${2:height})',
+    doc: 'Off-screen image buffer. Also a namespace: image.load(file), image.OFF / X2 / X4.' },
+  { label: 'font',          kind: 'Class', insertText: 'font.load(${1:"path.af"})',
+    doc: 'Vector font (.af files). Load with font.load(path).' },
+  { label: 'pixel_font',    kind: 'Class', insertText: 'pixel_font.load(${1:"path.ppf"})',
+    doc: 'Bitmap / pixel font (.ppf files). Load with pixel_font.load(path).' },
+  { label: 'run',           kind: 'Class', insertText: 'run(${1:update})',
+    doc: 'Run an animation loop. Use as a decorator @run or call run(fn). Optional: run(duration=ms).\nThe update() function is called every frame; return a value to exit.' },
+  { label: 'SpriteSheet',   kind: 'Class', insertText: 'SpriteSheet(${1:file}, ${2:columns}, ${3:rows})',
+    doc: 'Load a sprite sheet image. Args: file (path), columns (int), rows (int).\nAccess sprites via .sprite(x, y) or animations via .animation(x, y, count).' },
+  { label: 'AnimatedSprite', kind: 'Class',
+    doc: 'Animated sprite created by SpriteSheet.animation().\nMethods: .frame(index), .count().' },
+  { label: 'State',         kind: 'Class',
+    doc: 'Persistent JSON state (saved to /state/{app}.json).\nStatic methods: State.save(app, data), State.load(app, defaults), State.modify(app, data), State.delete(app).' },
+
+  // ── Global functions ───────────────────────────────────────────
+  { label: 'clamp',         kind: 'Function', insertText: 'clamp(${1:v}, ${2:vmin}, ${3:vmax})',
+    doc: 'Clamp v between vmin and vmax. Returns a number.' },
+  { label: 'rnd',           kind: 'Function', insertText: 'rnd(${1:v1})',
+    doc: 'Random integer 0..v1 (inclusive), or rnd(v1, v2) for v1..v2.' },
+  { label: 'frnd',          kind: 'Function', insertText: 'frnd(${1:v1})',
+    doc: 'Random float 0.0..v1, or frnd(v1, v2) for v1..v2.' },
+  { label: 'load_font',     kind: 'Function', insertText: 'load_font(${1:name})',
+    doc: 'Load a font by name or path. Searches /rom/fonts, /system/assets/fonts, /fonts.\nReturns a font or pixel_font instance.' },
+  { label: 'launch',        kind: 'Function', insertText: 'launch(${1:path})',
+    doc: 'Launch an app module at the given path. Calls on_exit() if defined.' },
+  { label: 'reset',         kind: 'Function', insertText: 'reset()',
+    doc: 'Soft-reset the badge (machine.reset()).' },
+  { label: 'set_brightness', kind: 'Function', insertText: 'set_brightness(${1:value})',
+    doc: 'Set display backlight brightness. value: 0.0 (off) – 1.0 (full).' },
+  { label: 'message',       kind: 'Function', insertText: 'message(${1:"title"}, ${2:"msg"})',
+    doc: 'Draw an overlay message box. Args: title (str), msg (str), window=None.' },
+  { label: 'fatal_error',   kind: 'Function', insertText: 'fatal_error(${1:"title"}, ${2:error})',
+    doc: 'Show a fatal error overlay (switches to HIRES). Args: title (str), error (str or Exception).' },
+  { label: 'file_exists',   kind: 'Function', insertText: 'file_exists(${1:path})',
+    doc: 'Returns True if the path exists.' },
+  { label: 'is_dir',        kind: 'Function', insertText: 'is_dir(${1:path})',
+    doc: 'Returns True if the path is a directory.' },
+  { label: 'free',          kind: 'Function', insertText: 'free()',
+    doc: 'Print free heap memory in KB (with delta). Calls gc.collect() first.' },
+];
+
+/* Member completions, keyed by the identifier before the dot. */
+const MEMBERS = {
+  screen: [
+    { label: 'width',        kind: 'Property', doc: 'Display width in pixels (160 in LORES, 320 in HIRES).' },
+    { label: 'height',       kind: 'Property', doc: 'Display height in pixels (120 in LORES, 240 in HIRES).' },
+    { label: 'pen',          kind: 'Property', doc: 'Current draw color. Assign a color value: screen.pen = color.rgb(255, 0, 0).' },
+    { label: 'font',         kind: 'Property', doc: 'Current font (pixel_font or font instance). Default: rom_font.sins.' },
+    { label: 'clip',         kind: 'Property', doc: 'Current clip rect (rect). Assign to restrict drawing area.' },
+    { label: 'antialias',    kind: 'Property', doc: 'Anti-aliasing mode: OFF, X2, or X4.' },
+    { label: 'clear',        kind: 'Method', insertText: 'clear()',
+      doc: 'Fill the screen with the current pen color.' },
+    { label: 'text',         kind: 'Method', insertText: 'text(${1:text}, ${2:x}, ${3:y})',
+      doc: 'Draw text string at position (x, y). Pass font size as 4th arg for vector fonts.' },
+    { label: 'shape',        kind: 'Method', insertText: 'shape(${1:poly})',
+      doc: 'Draw a filled polygon (returned by shape.* constructors).' },
+    { label: 'blit',         kind: 'Method', insertText: 'blit(${1:source}, ${2:pos})',
+      doc: 'Blit another image onto this one. Args: source (image), pos (vec2 or rect).' },
+    { label: 'window',       kind: 'Method', insertText: 'window(${1:x}, ${2:y}, ${3:w}, ${4:h})',
+      doc: 'Create a sub-image view of this canvas. Returns an image.' },
+    { label: 'measure_text', kind: 'Method', insertText: 'measure_text(${1:text})',
+      doc: 'Measure text in the current font. Returns (width, height).' },
+    { label: 'line',         kind: 'Method', insertText: 'line(${1:x1}, ${2:y1}, ${3:x2}, ${4:y2})',
+      doc: 'Draw a line from (x1,y1) to (x2,y2) with the current pen.' },
+  ],
+
+  badge: [
+    { label: 'mode',          kind: 'Method', insertText: 'mode(${1:LORES | VSYNC})',
+      doc: 'Get or set the display mode. Combine flags with |:\n  LORES (160×120), HIRES (320×240), VSYNC\n  FAST_UPDATE, FULL_UPDATE, MEDIUM_UPDATE, DITHER' },
+    { label: 'clear',         kind: 'Method', insertText: 'clear()',
+      doc: 'Fill screen with badge.default_clear, reset pen to badge.default_pen.' },
+    { label: 'poll',          kind: 'Method', insertText: 'poll()',
+      doc: 'Update button state. Called automatically each frame by _update().' },
+    { label: 'update',        kind: 'Method', insertText: 'update()',
+      doc: 'Flip display buffer + poll buttons. Use in simple blocking loops instead of the update() pattern.' },
+    { label: 'pressed',       kind: 'Method', insertText: 'pressed()',
+      doc: 'Buttons pressed this frame. Returns a set, or True/False when a button constant is passed.' },
+    { label: 'held',          kind: 'Method', insertText: 'held()',
+      doc: 'Buttons currently held. Returns a set, or True/False when a button constant is passed.' },
+    { label: 'released',      kind: 'Method', insertText: 'released()',
+      doc: 'Buttons released this frame. Returns a set, or True/False when a button constant is passed.' },
+    { label: 'changed',       kind: 'Method', insertText: 'changed()',
+      doc: 'Buttons whose state changed this frame. Returns a set, or True/False when a button constant is passed.' },
+    { label: 'ticks',         kind: 'Property', doc: 'Milliseconds since startup (int).' },
+    { label: 'ticks_delta',   kind: 'Property', doc: 'Milliseconds elapsed since last badge.poll() call (int).' },
+    { label: 'model',         kind: 'Property', doc: 'Badge model name: "tufty", "badger", or "blinky".' },
+    { label: 'uid',           kind: 'Property', doc: 'Unique hardware ID (hex string).' },
+    { label: 'resolution',    kind: 'Property', doc: '(width, height) tuple for the current display mode.' },
+    { label: 'default_pen',   kind: 'Property', doc: 'Default pen color restored by badge.clear().' },
+    { label: 'default_clear', kind: 'Property', doc: 'Background fill color used by badge.clear().' },
+    { label: 'battery_voltage', kind: 'Method', insertText: 'battery_voltage()',
+      doc: 'Battery voltage in volts (float).' },
+    { label: 'battery_level', kind: 'Method', insertText: 'battery_level()',
+      doc: 'Estimated battery percentage 0–100 (int).' },
+    { label: 'usb_connected', kind: 'Method', insertText: 'usb_connected()',
+      doc: 'True if a USB cable is connected (bool).' },
+    { label: 'is_charging',   kind: 'Method', insertText: 'is_charging()',
+      doc: 'True if the battery is currently charging (bool). Requires USB to be connected.' },
+    { label: 'disk_free',     kind: 'Method', insertText: 'disk_free()',
+      doc: 'Disk usage for a mount point. Returns (total, used, free) in bytes. Args: mountpoint="/system".' },
+    { label: 'light_level',   kind: 'Method', insertText: 'light_level()',
+      doc: 'Raw u16 ambient light sensor reading (Tufty only). Raises RuntimeError on unsupported models.' },
+    { label: 'caselights',    kind: 'Method', insertText: 'caselights(${1:value})',
+      doc: 'Get/set case LED brightness. Pass one value (all LEDs) or four values. Range 0.0–1.0.' },
+    { label: 'sleep',         kind: 'Method', insertText: 'sleep(${1:duration})',
+      doc: 'Enter dormant mode. Args: duration in seconds (optional). Wakes on button or RTC alarm.' },
+    { label: 'wake_reason',   kind: 'Method', insertText: 'wake_reason()',
+      doc: 'Reason the badge woke from sleep (powman constant).' },
+    { label: 'woken_by_button', kind: 'Method', insertText: 'woken_by_button()',
+      doc: 'True if the badge was woken by a button press (bool).' },
+    { label: 'pressed_to_wake', kind: 'Method', insertText: 'pressed_to_wake(${1:button})',
+      doc: 'True if a specific button triggered the wake. Args: button constant.' },
+    { label: 'woken_by_reset', kind: 'Method', insertText: 'woken_by_reset()',
+      doc: 'True if woken by hardware reset (bool).' },
+  ],
+
+  shape: [
+    { label: 'rectangle',        kind: 'Function', insertText: 'rectangle(${1:x}, ${2:y}, ${3:w}, ${4:h})',
+      doc: 'Filled rectangle polygon. Args: x, y, width, height.' },
+    { label: 'rounded_rectangle', kind: 'Function',
+      insertText: 'rounded_rectangle(${1:x}, ${2:y}, ${3:w}, ${4:h}, ${5:r1}, ${6:r2}, ${7:r3}, ${8:r4})',
+      doc: 'Rounded rectangle. Args: x, y, w, h, corner radii (TL, TR, BR, BL).' },
+    { label: 'circle',   kind: 'Function', insertText: 'circle(${1:cx}, ${2:cy}, ${3:r})',
+      doc: 'Circle polygon. Args: cx, cy, radius.' },
+    { label: 'ellipse',  kind: 'Function', insertText: 'ellipse(${1:cx}, ${2:cy}, ${3:rx}, ${4:ry})',
+      doc: 'Ellipse polygon. Args: cx, cy, x-radius, y-radius.' },
+    { label: 'line',     kind: 'Function', insertText: 'line(${1:x1}, ${2:y1}, ${3:x2}, ${4:y2})',
+      doc: 'Line polygon. Args: x1, y1, x2, y2. Optional: thickness.' },
+    { label: 'custom',   kind: 'Function', insertText: 'custom(${1:path})',
+      doc: 'Custom polygon from a list of vec2 points. Pass additional path lists to create holes.' },
+    { label: 'path',     kind: 'Function', insertText: 'path()',
+      doc: 'Create an empty path object for building custom shapes.' },
+  ],
+
+  color: [
+    { label: 'rgb',   kind: 'Function', insertText: 'rgb(${1:r}, ${2:g}, ${3:b})',
+      doc: 'Create a color from RGB values (0–255 each). Optional 4th arg: alpha (0–255).' },
+    { label: 'hsv',   kind: 'Function', insertText: 'hsv(${1:h}, ${2:s}, ${3:v})',
+      doc: 'Create a color from HSV components (0.0–1.0 each).' },
+    { label: 'white', kind: 'Property', doc: 'White color constant.' },
+    { label: 'black', kind: 'Property', doc: 'Black color constant.' },
+    { label: 'red',   kind: 'Property', doc: 'Red color constant.' },
+    { label: 'green', kind: 'Property', doc: 'Green color constant.' },
+    { label: 'blue',  kind: 'Property', doc: 'Blue color constant.' },
+  ],
+
+  text: [
+    { label: 'draw',     kind: 'Method',
+      insertText: 'draw(${1:image}, ${2:text})',
+      doc: 'Draw word-wrapped text into an image.\nArgs: image, text (str), bounds=None (rect), line_spacing=1, word_spacing=1, size=24.\nReturns the bounding rect of drawn text.' },
+    { label: 'scroll',   kind: 'Method',
+      insertText: 'scroll(${1:text})',
+      doc: 'Create a scrolling-text update() function.\nArgs: text (str), font_face=None, font_size=None, target=None (defaults to screen), speed=25, gap=None, align="middle".\nReturns an update function; call with @run or run().' },
+    { label: 'tokenise', kind: 'Method',
+      insertText: 'tokenise(${1:image}, ${2:text})',
+      doc: 'Tokenise text into a list for manual layout. Returns a token list compatible with text.draw().' },
+  ],
+
+  rom_font: [
+    { label: 'sins',     kind: 'Property', doc: 'ROM pixel font: sins (default system font).' },
+    { label: 'absolute', kind: 'Property', doc: 'ROM pixel font: absolute.' },
+    { label: 'vest',     kind: 'Property', doc: 'ROM pixel font: vest.' },
+    { label: 'nope',     kind: 'Property', doc: 'ROM pixel font: nope.' },
+    { label: 'match',    kind: 'Property', doc: 'ROM pixel font: match.' },
+    { label: 'winds',    kind: 'Property', doc: 'ROM pixel font: winds.' },
+    { label: 'hungry',   kind: 'Property', doc: 'ROM pixel font: hungry.' },
+    { label: 'memo',     kind: 'Property', doc: 'ROM pixel font: memo.' },
+    { label: 'fear',     kind: 'Property', doc: 'ROM pixel font: fear.' },
+  ],
+
+  rtc: [
+    { label: 'datetime',         kind: 'Method', insertText: 'datetime()',
+      doc: 'Get or set datetime. Returns (year, month, day, hour, minute, second, weekday).\nPass a tuple to set: rtc.datetime((2025, 1, 1, 12, 0, 0, 2)).' },
+    { label: 'localtime_to_rtc', kind: 'Method', insertText: 'localtime_to_rtc()',
+      doc: 'Write current system time to the hardware RTC chip.' },
+    { label: 'rtc_to_localtime', kind: 'Method', insertText: 'rtc_to_localtime()',
+      doc: 'Read the hardware RTC and set the system clock.' },
+    { label: 'time_from_ntp',    kind: 'Method', insertText: 'time_from_ntp()',
+      doc: 'Fetch current time via NTP and sync to RTC. Requires network.' },
+    { label: 'set_timer',        kind: 'Method', insertText: 'set_timer(${1:ticks})',
+      doc: 'Start a countdown timer. Args: ticks (int), enable_interrupt=True.' },
+    { label: 'timer_elapsed',    kind: 'Method', insertText: 'timer_elapsed()',
+      doc: 'True if the timer has elapsed. Clears the timer flag.' },
+    { label: 'set_alarm',        kind: 'Method', insertText: 'set_alarm(hours=${1:0}, minutes=${2:0})',
+      doc: 'Set a relative wake alarm. Args: hours=0, minutes=0, seconds=0 (relative to now).' },
+    { label: 'clear_alarm',      kind: 'Method', insertText: 'clear_alarm()',
+      doc: 'Cancel any active alarm and clear interrupt flags.' },
+    { label: 'alarm_status',     kind: 'Method', insertText: 'alarm_status()',
+      doc: 'True if the alarm has fired (bool).' },
+  ],
+
+  image: [
+    { label: 'load',     kind: 'Method',   insertText: 'load(${1:file})',
+      doc: 'Load an image from a file path. Returns an image.' },
+    { label: 'OFF',      kind: 'Constant', doc: 'Anti-aliasing off.' },
+    { label: 'X2',       kind: 'Constant', doc: '2× anti-aliasing supersample.' },
+    { label: 'X4',       kind: 'Constant', doc: '4× anti-aliasing supersample.' },
+    { label: 'width',    kind: 'Property', doc: 'Width in pixels.' },
+    { label: 'height',   kind: 'Property', doc: 'Height in pixels.' },
+    { label: 'pen',      kind: 'Property', doc: 'Current draw color.' },
+    { label: 'font',     kind: 'Property', doc: 'Current font.' },
+    { label: 'clip',     kind: 'Property', doc: 'Clip rect (rect). Assign to restrict drawing.' },
+    { label: 'antialias',kind: 'Property', doc: 'Anti-aliasing mode: OFF, X2, or X4.' },
+    { label: 'clear',    kind: 'Method',   insertText: 'clear()',
+      doc: 'Fill with the current pen color.' },
+    { label: 'text',     kind: 'Method',   insertText: 'text(${1:text}, ${2:x}, ${3:y})',
+      doc: 'Draw text at (x, y).' },
+    { label: 'shape',    kind: 'Method',   insertText: 'shape(${1:poly})',
+      doc: 'Draw a filled polygon.' },
+    { label: 'blit',     kind: 'Method',   insertText: 'blit(${1:source}, ${2:pos})',
+      doc: 'Blit another image. Args: source (image), pos (vec2 or rect).' },
+    { label: 'window',   kind: 'Method',   insertText: 'window(${1:x}, ${2:y}, ${3:w}, ${4:h})',
+      doc: 'Create a sub-image view.' },
+    { label: 'measure_text', kind: 'Method', insertText: 'measure_text(${1:text})',
+      doc: 'Measure text dimensions. Returns (width, height).' },
+  ],
+
+  loop: [
+    { label: 'ticks',    kind: 'Property', doc: 'Milliseconds elapsed since this loop started.' },
+    { label: 'progress', kind: 'Property', doc: 'Loop progress 0.0–1.0 (only meaningful when duration was set).' },
+    { label: 'result',   kind: 'Property', doc: 'Return value from the update function (set when the loop exits).' },
+    { label: 'duration', kind: 'Property', doc: 'Total loop duration in ms (or None for infinite).' },
+  ],
+
+  State: [
+    { label: 'save',   kind: 'Method', insertText: 'save(${1:app}, ${2:data})',
+      doc: 'Save a dict to /state/{app}.json.' },
+    { label: 'load',   kind: 'Method', insertText: 'load(${1:app}, ${2:defaults})',
+      doc: 'Load state, updating defaults dict in-place. Returns True if a saved file was found.' },
+    { label: 'modify', kind: 'Method', insertText: 'modify(${1:app}, ${2:data})',
+      doc: 'Merge data dict into existing saved state and re-save.' },
+    { label: 'delete', kind: 'Method', insertText: 'delete(${1:app})',
+      doc: 'Delete /state/{app}.json.' },
+  ],
+
+  SpriteSheet: [
+    { label: 'sprite',    kind: 'Method', insertText: 'sprite(${1:x}, ${2:y})',
+      doc: 'Get the image for a single sprite at grid position (column, row).' },
+    { label: 'animation', kind: 'Method', insertText: 'animation(${1:x}, ${2:y}, ${3:count})',
+      doc: 'Create an AnimatedSprite. Args: x=0, y=0, count=None, horizontal=True.' },
+  ],
+
+  AnimatedSprite: [
+    { label: 'frame', kind: 'Method', insertText: 'frame(${1:0})',
+      doc: 'Get the image for the given frame index (wraps around count).' },
+    { label: 'count', kind: 'Method', insertText: 'count()',
+      doc: 'Total number of animation frames.' },
+  ],
+};
+
+/* Helper: convert our stub entry → Monaco CompletionItem */
+function toCompletionItem(entry, range, monaco) {
+  const K = monaco.languages.CompletionItemKind;
+  const kindMap = {
+    Constant: K.Constant,
+    Variable: K.Variable,
+    Module:   K.Module,
+    Class:    K.Class,
+    Function: K.Function,
+    Method:   K.Method,
+    Property: K.Property,
+  };
+
+  const insertText = entry.insertText ?? entry.label;
+  const isSnippet  = insertText.includes('${');
+
+  return {
+    label:             entry.label,
+    kind:              kindMap[entry.kind] ?? K.Variable,
+    detail:            entry.detail,
+    documentation:     entry.doc,
+    insertText,
+    insertTextRules:   isSnippet
+      ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+      : undefined,
+    range,
+  };
+}
+</script>
+
+<!-- Monaco Editor (AMD loader) — requires CORS-eligible CDN responses.
+     If the server is started with --cross (COEP require-corp) ensure your
+     network can reach cdn.jsdelivr.net and that it returns CORS headers. -->
+<script crossorigin="anonymous"
+        src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+<script>
+require.config({
+  paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' },
+});
+
+require(['vs/editor/editor.main'], async function () {
+
+  /* ── Completion provider ───────────────────────────────────────── */
+  monaco.languages.registerCompletionItemProvider('python', {
+    triggerCharacters: ['.'],
+
+    provideCompletionItems(model, position) {
+      const linePrefix = model.getValueInRange({
+        startLineNumber: position.lineNumber,
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      });
+
+      // Detect "identifier." at end of typed text
+      const dotMatch = linePrefix.match(/(\w+)\.\s*$/);
+
+      if (dotMatch) {
+        const members = MEMBERS[dotMatch[1]];
+        if (members) {
+          const word  = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            startColumn:     word.startColumn,
+            endLineNumber:   position.lineNumber,
+            endColumn:       word.endColumn,
+          };
+          return { suggestions: members.map(m => toCompletionItem(m, range, monaco)) };
+        }
+        // Unknown object after a dot — let Monaco handle it
+        return { suggestions: [] };
+      }
+
+      // Global completions
+      const word  = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        startColumn:     word.startColumn,
+        endLineNumber:   position.lineNumber,
+        endColumn:       word.endColumn,
+      };
+      return { suggestions: BADGEWARE_GLOBALS.map(m => toCompletionItem(m, range, monaco)) };
+    },
+  });
+
+  /* ── Editor ────────────────────────────────────────────────────── */
+  const editor = monaco.editor.create(document.getElementById('editor'), {
+    value:          '# Loading…',
+    language:       'python',
+    theme:          'vs-dark',
+    fontSize:       14,
+    fontFamily:     '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace',
+    fontLigatures:  true,
+    minimap:        { enabled: false },
+    scrollBeyondLastLine: false,
+    lineNumbers:    'on',
+    tabSize:        2,
+    insertSpaces:   true,
+    automaticLayout: true,
+    wordWrap:       'off',
+    renderLineHighlight: 'line',
+    suggestOnTriggerCharacters: true,
+    quickSuggestions: { other: true, comments: false, strings: false },
+    parameterHints: { enabled: true },
+  });
+
+  // Load default example into the editor
+  const defaultCode = await fetch('/simulator/examples/default_code.py')
+    .then(r => r.ok ? r.text() : null)
+    .catch(() => null)
+    ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
+
+  editor.setValue(defaultCode);
+
+  /* ── Simulator ─────────────────────────────────────────────────── */
+  const simHost   = document.getElementById('sim-host');
+  const stdoutEl  = document.getElementById('stdout');
+  const statusEl  = document.getElementById('status');
+
+  const simulator = await BadgewareSimulator(simHost);
+
+  const appendOut = (text, cls) => {
+    const span = document.createElement('span');
+    span.textContent = text + '\n';
+    if (cls) span.className = cls;
+    stdoutEl.appendChild(span);
+    stdoutEl.scrollTop = stdoutEl.scrollHeight;
+  };
+
+  // Override the simulator's stdout handler
+  simulator.stdout = async (text) => appendOut(text);
+
+  /* ── Run action ────────────────────────────────────────────────── */
+  const runCode = async () => {
+    const code = editor.getValue();
+    stdoutEl.innerHTML = '';
+    appendOut('▶ Running…', 'out-dim');
+    statusEl.textContent = 'Running…';
+    try {
+      await simulator.run(code);
+      statusEl.textContent = '';
+    } catch (err) {
+      appendOut('✕ ' + err, 'out-error');
+      statusEl.textContent = 'Error';
+    }
+  };
+
+  // F5 keybinding inside the editor
+  editor.addAction({
+    id:                   'badgeware.run',
+    label:                'Run in Simulator',
+    keybindings:          [monaco.KeyCode.F5],
+    contextMenuGroupId:   'navigation',
+    contextMenuOrder:     1,
+    run:                  runCode,
+  });
+
+  /* ── Toolbar wiring ────────────────────────────────────────────── */
+  document.getElementById('run-btn').addEventListener('click', runCode);
+
+  document.getElementById('example-select').addEventListener('change', async (e) => {
+    if (!e.target.value) return;
+    const code = await fetch(e.target.value)
+      .then(r => r.ok ? r.text() : null)
+      .catch(() => null);
+    if (code != null) editor.setValue(code);
+    e.target.value = '';
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    stdoutEl.innerHTML = '';
+  });
+
+  /* ── Auto-run on load ──────────────────────────────────────────── */
+  await runCode();
+});
+</script>
+</body>
 </html>

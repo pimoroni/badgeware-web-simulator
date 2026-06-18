@@ -98,7 +98,7 @@ function initBadge3D(simulator, appendOut) {
       const raycaster    = new THREE.Raycaster();
       let   heldMask     = 0;
       let   buttonAnimator  = null;
-      let   ledState        = null;   // { lights: PointLight[4], coverMesh }
+      let   ledState        = null;   // { lights: SpotLight[4], coverMesh }
       let   _ledSimActive   = false;  // true once MicroPython has sent caselights data
 
       // Drive the 3D case LEDs when badge.caselights() is called from MicroPython
@@ -261,7 +261,7 @@ function initBadge3D(simulator, appendOut) {
         };
       }
 
-      /* ── Case LEDs (4× PointLights behind badge + emissive cover) ── */
+      /* ── Case LEDs (4× SpotLights facing out the back + emissive cover) ── */
       function createLedLights(root) {
         root.updateWorldMatrix(true, true);
         const faceOut = new THREE.Vector3(0, 1, 0)
@@ -285,10 +285,21 @@ function initBadge3D(simulator, appendOut) {
         ];
         const lights = LED_MESH_LOCAL.map(lp => {
           const wp = rm4.localToWorld(lp.clone());
-          wp.addScaledVector(faceOut, -0.002); // 2mm inside back face
-          const light = new THREE.PointLight(0xfff0e0, 0, 0.04, 2);
+          wp.addScaledVector(faceOut, -0.004); // 4mm outside back face
+          const light = new THREE.SpotLight(0xfff0e0, 1, 0.02, Math.PI, 0, 2);
           light.position.copy(wp);
           scene.add(light);
+
+          // Aim the cone straight out the back of the case (opposite the screen
+          // normal) by placing the spotlight's target behind the light.
+          light.target.position.copy(wp).addScaledVector(faceOut, -0.05);
+          scene.add(light.target);
+
+          // Parent light + target to the badge so they spin with it (attach
+          // preserves the world transforms we just computed). Otherwise they stay
+          // world-fixed and drift out of the model once the badge is rotated.
+          rm4.attach(light);
+          rm4.attach(light.target);
           return light;
         });
 

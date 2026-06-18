@@ -640,6 +640,7 @@
 
 <script src="/simulator/completions.js"></script>
 <script src="/simulator/ppf.js"></script>
+<script src="/simulator/af.js"></script>
 
 <script>
 /* ── Base64 helpers ──────────────────────────────────────────────────────── */
@@ -1691,6 +1692,7 @@ require(['vs/editor/editor.main'], async function () {
   async function openSysFile(path, transient = false) {
     const ext = path.slice(path.lastIndexOf('.'));
     if (ext === '.ppf') { await openSysPpfFile(path, transient); return; }
+    if (ext === '.af')  { await openSysAfFile(path, transient);  return; }
     if (!TEXT_EXTS.has(ext)) return;
     const key = 'sys:' + path;
     if (openModels.has(key)) {
@@ -1721,6 +1723,7 @@ require(['vs/editor/editor.main'], async function () {
     const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
     if (IMAGE_EXTS.has(ext)) { openUserImageFile(path, entry, transient); return; }
     if (ext === '.ppf') { openUserPpfFile(path, entry, transient); return; }
+    if (ext === '.af')  { openUserAfFile(path, entry, transient);  return; }
     if (entry.binary) return;
     if (openModels.has(path)) {
       if (!transient && openModels.get(path).transient) promoteTab(path);
@@ -1790,6 +1793,47 @@ require(['vs/editor/editor.main'], async function () {
       const buf   = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       const font  = ppfParse(buf);
       const { dataUrl, dimText } = ppfPreview(font);
+      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
+      openOrder.push(key);
+      if (transient) transientTabKey = key;
+    } catch (_) { return; }
+    focusTab(key);
+  }
+
+  async function openSysAfFile(path, transient = false) {
+    const key = 'af:sys:' + path;
+    if (openModels.has(key)) {
+      if (!transient && openModels.get(key).transient) promoteTab(key);
+      focusTab(key);
+      statusEl.textContent = path + ' — read-only';
+      return;
+    }
+    if (transient) evictTransient(key);
+    try {
+      const buf  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+      const font = afParse(buf);
+      const { dataUrl, dimText } = afPreview(font);
+      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
+      openOrder.push(key);
+      if (transient) transientTabKey = key;
+    } catch (_) { return; }
+    focusTab(key);
+    statusEl.textContent = path + ' — read-only';
+  }
+
+  function openUserAfFile(path, entry, transient = false) {
+    const key = 'af:' + path;
+    if (openModels.has(key)) {
+      if (!transient && openModels.get(key).transient) promoteTab(key);
+      focusTab(key);
+      return;
+    }
+    if (transient) evictTransient(key);
+    try {
+      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
+      const buf   = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const font  = afParse(buf);
+      const { dataUrl, dimText } = afPreview(font);
       openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
       openOrder.push(key);
       if (transient) transientTabKey = key;

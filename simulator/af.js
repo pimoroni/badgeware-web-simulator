@@ -177,5 +177,5 @@ function afPreview(font, options = {}) {
   }
 
   const dimText = `vector · ${font.glyphCount} glyphs`;
-  return { dataUrl: canvas.toDataURL(), dimText };
+  return { imgUrl: canvas.toDataURL(), dimText };
 }

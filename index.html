@@ -1680,8 +1680,29 @@ require(['vs/editor/editor.main'], async function () {
   }
 
   /* ── File helpers ──────────────────────────────────────────────── */
-  const TEXT_EXTS  = new Set(['.py', '.json', '.txt', '.md', '.csv', '.toml', '.ini', '.mpy']);
-  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.svg', '.gif', '.bmp', '.webp']);
+  /* ── File-type dispatch table ──────────────────────────────────── */
+  /* kind: 'text'    — open in Monaco editor                         */
+  /* kind: 'image'   — decode bytes → blob URL → img preview         */
+  /* kind: 'preview' — parse binary → render canvas → img preview    */
+  const FILE_HANDLERS = {
+    '.ppf':  { kind: 'preview', keyPrefix: 'ppf', open: buf => ppfPreview(ppfParse(buf)) },
+    '.af':   { kind: 'preview', keyPrefix: 'af',  open: buf => afPreview(afParse(buf)) },
+    '.png':  { kind: 'image',   mime: 'image/png' },
+    '.jpg':  { kind: 'image',   mime: 'image/jpeg' },
+    '.jpeg': { kind: 'image',   mime: 'image/jpeg' },
+    '.svg':  { kind: 'image',   mime: 'image/svg+xml' },
+    '.gif':  { kind: 'image',   mime: 'image/gif' },
+    '.bmp':  { kind: 'image',   mime: 'image/bmp' },
+    '.webp': { kind: 'image',   mime: 'image/webp' },
+    '.py':   { kind: 'text' },
+    '.json': { kind: 'text' },
+    '.txt':  { kind: 'text' },
+    '.md':   { kind: 'text' },
+    '.csv':  { kind: 'text' },
+    '.toml': { kind: 'text' },
+    '.ini':  { kind: 'text' },
+    '.mpy':  { kind: 'text' },
+  };
 
   function normalisePath(raw) {
     // Ensure the path starts with / and trim whitespace
@@ -1689,41 +1710,73 @@ require(['vs/editor/editor.main'], async function () {
     return p.startsWith('/') ? p : '/' + p;
   }
 
-  async function openSysFile(path, transient = false) {
-    const ext = path.slice(path.lastIndexOf('.'));
-    if (ext === '.ppf') { await openSysPpfFile(path, transient); return; }
-    if (ext === '.af')  { await openSysAfFile(path, transient);  return; }
-    if (!TEXT_EXTS.has(ext)) return;
-    const key = 'sys:' + path;
+  function openBinaryTab(key, buf, handler, transient, mimeOverride) {
     if (openModels.has(key)) {
       if (!transient && openModels.get(key).transient) promoteTab(key);
       focusTab(key);
-      statusEl.textContent = path + ' — read-only';
       return;
     }
     if (transient) evictTransient(key);
     try {
-      const text = await fetch('/simulator/filesystem' + path).then(r => {
-        if (!r.ok) throw new Error();
-        return r.text();
-      });
-      const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
-      const model = monaco.editor.createModel(text, langForPath(path), uri);
-      openModels.set(key, { model, dirty: false, readOnly: true, transient });
+      let imgUrl, dimText;
+      if (handler.kind === 'preview') {
+        ({ imgUrl, dimText } = handler.open(buf));
+      } else {
+        imgUrl = URL.createObjectURL(new Blob([buf], { type: mimeOverride || handler.mime }));
+      }
+      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl, dimText, label: key.slice(key.lastIndexOf('/') + 1), transient });
       openOrder.push(key);
       if (transient) transientTabKey = key;
     } catch (_) { return; }
     focusTab(key);
+  }
+
+  async function openSysFile(path, transient = false) {
+    const ext     = path.slice(path.lastIndexOf('.'));
+    const handler = FILE_HANDLERS[ext];
+    if (!handler) return;
+
+    if (handler.kind === 'text') {
+      const key = 'sys:' + path;
+      if (openModels.has(key)) {
+        if (!transient && openModels.get(key).transient) promoteTab(key);
+        focusTab(key);
+        statusEl.textContent = path + ' — read-only';
+        return;
+      }
+      if (transient) evictTransient(key);
+      try {
+        const text  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
+        const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
+        const model = monaco.editor.createModel(text, langForPath(path), uri);
+        openModels.set(key, { model, dirty: false, readOnly: true, transient });
+        openOrder.push(key);
+        if (transient) transientTabKey = key;
+      } catch (_) { return; }
+      focusTab(key);
+    } else {
+      const key = (handler.keyPrefix ?? 'img') + ':sys:' + path;
+      try {
+        const buf = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+        openBinaryTab(key, buf, handler, transient);
+      } catch (_) {}
+    }
     statusEl.textContent = path + ' — read-only';
   }
 
   function openUserFile(path, transient = false) {
     const entry = userFS.get(path);
     if (!entry || entry.isDir) return;
-    const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
-    if (IMAGE_EXTS.has(ext)) { openUserImageFile(path, entry, transient); return; }
-    if (ext === '.ppf') { openUserPpfFile(path, entry, transient); return; }
-    if (ext === '.af')  { openUserAfFile(path, entry, transient);  return; }
+    const ext     = path.slice(path.lastIndexOf('.')).toLowerCase();
+    const handler = FILE_HANDLERS[ext];
+    if (!handler) return;
+
+    if (handler.kind !== 'text') {
+      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
+      openBinaryTab((handler.keyPrefix ?? 'img') + ':' + path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), handler, transient, entry.mimeType);
+      return;
+    }
+
     if (entry.binary) return;
     if (openModels.has(path)) {
       if (!transient && openModels.get(path).transient) promoteTab(path);
@@ -1737,108 +1790,6 @@ require(['vs/editor/editor.main'], async function () {
     openOrder.push(path);
     if (transient) transientTabKey = path;
     focusTab(path);
-  }
-
-  function openUserImageFile(path, entry, transient = false) {
-    const imgKey = 'img:' + path;
-    if (openModels.has(imgKey)) {
-      if (!transient && openModels.get(imgKey).transient) promoteTab(imgKey);
-      focusTab(imgKey);
-      return;
-    }
-    if (transient) evictTransient(imgKey);
-    const ext      = path.slice(path.lastIndexOf('.')).toLowerCase();
-    const mimeMap  = { '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp' };
-    const mimeType = entry.mimeType || mimeMap[ext] || 'application/octet-stream';
-    const bytes    = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
-    const blob     = new Blob([bytes], { type: mimeType });
-    const imgUrl   = URL.createObjectURL(blob);
-    openModels.set(imgKey, { model: null, dirty: false, readOnly: true, imgUrl, label: path.split('/').pop(), transient });
-    openOrder.push(imgKey);
-    if (transient) transientTabKey = imgKey;
-    focusTab(imgKey);
-  }
-
-  async function openSysPpfFile(path, transient = false) {
-    const key = 'ppf:sys:' + path;
-    if (openModels.has(key)) {
-      if (!transient && openModels.get(key).transient) promoteTab(key);
-      focusTab(key);
-      statusEl.textContent = path + ' — read-only';
-      return;
-    }
-    if (transient) evictTransient(key);
-    try {
-      const buf  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-      const font = ppfParse(buf);
-      const { dataUrl, dimText } = ppfPreview(font);
-      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
-      openOrder.push(key);
-      if (transient) transientTabKey = key;
-    } catch (_) { return; }
-    focusTab(key);
-    statusEl.textContent = path + ' — read-only';
-  }
-
-  function openUserPpfFile(path, entry, transient = false) {
-    const key = 'ppf:' + path;
-    if (openModels.has(key)) {
-      if (!transient && openModels.get(key).transient) promoteTab(key);
-      focusTab(key);
-      return;
-    }
-    if (transient) evictTransient(key);
-    try {
-      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
-      const buf   = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      const font  = ppfParse(buf);
-      const { dataUrl, dimText } = ppfPreview(font);
-      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
-      openOrder.push(key);
-      if (transient) transientTabKey = key;
-    } catch (_) { return; }
-    focusTab(key);
-  }
-
-  async function openSysAfFile(path, transient = false) {
-    const key = 'af:sys:' + path;
-    if (openModels.has(key)) {
-      if (!transient && openModels.get(key).transient) promoteTab(key);
-      focusTab(key);
-      statusEl.textContent = path + ' — read-only';
-      return;
-    }
-    if (transient) evictTransient(key);
-    try {
-      const buf  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-      const font = afParse(buf);
-      const { dataUrl, dimText } = afPreview(font);
-      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
-      openOrder.push(key);
-      if (transient) transientTabKey = key;
-    } catch (_) { return; }
-    focusTab(key);
-    statusEl.textContent = path + ' — read-only';
-  }
-
-  function openUserAfFile(path, entry, transient = false) {
-    const key = 'af:' + path;
-    if (openModels.has(key)) {
-      if (!transient && openModels.get(key).transient) promoteTab(key);
-      focusTab(key);
-      return;
-    }
-    if (transient) evictTransient(key);
-    try {
-      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
-      const buf   = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      const font  = afParse(buf);
-      const { dataUrl, dimText } = afPreview(font);
-      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
-      openOrder.push(key);
-      if (transient) transientTabKey = key;
-    } catch (_) { return; }
-    focusTab(key);
   }
 
   /* ── User-tree renderer (hierarchical, with context menu + actions) */
@@ -2092,7 +2043,7 @@ require(['vs/editor/editor.main'], async function () {
   document.getElementById('fp-upload-input').addEventListener('change', async e => {
     for (const file of e.target.files) {
       const path   = normalisePath(file.name);
-      const isText = TEXT_EXTS.has(path.slice(path.lastIndexOf('.'))) || file.type.startsWith('text/');
+      const isText = FILE_HANDLERS[path.slice(path.lastIndexOf('.'))]?.kind === 'text' || file.type.startsWith('text/');
       if (isText) {
         userFS.set(path, { text: await file.text(), binary: false });
       } else {

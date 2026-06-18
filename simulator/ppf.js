@@ -153,5 +153,5 @@ function ppfPreview(font, options = {}) {
   ctx.restore();
 
   const dimText = `${font.cellWidth}×${font.glyphHeight} px · ${font.glyphCount} glyphs`;
-  return { dataUrl: canvas.toDataURL(), dimText };
+  return { imgUrl: canvas.toDataURL(), dimText };
 }

@@ -1,7 +1,6 @@
 {
     "files": [
         "/powman.py",
-        "/machine.py",
         "/pcf85063a.py",
         "/badgeware/memory.py",
         "/badgeware/filesystem.py",

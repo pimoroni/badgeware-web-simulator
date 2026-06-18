@@ -7,6 +7,24 @@ worker.paused = true
 worker.input = 0
 worker.debug = false
 
+// Simulated `machine` peripheral state, shared with the WASM module.
+// The C `machine` module reads/writes this object via EM_ASM:
+//   gpio       - last value driven by Pin.value(x), keyed by gpio number
+//   gpio_in    - input states the host may set, keyed by gpio number
+//   pwm        - {freq, duty} keyed by gpio number (duty is a u16, 0..65535)
+//   caselights - normalised 0..1 duty for CL0..CL3 (GPIO0..3)
+//   adc        - ADC sample values (u16) keyed by channel, host-settable
+worker.machine = {
+  gpio: {},
+  gpio_in: {},
+  pwm: {},
+  caselights: [0, 0, 0, 0],
+  adc: {},
+}
+
+// Snapshot used to avoid posting unchanged caselight values every frame.
+worker._caselights_last = "0,0,0,0"
+
 import("/simulator/micropython.mjs").then((mp_mjs) => {
   const stdoutWriter = (line) => {
     if (worker.debug) console.log(`WORKER: stdout: ${line}`)
@@ -57,17 +75,35 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
       }
     })
 
+    worker.update_caselights = () => {
+      // Forward caselight PWM values to the host for visualisation, but only
+      // when they've actually changed to avoid flooding the message channel.
+      const caselights = worker.machine.caselights
+      const key = caselights.join(",")
+      if (key !== worker._caselights_last) {
+        worker._caselights_last = key
+        worker.postMessage({ caselights: caselights.slice() })
+      }
+    }
+
     // Handle a flip from a 160x120x4 byte buffer
     worker.flip_lores = (data) => {
       worker.lores_canvas_image.data.set(data);
       worker.lores_canvas_context.putImageData(worker.lores_canvas_image, 0, 0);
       worker.canvas_context.drawImage(worker.lores_canvas, 0, 0, 320, 240);
+      worker.update_caselights();
+    }
+
+    // Forward case-light values [v0..v3] (0.0–1.0) to the host
+    worker.set_case_lights = (v0, v1, v2, v3) => {
+      worker.postMessage({ caselights: [v0, v1, v2, v3] });
     }
 
     // Handle a flip from a 320x240x4 byte buffer
     worker.flip_hires = (data) => {
       worker.canvas_image.data.set(data);
       worker.canvas_context.putImageData(worker.canvas_image, 0, 0);
+      worker.update_caselights();
     }
 
     // Use requestAnimationFrame to pace the update loop, since this will

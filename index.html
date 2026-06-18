@@ -562,6 +562,7 @@
     <option value="/simulator/examples/another_code.py">another_code.py</option>
     <option value="/simulator/examples/menu.py">menu.py</option>
     <option value="/simulator/examples/file_test.py">file_test.py</option>
+    <option value="/simulator/examples/caselights.py">caselights.py</option>
   </select>
   <span id="status"></span>
 </div>
@@ -1213,14 +1214,16 @@ require(['vs/editor/editor.main'], async function () {
     if (!_three || !_glbScreenMesh || !simulator.canvas) return;
     if (_glbScreenTex) _glbScreenTex.dispose();
     _glbScreenTex = new _three.CanvasTexture(simulator.canvas);
-    _glbScreenTex.magFilter = _three.NearestFilter;
-    _glbScreenTex.minFilter = _three.NearestFilter;
-    _glbScreenTex.flipY     = false;
-    _glbScreenMesh.material.map          = _glbScreenTex;
-    _glbScreenMesh.material.emissiveMap  = _glbScreenTex;
-    _glbScreenMesh.material.emissive.set(1, 1, 1);
-    _glbScreenMesh.material.emissiveIntensity = 1.0;
-    _glbScreenMesh.material.needsUpdate  = true;
+    _glbScreenTex.magFilter  = _three.NearestFilter;
+    _glbScreenTex.minFilter  = _three.NearestFilter;
+    _glbScreenTex.flipY      = false;
+    _glbScreenTex.colorSpace = _three.SRGBColorSpace;
+    // MeshBasicMaterial is unlit — scene lights can't lift the blacks.
+    if (!(_glbScreenMesh.material instanceof _three.MeshBasicMaterial)) {
+      _glbScreenMesh.material = new _three.MeshBasicMaterial();
+    }
+    _glbScreenMesh.material.map         = _glbScreenTex;
+    _glbScreenMesh.material.needsUpdate = true;
   }
 
   const simHost   = document.getElementById('sim-host');
@@ -1288,9 +1291,21 @@ require(['vs/editor/editor.main'], async function () {
       const allHitMeshes = [];
       const raycaster    = new THREE.Raycaster();
       let   heldMask     = 0;
+      let   buttonAnimator  = null;
+      let   ledState        = null;   // { lights: PointLight[4], coverMesh }
+      let   _ledSimActive   = false;  // true once MicroPython has sent caselights data
+
+      // Drive the 3D case LEDs when badge.caselights() is called from MicroPython
+      simulator.caselights = (values) => {
+        _ledSimActive = true;
+        if (!ledState) return;
+        const { lights, coverMesh } = ledState;
+        lights.forEach((l, i) => { l.intensity = (values[i] || 0) * 2; });
+        if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...values);
+      };
 
       function buttonMaskAt(ev) {
-        if (!_glbScreenMesh) return 0;
+        if (!_glbScreenMesh) return { mask: 0, worldPt: null };
         const rect  = renderer.domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2(
           ((ev.clientX - rect.left) / rect.width)  *  2 - 1,
@@ -1298,28 +1313,33 @@ require(['vs/editor/editor.main'], async function () {
         );
         raycaster.setFromCamera(mouse, camera);
         const hits = raycaster.intersectObjects(allHitMeshes, true);
-        if (!hits.length) return 0;
+        if (!hits.length) return { mask: 0, worldPt: null };
+        const worldPt = hits[0].point.clone();
         const lp = _glbScreenMesh.worldToLocal(hits[0].point.clone());
         // lp.x = left(-)/right(+), lp.z = up(-)/down(+) in screen-local space
         // Screen area x∈[-0.029,+0.029], z∈[-0.022,+0.022]
-        if (Math.abs(lp.x) < 0.029 && lp.z < 0.022 && lp.z > -0.022) return 0;
-        if (lp.x > 0.028) return lp.z < 0.005 ? 2 : 1;   // UP / DOWN (right edge)
-        if (lp.z > 0.018) {                                 // A / B / C (bottom row)
-          if (lp.x < -0.008) return 16;
-          if (lp.x < +0.008) return 8;
-          return 4;
+        // Ignore screen area
+        if (Math.abs(lp.x) < 0.029 && lp.z < 0.022 && lp.z > -0.022) return { mask: 0, worldPt: null };
+        // Right-edge panel only — constrain Z so far corners don't fire
+        if (lp.x > 0.028 && lp.x < 0.045 && lp.z > -0.016 && lp.z < 0.020) {
+          return { mask: lp.z < 0.005 ? 2 : 1, worldPt };                     // UP / DOWN
         }
-        if (lp.z < -0.022) return 32;                       // HOME (above screen)
-        return 0;
+        // Bottom button strip — constrain to centred region just below screen
+        if (lp.z > 0.018 && lp.z < 0.035 && Math.abs(lp.x) < 0.028) {
+          const mask = lp.x < -0.008 ? 16 : lp.x < +0.008 ? 8 : 4;
+          return { mask, worldPt };                                             // A / B / C
+        }
+        return { mask: 0, worldPt: null };
       }
 
       // Capture-phase pointerdown so button hits block OrbitControls entirely
       renderer.domElement.addEventListener('pointerdown', ev => {
-        const mask = buttonMaskAt(ev);
+        const { mask, worldPt } = buttonMaskAt(ev);
         if (!mask) return;
         heldMask = mask;
         simulator.buttons |= mask;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+        if (buttonAnimator) buttonAnimator.press(mask, worldPt);
         controls.enabled = false;
         ev.stopPropagation();
       }, true);
@@ -1327,6 +1347,7 @@ require(['vs/editor/editor.main'], async function () {
       renderer.domElement.addEventListener('pointerup', ev => {
         if (!heldMask) return;
         simulator.buttons &= ~heldMask;
+        if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
         controls.enabled = true;
@@ -1336,10 +1357,140 @@ require(['vs/editor/editor.main'], async function () {
       renderer.domElement.addEventListener('pointercancel', () => {
         if (!heldMask) return;
         simulator.buttons &= ~heldMask;
+        if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
         controls.enabled = true;
       });
+
+      /* ── Button press animation (siloed — swap out when geometry improves) ──
+         Approach: onBeforeCompile vertex displacement on the cap mesh(es)
+         found by raycasting at each button zone, plus a screen-space ripple. */
+      function initButtonAnimator(root, tuftyNode) {
+        root.updateWorldMatrix(true, true);
+
+        // Badge face outward normal in world space (= screen local +Y → world)
+        const faceOut = new THREE.Vector3(0, 1, 0)
+          .transformDirection(_glbScreenMesh.matrixWorld).normalize();
+        const faceIn  = faceOut.clone().negate();
+
+        // Button zone centres in screen-local space (Y=0 = on screen plane)
+        const BTN_DEFS = [
+          { mask: 16, slc: new THREE.Vector3(-0.018,  0,  0.023) }, // A
+          { mask:  8, slc: new THREE.Vector3(  0.00,  0,  0.023) }, // B
+          { mask:  4, slc: new THREE.Vector3(+0.018,  0,  0.023) }, // C
+          { mask:  2, slc: new THREE.Vector3(+0.035,  0, -0.002) }, // UP
+          { mask:  1, slc: new THREE.Vector3(+0.035,  0, +0.010) }, // DOWN
+        ];
+
+        // Raycast from in front of each zone inward to find actual hit mesh + world point
+        const btnRay = new THREE.Raycaster();
+        const hitData = BTN_DEFS.map((b, idx) => {
+          const worldPt = _glbScreenMesh.localToWorld(b.slc.clone());
+          const origin  = worldPt.clone().addScaledVector(faceOut, 0.04);
+          btnRay.set(origin, faceIn);
+          const hits = btnRay.intersectObjects(allHitMeshes, false)
+                             .filter(h => h.object !== _glbScreenMesh);
+          return {
+            mask:    b.mask,
+            idx,
+            worldPt: hits.length ? hits[0].point.clone() : worldPt.clone(),
+            mesh:    hits.length ? hits[0].object : null,
+          };
+        });
+
+        // Shared animation state — one slot per BTN_DEFS entry
+        const pressVals = [0, 0, 0, 0, 0];
+        const targets   = [0, 0, 0, 0, 0];
+
+        // ── Ripple pool (visual "dash of 3") ─────────────────────────────
+        const RIPPLE_DUR  = 0.42;
+        const ripplePool  = Array.from({ length: 4 }, () => {
+          const mat  = new THREE.MeshBasicMaterial({
+            color: 0xffffff, transparent: true, opacity: 0,
+            side: THREE.DoubleSide, depthWrite: false,
+          });
+          const mesh = new THREE.Mesh(new THREE.RingGeometry(0.003, 0.007, 32), mat);
+          mesh.visible = false;
+          scene.add(mesh);
+          return { mesh, t: -1 };
+        });
+
+        const _ringNormal = new THREE.Vector3(0, 0, 1);
+        function spawnRipple(worldPt) {
+          const r = ripplePool.find(r => r.t < 0)
+                 || ripplePool.reduce((a, b) => a.t > b.t ? a : b);
+          r.mesh.position.copy(worldPt).addScaledVector(faceOut, 0.0003);
+          r.mesh.quaternion.setFromUnitVectors(_ringNormal, faceOut);
+          r.mesh.scale.setScalar(0.15);
+          r.mesh.material.opacity = 0.55;
+          r.mesh.visible = true;
+          r.t = 0;
+        }
+
+        // ── Public API ────────────────────────────────────────────────────
+        const PRESS_SPD   = 22;
+        const RELEASE_SPD = 9;
+
+        return {
+          press(mask, worldHitPt) {
+            hitData.forEach(h => { if (mask & h.mask) targets[h.idx] = 1; });
+            if (worldHitPt) spawnRipple(worldHitPt);
+          },
+          release(mask) {
+            hitData.forEach(h => { if (mask & h.mask) targets[h.idx] = 0; });
+          },
+          update(dt) {
+            for (let i = 0; i < 5; i++) {
+              const spd = targets[i] > pressVals[i] ? PRESS_SPD : RELEASE_SPD;
+              pressVals[i] += (targets[i] - pressVals[i]) * Math.min(1, spd * dt);
+            }
+
+            ripplePool.forEach(r => {
+              if (r.t < 0) return;
+              r.t += dt / RIPPLE_DUR;
+              if (r.t >= 1) { r.t = -1; r.mesh.visible = false; return; }
+              const ease = 1 - Math.pow(1 - r.t, 2);
+              r.mesh.scale.setScalar(0.15 + ease * 1.85);
+              r.mesh.material.opacity = 0.55 * (1 - r.t);
+            });
+          },
+        };
+      }
+
+      /* ── Case LEDs (4× PointLights behind badge + emissive cover) ── */
+      function createLedLights(root) {
+        root.updateWorldMatrix(true, true);
+        const faceOut = new THREE.Vector3(0, 1, 0)
+          .transformDirection(_glbScreenMesh.matrixWorld).normalize();
+
+        const rm4 = root.getObjectByName('RM051_4');
+        if (!rm4 || !rm4.isMesh) return { lights: [], coverMesh: null };
+
+        rm4.material = rm4.material.clone();
+        rm4.material.emissive.set(1, 0.94, 0.88);
+        rm4.material.emissiveIntensity = 0;
+
+        // Centroids of the 4 LED clusters in RM051_4's own mesh space
+        // (RM051 and tufty_packages both carry non-trivial matrices, so we
+        //  must use rm4.localToWorld() rather than tuftyNode.localToWorld())
+        const LED_MESH_LOCAL = [
+          new THREE.Vector3(-0.02700, 0, -0.04855), // CL0: left-top
+          new THREE.Vector3(-0.02700, 0, -0.00855), // CL1: left-bottom
+          new THREE.Vector3(+0.02700, 0, -0.04855), // CL2: right-top
+          new THREE.Vector3(+0.02683, 0, -0.00855), // CL3: right-bottom
+        ];
+        const lights = LED_MESH_LOCAL.map(lp => {
+          const wp = rm4.localToWorld(lp.clone());
+          wp.addScaledVector(faceOut, -0.002); // 2mm inside back face
+          const light = new THREE.PointLight(0xfff0e0, 0, 0.04, 2);
+          light.position.copy(wp);
+          scene.add(light);
+          return light;
+        });
+
+        return { lights, coverMesh: rm4 };
+      }
 
       /* Load the Tufty badge model */
       new GLTFLoader().load('/static/models/badgeware.glb', (gltf) => {
@@ -1410,6 +1561,12 @@ require(['vs/editor/editor.main'], async function () {
             if (child.isMesh) allHitMeshes.push(child);
           });
         }
+
+        /* Init button animator after meshes are collected and matrices settled */
+        if (_glbScreenMesh && tuftyNode) {
+          buttonAnimator = initButtonAnimator(root, tuftyNode);
+          ledState = createLedLights(root);
+        }
       });
 
       /* Keep renderer sized to container */
@@ -1423,10 +1580,21 @@ require(['vs/editor/editor.main'], async function () {
       }).observe(wrap);
 
       /* Render loop */
-      ;(function loop() {
+      let _loopLastT = 0;
+      ;(function loop(t = 0) {
         requestAnimationFrame(loop);
+        const dt = Math.min((t - _loopLastT) / 1000, 0.1);
+        _loopLastT = t;
         controls.update();
         if (_glbScreenTex) _glbScreenTex.needsUpdate = true;
+        if (buttonAnimator) buttonAnimator.update(dt);
+        if (ledState && !_ledSimActive) {
+          const { lights, coverMesh } = ledState;
+          lights.forEach((l, i) => {
+            l.intensity = Math.max(0, Math.cos(t * 0.0025 + i * Math.PI * 0.5)) ** 2 * 2;
+          });
+          if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...lights.map(l => l.intensity)) / 2;
+        }
         renderer.render(scene, camera);
       })();
 

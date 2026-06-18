@@ -113,6 +113,7 @@ const BadgewareSimulator = async (target) => {
             target.removeChild(node)
         })
         simulator.canvas = null
+        await simulator.caselights([0, 0, 0, 0])
     }
 
     /*
@@ -152,7 +153,7 @@ const BadgewareSimulator = async (target) => {
         simulator.micropython = new Worker('/simulator/micropython.worker.js?v=2', { type: "module" })
 
         debug_log("HOST: Running MicroPython code from editor...")
-        simulator.micropython.onmessage = async ({ data: { stdout, ready, running } }) => {
+        simulator.micropython.onmessage = async ({ data: { stdout, ready, running, caselights } }) => {
 
             if (ready){
                 // Run when the worker is ready to accept a canvas/code
@@ -177,6 +178,11 @@ const BadgewareSimulator = async (target) => {
                 return
             }
 
+            if (caselights !== undefined) {
+                await simulator.caselights(caselights)
+                return
+            }
+
             debug_log("HOST: Unhandled message.")
         }
     }
@@ -198,6 +204,10 @@ const BadgewareSimulator = async (target) => {
             simulator.dom_stdout.scrollTop = simulator.dom_stdout.scrollHeight
         }
     }
+
+    // Called with an array of 4 floats [0.0–1.0] when badge.caselights() is called.
+    // Override this in the host to drive a physical LED representation.
+    simulator.caselights = async (_values) => {}
 
     return simulator
 }

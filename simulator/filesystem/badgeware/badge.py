@@ -105,7 +105,7 @@ class Badge():
         return True
 
     def update(self):
-        display.update(screen.width == 320)
+        display.update()
         badge.clear()
         badge.poll()
         return True
@@ -120,9 +120,8 @@ class Badge():
         self._current_mode = mode
 
         if MODEL == "tufty":
-            pass
-            # display.fullres(bool(mode & HIRES))
-            # display.set_vsync(bool(mode & VSYNC))
+            display.fullres(bool(mode & HIRES))
+            display.set_vsync(bool(mode & VSYNC))
 
         elif MODEL == "badger":
             display.speed((self._current_mode >> 4) & 0xf)
@@ -130,8 +129,7 @@ class Badge():
         if MODEL == "tufty" or getattr(builtins, "screen", None) is None:
             font = getattr(getattr(builtins, "screen", None), "font", None)
             brush = getattr(getattr(builtins, "screen", None), "pen", None)
-            resolution = (320, 240) if mode & HIRES else (160, 120)
-            builtins.screen = image(*resolution, display.get_buffer())
+            builtins.screen = image(display.WIDTH, display.HEIGHT, memoryview(display))
             screen.font = font if font is not None else rom_font.sins
             screen.pen = brush if brush is not None else self.default_pen
 

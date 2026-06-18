@@ -5,8 +5,7 @@ import time
 import os
 
 import machine
-# import st7789
-import simulator
+import st7789
 import builtins
 
 import picovector
@@ -54,7 +53,7 @@ class _run:
                     self.result = result
                     return
 
-                display.update(screen.width == 320)
+                display.update()
                 badge.poll()
 
                 if self.duration is not None and self.ticks >= self.duration:
@@ -161,10 +160,10 @@ def fatal_error(title, error):
 
     message(title, error)
 
-    simulator.update(screen.width == 320)
+    display.update()
 
 
-# display = st7789.ST7789()
+display = st7789.ST7789()
 
 # Import PicoSystem module constants to builtins,
 # so they are available globally.
@@ -178,7 +177,7 @@ builtins.X2 = image.X2
 builtins.X4 = image.X4
 
 # Hoist display and run for clean Thonny apps
-builtins.display = simulator
+builtins.display = display
 builtins.run = _run
 builtins.launch = launch
 builtins.loop = None
@@ -215,7 +214,7 @@ def _update(update):
             fatal_error("Error!", get_exception(e))
             failed = True
         gc.collect()
-    simulator.update(screen.width == 320)
+    display.update()
 
 
 builtins._update = _update

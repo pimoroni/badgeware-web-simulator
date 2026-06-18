@@ -6,6 +6,7 @@ worker.running = false
 worker.paused = true
 worker.input = 0
 worker.debug = false
+worker.main = null
 
 // Simulated `machine` peripheral state, shared with the WASM module.
 // The C `machine` module reads/writes this object via EM_ASM:
@@ -106,22 +107,6 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
       worker.update_caselights();
     }
 
-    // Use requestAnimationFrame to pace the update loop, since this will
-    // trigger a draw to the canvas element
-    worker.call_user_update_function = async (timestamp) => {
-      if (!worker.paused) {
-        await mp.runPython(`
-try:
-    _update(update)
-except NameError:
-    pass
-`)
-      }
-      if (worker.running) {
-        requestAnimationFrame(worker.call_user_update_function)
-      }
-    }
-
     worker.onmessage = async ({ data: { program, canvas, stop, buttons, pause, file, files, debug } }) => {
       if (typeof buttons !== 'undefined') {
         if (worker.debug) console.log(`WORKER: Got buttons`)
@@ -163,6 +148,16 @@ except NameError:
       if (program) {
         if (worker.debug) console.log(`WORKER: Got program`)
         await mp.runPython(`import badgeware`)
+
+        // Arm execution *before* running the user program. A program may block
+        // in its own `while True:` here (never returning) or fall through to the
+        // `_update(update)` loop below; in both cases the WASM module's
+        // cooperative pause is gated on `worker.running`, so it must be set now
+        // for either path to be pausable. Posting `running` starts the host's
+        // visibility observer, which drives `worker.paused` via pause/resume.
+        worker.running = true
+        worker.postMessage({ running: true })
+
         try {
           await mp.runPython(program)
         } catch (error) {
@@ -172,20 +167,19 @@ except NameError:
           } catch (_) {
             worker.postMessage({stdout: msg})
           }
-          worker.running = true
           worker.paused = true
           return
         }
-        worker.running = true
-        worker.paused = true
-        await mp.runPython(`
+
+        // The program returned (it didn't block), so drive the frame loop.
+        worker.main = mp.runPython(`
 try:
-    _update(update)
+    while True:
+        _update(update)
 except NameError:
     pass
 `)
-        requestAnimationFrame(worker.call_user_update_function)
-        worker.postMessage({ running: true })
+        await worker.main
       }
 
       // Allow the host to request the worker download a file to MicroPython's

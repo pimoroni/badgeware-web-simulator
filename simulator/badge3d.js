@@ -1,6 +1,7 @@
 /* ── 3D badge display ────────────────────────────────────────────────────── */
 function initBadge3D(simulator, appendOut) {
   let three = null, screenMesh = null, screenTex = null;
+  let screenLive = false;   // true while the live simulator canvas is being shown
 
   function applyCanvasToScreen() {
     if (!three || !screenMesh || !simulator.canvas) return;
@@ -15,7 +16,25 @@ function initBadge3D(simulator, appendOut) {
       screenMesh.material = new three.MeshBasicMaterial();
     }
     screenMesh.material.map         = screenTex;
+    screenMesh.material.color.setRGB(1, 1, 1);  // show the texture unmodified
     screenMesh.material.needsUpdate = true;
+    screenLive = true;
+  }
+
+  // Stop driving the screen from the simulator canvas. Must be called BEFORE
+  // simulator.stop() tears the canvas down — otherwise the render loop keeps
+  // uploading a destroyed offscreen canvas and WebGL floods the console with
+  // "invalid mailbox" / "texture is not a shared image" errors.
+  function pauseScreen() {
+    screenLive = false;
+    if (screenMesh && screenMesh.material) {
+      // Drop the texture and paint the panel black so a stopped badge reads
+      // as "off" rather than a blank white screen.
+      screenMesh.material.map         = null;
+      screenMesh.material.color.setRGB(0, 0, 0);
+      screenMesh.material.needsUpdate = true;
+    }
+    if (screenTex) { screenTex.dispose(); screenTex = null; }
   }
 
   (async () => {
@@ -371,7 +390,7 @@ function initBadge3D(simulator, appendOut) {
         const dt = Math.min((t - _loopLastT) / 1000, 0.1);
         _loopLastT = t;
         controls.update();
-        if (screenTex) screenTex.needsUpdate = true;
+        if (screenLive && screenTex) screenTex.needsUpdate = true;
         if (buttonAnimator) buttonAnimator.update(dt);
         if (ledState && !_ledSimActive) {
           const { lights, coverMesh } = ledState;
@@ -388,5 +407,5 @@ function initBadge3D(simulator, appendOut) {
     }
   })();
 
-  return { applyCanvasToScreen };
+  return { applyCanvasToScreen, pauseScreen };
 }

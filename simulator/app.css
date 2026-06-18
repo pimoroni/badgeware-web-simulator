@@ -39,7 +39,7 @@
       user-select: none;
     }
 
-    #run-btn {
+    #run-btn, #stop-btn {
       background: var(--orange);
       color: rgb(10, 20, 30);
       border: none;
@@ -52,8 +52,18 @@
       letter-spacing: 0.02em;
       transition: filter 0.1s;
     }
-    #run-btn:hover  { filter: brightness(1.15); }
-    #run-btn:active { filter: brightness(0.9); }
+    #run-btn:hover, #stop-btn:hover   { filter: brightness(1.15); }
+    #run-btn:active, #stop-btn:active { filter: brightness(0.9); }
+    #stop-btn {
+      background: rgb(220, 70, 60);
+      color: rgb(250, 240, 240);
+    }
+    #stop-btn:disabled {
+      background: var(--panel, rgb(40, 44, 52));
+      color: rgb(120, 124, 132);
+      cursor: default;
+      filter: none;
+    }
 
     #example-select {
       background: var(--panel);

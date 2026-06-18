@@ -57,7 +57,7 @@ async function initApp() {
   };
 
   /* ── 3D badge display (non-blocking) ──────────────────────────── */
-  const { applyCanvasToScreen } = initBadge3D(simulator, appendOut);
+  const { applyCanvasToScreen, pauseScreen } = initBadge3D(simulator, appendOut);
 
   /* ── Runtime error → Monaco marker wiring ─────────────────────── */
   let lastRunKey   = null;   // tab key active when Run was pressed
@@ -114,6 +114,8 @@ async function initApp() {
     if (traceFrames.length > 0 && /^\w/.test(text)) {
       applyTracebackMarkers(text);
       traceFrames = [];
+      // A fatal exception ends the program — reflect that in the toolbar.
+      onSimulatorStopped();
     }
   }
 
@@ -123,7 +125,24 @@ async function initApp() {
     appendOut(text);
   };
 
-  /* ── Run action ────────────────────────────────────────────────── */
+  /* ── Run / Stop action ─────────────────────────────────────────── */
+  const runBtn  = document.getElementById('run-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  let isRunning = false;
+
+  // Stop is only meaningful while something is running; Run always re-runs.
+  const setRunning = (running) => {
+    isRunning = running;
+    stopBtn.disabled = !running;
+  };
+
+  // The simulator stopped on its own (e.g. a fatal exception was raised).
+  const onSimulatorStopped = () => {
+    if (!isRunning) return;
+    setRunning(false);
+    statusEl.textContent = 'Stopped (error)';
+  };
+
   const runCode = async () => {
     const code = editor.getValue();
     // Auto-save to user FS if a named file is open
@@ -136,6 +155,10 @@ async function initApp() {
     stdoutEl.innerHTML = '';
     appendOut('▶ Running…', 'out-dim');
     statusEl.textContent = 'Running…';
+    setRunning(true);
+    // simulator.run() tears down the old worker/canvas first; drop the screen
+    // texture so the render loop never touches the destroyed canvas.
+    pauseScreen();
     try {
       await simulator.run(code, userFS.workerFiles());
       applyCanvasToScreen();
@@ -143,7 +166,16 @@ async function initApp() {
     } catch (err) {
       appendOut('✕ ' + err, 'out-error');
       statusEl.textContent = 'Error';
+      setRunning(false);
     }
+  };
+
+  const stopCode = async () => {
+    // Halt screen rendering before the canvas is destroyed (see pauseScreen).
+    pauseScreen();
+    await simulator.stop();
+    setRunning(false);
+    statusEl.textContent = 'Stopped';
   };
 
   // F5 keybinding inside the editor
@@ -160,7 +192,8 @@ async function initApp() {
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveCurrentFile);
 
   /* ── Toolbar wiring ────────────────────────────────────────────── */
-  document.getElementById('run-btn').addEventListener('click', runCode);
+  runBtn.addEventListener('click', runCode);
+  stopBtn.addEventListener('click', stopCode);
 
   document.getElementById('example-select').addEventListener('change', async (e) => {
     if (!e.target.value) return;

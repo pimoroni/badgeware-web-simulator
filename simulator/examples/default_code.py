@@ -1,27 +1,28 @@
-badge.mode(HIRES)
+# Welcome to Badgeware!
+#
+# Every app follows the same shape: set things up, then loop forever. Each
+# time round the loop you draw a frame and call badge.update(), which pushes
+# your drawing to the screen and reads the buttons.
 
 from math import sin, cos, pi
 
-print("hi")
+badge.mode(HIRES)
 
-def update():
-  # create a flower shape path
-  path1 = []
-  for i in range(0, 360, 5):
-    scale = (sin(((i + badge.ticks / 50)) * 5 * pi / 180) * (screen.height // 12)) + (screen.height // 4)
-    x = sin(i * pi / 180) * scale
-    y = cos(i * pi / 180) * scale
-    path1.append(vec2(x + (screen.width // 2), y + (screen.height // 2)))
+while True:
+    # Build a wobbling flower outline from polar coordinates.
+    petals = []
+    for deg in range(0, 360, 5):
+        wobble = sin((deg + badge.ticks / 50) * 5 * pi / 180) * (screen.height // 12)
+        radius = wobble + screen.height // 4
+        x = sin(deg * pi / 180) * radius + screen.width // 2
+        y = cos(deg * pi / 180) * radius + screen.height // 2
+        petals.append(vec2(x, y))
 
-  # define a simple square "hole" path
-  scale = 2 if screen.width == 320 else 1
-  path2 = [vec2(70 * scale, 50 * scale), vec2(90 * scale, 50 * scale), vec2(90 * scale, 70 * scale), vec2(70 * scale, 70 * scale)]
+    screen.antialias = image.X2
+    screen.pen = color.rgb(255, 80, 160)
+    screen.shape(shape.custom(petals))
 
-  # construct a new polygon from the path
-  poly = shape.custom(path1, path2)
+    screen.pen = color.white
+    screen.text("Hello World", 10, 10)
 
-  # draw the polygon to the display
-  screen.shape(poly)
-
-  screen.text("Hello World", 10, 10)
-
+    badge.update()

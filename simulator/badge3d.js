@@ -1,4 +1,6 @@
 /* ── 3D badge display ────────────────────────────────────────────────────── */
+const _badge3dBase = new URL('.', document.currentScript.src).href;
+
 function initBadge3D(simulator, appendOut) {
   let three = null, screenMesh = null, screenTex = null;
   let screenLive = false;   // true while the live simulator canvas is being shown
@@ -380,7 +382,7 @@ function initBadge3D(simulator, appendOut) {
       }
 
       /* Load the Tufty badge model */
-      new GLTFLoader().load('/static/models/badgeware.glb', (gltf) => {
+      new GLTFLoader().load(new URL('../static/models/badgeware.glb', _badge3dBase).href, (gltf) => {
         const root      = gltf.scene;
         const tuftyNode = root.getObjectByName('tufty');
         const caseBack  = root.getObjectByName('badger_case_back');

@@ -26,7 +26,7 @@ worker.machine = {
 // Snapshot used to avoid posting unchanged caselight values every frame.
 worker._caselights_last = "0,0,0,0"
 
-import("/simulator/micropython.mjs").then((mp_mjs) => {
+import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
   const stdoutWriter = (line) => {
     if (worker.debug) console.log(`WORKER: stdout: ${line}`)
     worker.postMessage({stdout: line})
@@ -57,7 +57,7 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
     }
 
     // Fetch JSON Manifest generated with "python3 filesystem.py > filesystem.json"
-    await fetch("/simulator/filesystem.json").then(async (response) => {
+    await fetch(new URL('./filesystem.json', import.meta.url).href).then(async (response) => {
       if(response.ok) {
         // Pray we don't have a parsing error...
         const lazy_files = (await response.json())["files"]
@@ -71,7 +71,7 @@ import("/simulator/micropython.mjs").then((mp_mjs) => {
         // Use the file list to create lazy-loading file entries in the FS
         // I am in awe that this works.
         lazy_files.forEach((file) => {
-          mp.FS.createLazyFile("", `${file}`, `/simulator/filesystem${file}`, true, false)
+          mp.FS.createLazyFile("", `${file}`, new URL(`./filesystem${file}`, import.meta.url).href, true, false)
         })
       }
     })

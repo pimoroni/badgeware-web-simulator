@@ -1,4 +1,6 @@
 
+const _simulatorBase = new URL('.', document.currentScript.src).href;
+
 const BadgewareSimulator = async (target) => {
     let simulator = {
         target:        target,
@@ -150,7 +152,7 @@ const BadgewareSimulator = async (target) => {
             }
         }, { threshold: [0] })
 
-        simulator.micropython = new Worker('/simulator/micropython.worker.js?v=2', { type: "module" })
+        simulator.micropython = new Worker(_simulatorBase + 'micropython.worker.js?v=2', { type: "module" })
 
         debug_log("HOST: Running MicroPython code from editor...")
         simulator.micropython.onmessage = async ({ data: { stdout, ready, running, caselights } }) => {

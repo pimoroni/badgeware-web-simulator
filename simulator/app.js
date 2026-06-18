@@ -1,4 +1,6 @@
 /* ── Main application — called from the Monaco require() callback ────────── */
+const APP_BASE = new URL('.', document.currentScript.src).href;
+
 async function initApp() {
 
   configureMonaco(monaco);
@@ -26,7 +28,7 @@ async function initApp() {
 
   // Load the system boot script into the editor — it's the default app that
   // runs on startup (launches /system/apps/menu).
-  const defaultCode = await fetch('/simulator/filesystem/system/main.py')
+  const defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
     .then(r => r.ok ? r.text() : null)
     .catch(() => null)
     ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
@@ -214,7 +216,7 @@ async function initApp() {
 
   /* ── Load system file list ─────────────────────────────────────── */
   try {
-    const fsData = await fetch('/simulator/filesystem.json').then(r => r.json());
+    const fsData = await fetch(APP_BASE + 'filesystem.json').then(r => r.json());
     systemPaths = (fsData.files || []);
     // Reset the built flag so refreshFileTree rebuilds the sys tree with real paths
     const sysTreeEl = document.getElementById('fp-sys-tree');
@@ -528,7 +530,7 @@ async function initApp() {
       }
       if (transient) evictTransient(key);
       try {
-        const text  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
+        const text  = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
         const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
         const model = monaco.editor.createModel(text, langForPath(path), uri);
         openModels.set(key, { model, dirty: false, readOnly: true, transient });
@@ -539,7 +541,7 @@ async function initApp() {
     } else {
       const key = (handler.keyPrefix ?? 'img') + ':sys:' + path;
       try {
-        const buf = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+        const buf = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
         openBinaryTab(key, buf, handler, transient);
       } catch (_) {}
     }

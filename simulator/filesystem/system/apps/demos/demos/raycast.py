@@ -64,9 +64,16 @@ minimap_overlay_mv = memoryview(minimap_overlay)
 minimap_overlay_len = minimap_overlay.width * minimap_overlay.height
 
 
+@micropython.viper
+def clear(buf: ptr32, length: int):
+  for i in range(length):
+    buf[i] = 0
+
+
 d_proj = (screen.width / 2) / math.tan(player.fov * (math.pi / 180) / 2)
 
 
+@micropython.native
 def update():
   player.pos = vec2(
     math.sin(badge.ticks / 2000) * 2 + 11,
@@ -76,8 +83,7 @@ def update():
 
   if display_minimap:
     # clear the minimap overlay to 0, 0, 0, 0
-    #clear(minimap_overlay_mv, minimap_overlay_len)
-    minimap_overlay_mv[:] = bytearray(minimap_overlay_len * 4)
+    clear(minimap_overlay_mv, minimap_overlay_len)
 
     minimap_pos = player.pos * minimap_scale
 
@@ -97,7 +103,7 @@ def update():
   result = algorithm.raycast(player.pos, math.radians(player.angle), player.fov, num_rays, 20, world_map, MAP_SIZE_X, MAP_SIZE_Y, screen.width)
 
   for screen_x, ray in enumerate(result):
-    for (tile_id, cb_p, _cb_g, _edge, _offset, distance, angle) in ray:
+    for (tile_id, cb_p, _cb_g, _edge, _offset, distance, _ray_angle) in ray:
       if tile_id == 1:
           height = (2 / distance) * d_proj
           b = min(255, distance * 20)

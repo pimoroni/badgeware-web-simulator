@@ -273,6 +273,15 @@ const BADGEWARE_GLOBALS = [
   { label: 'io',      kind: 'Module', doc: 'I/O stream utilities. Import: import io\nKey: io.StringIO(), io.BytesIO()' },
   { label: 'network', kind: 'Module', doc: 'WiFi/network interface. Import: import network\nKey: network.WLAN(network.STA_IF)' },
   { label: 'uasyncio', kind: 'Module', doc: 'Asynchronous I/O. Import: import uasyncio\nKey: uasyncio.run(), uasyncio.sleep_ms()' },
+
+  // ── Badge bundled modules (simulator/modules) ──────────────────────────────
+  { label: 'easing',   kind: 'Module', doc: 'Easing / tweening functions (Robert Penner set). Import: import easing\nEach takes x in 0.0–1.0 and returns the eased value. e.g. easing.easeOutBounce(0.5)' },
+  { label: 'wifi',     kind: 'Module', doc: 'WiFi connection helper. Import: import wifi\nKey: wifi.connect(ssid, psk), wifi.is_connected(), wifi.ip(). (Simulator always reports connected.)' },
+  { label: 'requests', kind: 'Module', doc: 'HTTP requests (fetch-backed). Import: import requests\nKey: requests.get(url), requests.post(url, json=…). Returns a Response with .status_code, .text, .json().' },
+  { label: 'fetch',    kind: 'Module', doc: 'Asynchronous file/stream fetching. Import: import fetch\nKey: fetch.AsyncFetch(host).fetch(path); poll .update() until AsyncFetch.DONE.' },
+  { label: 'pimoroni', kind: 'Module', doc: 'Pimoroni hardware helpers. Import: import pimoroni\nKey: pimoroni.Button, pimoroni.RGBLED, pimoroni.Analog, pimoroni.PID, pimoroni.Buzzer.' },
+  { label: 'board',    kind: 'Module', doc: 'Board pin labels pulled into scope (from machine.Pin.board). Import: import board\nAccess named pins, e.g. board.LED_R.' },
+  { label: 'urllib',   kind: 'Module', doc: 'URL handling. Import: import urllib.urequest\nKey: urllib.urequest.urlopen(url).read().' },
 ];
 
 /* ── Member completions, keyed by the identifier before the dot ──────────────
@@ -920,6 +929,134 @@ const MEMBERS = {
       doc: 'Exit the interpreter with an optional status code.' },
     { label: 'print_exception', kind: 'Function', insertText: 'print_exception(${1:exc})',
       doc: 'Print an exception with its traceback.' },
+  ],
+
+  // ── Badge: easing module ───────────────────────────────────────────────────
+  // Every function takes x in 0.0–1.0 and returns the eased position.
+  easing: [
+    { label: 'linear',            kind: 'Function', insertText: 'linear(${1:x})',            doc: 'No easing — returns x unchanged.' },
+    { label: 'easeInQuad',        kind: 'Function', insertText: 'easeInQuad(${1:x})',        doc: 'Quadratic ease in (accelerate from 0).' },
+    { label: 'easeOutQuad',       kind: 'Function', insertText: 'easeOutQuad(${1:x})',       doc: 'Quadratic ease out (decelerate to 1).' },
+    { label: 'easeInOutQuad',     kind: 'Function', insertText: 'easeInOutQuad(${1:x})',     doc: 'Quadratic ease in then out.' },
+    { label: 'easeInCubic',       kind: 'Function', insertText: 'easeInCubic(${1:x})',       doc: 'Cubic ease in.' },
+    { label: 'easeOutCubic',      kind: 'Function', insertText: 'easeOutCubic(${1:x})',      doc: 'Cubic ease out.' },
+    { label: 'easeInOutCubic',    kind: 'Function', insertText: 'easeInOutCubic(${1:x})',    doc: 'Cubic ease in then out.' },
+    { label: 'easeInQuart',       kind: 'Function', insertText: 'easeInQuart(${1:x})',       doc: 'Quartic ease in.' },
+    { label: 'easeOutQuart',      kind: 'Function', insertText: 'easeOutQuart(${1:x})',      doc: 'Quartic ease out.' },
+    { label: 'easeInOutQuart',    kind: 'Function', insertText: 'easeInOutQuart(${1:x})',    doc: 'Quartic ease in then out.' },
+    { label: 'easeInQuint',       kind: 'Function', insertText: 'easeInQuint(${1:x})',       doc: 'Quintic ease in.' },
+    { label: 'easeOutQuint',      kind: 'Function', insertText: 'easeOutQuint(${1:x})',      doc: 'Quintic ease out.' },
+    { label: 'easeInOutQuint',    kind: 'Function', insertText: 'easeInOutQuint(${1:x})',    doc: 'Quintic ease in then out.' },
+    { label: 'easeInSine',        kind: 'Function', insertText: 'easeInSine(${1:x})',        doc: 'Sinusoidal ease in.' },
+    { label: 'easeOutSine',       kind: 'Function', insertText: 'easeOutSine(${1:x})',       doc: 'Sinusoidal ease out.' },
+    { label: 'easeInOutSine',     kind: 'Function', insertText: 'easeInOutSine(${1:x})',     doc: 'Sinusoidal ease in then out.' },
+    { label: 'easeInExpo',        kind: 'Function', insertText: 'easeInExpo(${1:x})',        doc: 'Exponential ease in.' },
+    { label: 'easeOutExpo',       kind: 'Function', insertText: 'easeOutExpo(${1:x})',       doc: 'Exponential ease out.' },
+    { label: 'easeInOutExpo',     kind: 'Function', insertText: 'easeInOutExpo(${1:x})',     doc: 'Exponential ease in then out.' },
+    { label: 'easeInCirc',        kind: 'Function', insertText: 'easeInCirc(${1:x})',        doc: 'Circular ease in.' },
+    { label: 'easeOutCirc',       kind: 'Function', insertText: 'easeOutCirc(${1:x})',       doc: 'Circular ease out.' },
+    { label: 'easeInOutCirc',     kind: 'Function', insertText: 'easeInOutCirc(${1:x})',     doc: 'Circular ease in then out.' },
+    { label: 'easeInBack',        kind: 'Function', insertText: 'easeInBack(${1:x})',        doc: 'Back ease in (overshoots backwards at the start).' },
+    { label: 'easeOutBack',       kind: 'Function', insertText: 'easeOutBack(${1:x})',       doc: 'Back ease out (overshoots past the end).' },
+    { label: 'easeInOutBack',     kind: 'Function', insertText: 'easeInOutBack(${1:x})',     doc: 'Back ease in then out (overshoots both ends).' },
+    { label: 'easeInElastic',     kind: 'Function', insertText: 'easeInElastic(${1:x})',     doc: 'Elastic ease in (springy).' },
+    { label: 'easeOutElastic',    kind: 'Function', insertText: 'easeOutElastic(${1:x})',    doc: 'Elastic ease out (springy).' },
+    { label: 'easeInOutElastic',  kind: 'Function', insertText: 'easeInOutElastic(${1:x})',  doc: 'Elastic ease in then out.' },
+    { label: 'easeInBounce',      kind: 'Function', insertText: 'easeInBounce(${1:x})',      doc: 'Bounce ease in.' },
+    { label: 'easeOutBounce',     kind: 'Function', insertText: 'easeOutBounce(${1:x})',     doc: 'Bounce ease out.' },
+    { label: 'easeInOutBounce',   kind: 'Function', insertText: 'easeInOutBounce(${1:x})',   doc: 'Bounce ease in then out.' },
+  ],
+
+  // ── Badge: requests module (fetch-backed HTTP) ─────────────────────────────
+  requests: [
+    { label: 'get',     kind: 'Function', insertText: 'get(${1:url})',
+      doc: 'HTTP GET. Returns a Response. Optional kwargs: headers, auth, timeout.' },
+    { label: 'post',    kind: 'Function', insertText: 'post(${1:url}, json=${2:data})',
+      doc: 'HTTP POST. Pass data=… (str/bytes) or json=… (object).' },
+    { label: 'put',     kind: 'Function', insertText: 'put(${1:url})',     doc: 'HTTP PUT. Returns a Response.' },
+    { label: 'patch',   kind: 'Function', insertText: 'patch(${1:url})',   doc: 'HTTP PATCH. Returns a Response.' },
+    { label: 'delete',  kind: 'Function', insertText: 'delete(${1:url})',  doc: 'HTTP DELETE. Returns a Response.' },
+    { label: 'head',    kind: 'Function', insertText: 'head(${1:url})',    doc: 'HTTP HEAD. Returns a Response.' },
+    { label: 'request', kind: 'Function', insertText: 'request(${1:"GET"}, ${2:url})',
+      doc: 'Generic request. Args: method, url, data=None, json=None, headers=None, auth=None, timeout=None.' },
+    { label: 'Response', kind: 'Class',
+      doc: 'HTTP response. Attributes: .status_code, .reason, .headers, .text, .content; methods .json(), .close().' },
+  ],
+
+  // ── Badge: wifi module (simulator shim — always connected) ─────────────────
+  wifi: [
+    { label: 'connect',      kind: 'Function', insertText: 'connect(${1:"ssid"}, ${2:"password"})',
+      doc: 'Connect to a network. Args: ssid, psk, timeout=60, retries=5. Returns True. (Simulator connects instantly.)' },
+    { label: 'disconnect',   kind: 'Function', insertText: 'disconnect()',   doc: 'Disconnect from the network.' },
+    { label: 'tick',         kind: 'Function', insertText: 'tick()',         doc: 'Advance the connection state machine. Returns True when connected.' },
+    { label: 'status',       kind: 'Function', insertText: 'status()',       doc: 'Return (status_code, status_text).' },
+    { label: 'get_status',   kind: 'Function', insertText: 'get_status(${1:index})', doc: 'Human-readable text for a status code.' },
+    { label: 'is_connected', kind: 'Function', insertText: 'is_connected()', doc: 'True if currently connected (bool).' },
+    { label: 'ip',           kind: 'Function', insertText: 'ip()',           doc: 'Current IPv4 address (str) or None.' },
+    { label: 'ipv4',         kind: 'Function', insertText: 'ipv4()',         doc: 'Current IPv4 address (str) or None.' },
+    { label: 'ipv6',         kind: 'Function', insertText: 'ipv6()',         doc: 'Current IPv6 address (str) or None.' },
+    { label: 'subnet',       kind: 'Function', insertText: 'subnet()',       doc: 'Subnet mask (str) or None.' },
+    { label: 'gateway',      kind: 'Function', insertText: 'gateway()',      doc: 'Gateway address (str) or None.' },
+    { label: 'nameserver',   kind: 'Function', insertText: 'nameserver()',   doc: 'DNS server address (str) or None.' },
+  ],
+
+  // ── Badge: fetch module (async streamed downloads) ─────────────────────────
+  fetch: [
+    { label: 'AsyncFetch',    kind: 'Class', insertText: 'AsyncFetch(${1:host})',
+      doc: 'Async fetcher. AsyncFetch(host, port=None, use_tls=True, debug=False).\nCall .fetch(path) then poll .update() until it returns AsyncFetch.DONE.' },
+    { label: 'HTTPException', kind: 'Class', doc: 'Raised on HTTP errors during a fetch.' },
+  ],
+
+  AsyncFetch: [
+    { label: 'fetch',       kind: 'Method', insertText: 'fetch(${1:path})',
+      doc: 'Start a fetch. Args: path (relative), file=None, interval=None, headers=None, data=None, method=None, blocking=False.' },
+    { label: 'update',      kind: 'Method', insertText: 'update()',   doc: 'Advance the fetch. Returns the current status; compare to AsyncFetch.DONE.' },
+    { label: 'finish',      kind: 'Method', insertText: 'finish()',   doc: 'Block (yielding to the event loop) until the fetch is DONE.' },
+    { label: 'to_json',     kind: 'Method', insertText: 'to_json()',  doc: 'Parse the fetched stream as JSON.' },
+    { label: 'on_complete', kind: 'Method', insertText: 'on_complete(${1:handler})', doc: 'Register a completion callback handler(fetch).' },
+    { label: 'on_error',    kind: 'Method', insertText: 'on_error(${1:handler})',    doc: 'Register an error callback handler(fetch).' },
+    { label: 'status',      kind: 'Property', doc: 'Current status: AsyncFetch.IDLE / FETCHING / DONE / ERROR.' },
+    { label: 'duration',    kind: 'Property', doc: 'Milliseconds since the last update.' },
+    { label: 'source',      kind: 'Property', doc: 'The requested path.' },
+    { label: 'destination', kind: 'Property', doc: 'Target file path, or None for a stream.' },
+    { label: 'http_status', kind: 'Property', doc: 'HTTP response status code.' },
+    { label: 'http_response_headers', kind: 'Property', doc: 'Dict of response headers.' },
+    { label: 'stream',      kind: 'Property', doc: 'A readable stream over the fetched content.' },
+    { label: 'IDLE',        kind: 'Constant', doc: 'Status: idle (0).' },
+    { label: 'FETCHING',    kind: 'Constant', doc: 'Status: fetching (1).' },
+    { label: 'DONE',        kind: 'Constant', doc: 'Status: done (2).' },
+    { label: 'ERROR',       kind: 'Constant', doc: 'Status: error (3).' },
+  ],
+
+  // ── Badge: pimoroni module (hardware helpers) ──────────────────────────────
+  pimoroni: [
+    { label: 'Button',        kind: 'Class', insertText: 'Button(${1:pin})',
+      doc: 'Debounced button with repeat/hold. Button(button, invert=True, repeat_time=200, hold_time=1000).\nMethods: .read(), .raw(); property .is_pressed.' },
+    { label: 'RGBLED',        kind: 'Class', insertText: 'RGBLED(${1:"LED_R"}, ${2:"LED_G"}, ${3:"LED_B"})',
+      doc: 'PWM RGB LED. RGBLED(r, g, b, invert=True). Method: .set_rgb(r, g, b) with 0–255 channels.' },
+    { label: 'PWMLED',        kind: 'Class', insertText: 'PWMLED(${1:pin})',
+      doc: 'Single brightness-controlled LED. PWMLED(pin, invert=False).\nMethods: .brightness(0.0–1.0), .on(), .off(), .toggle().' },
+    { label: 'Analog',        kind: 'Class', insertText: 'Analog(${1:pin})',
+      doc: 'Analog input. Analog(pin, amplifier_gain=1, resistor=0, offset=0).\nMethods: .read_voltage(), .read_current().' },
+    { label: 'AnalogMux',     kind: 'Class', insertText: 'AnalogMux(${1:addr0})',
+      doc: 'Analog multiplexer. AnalogMux(addr0, addr1=None, addr2=None, en=None, muxed_pin=None).\nMethods: .select(addr), .read(), .configure_pull(addr, pull), .disable().' },
+    { label: 'Buzzer',        kind: 'Class', insertText: 'Buzzer(${1:pin})',
+      doc: 'Piezo buzzer. Method: .set_tone(freq, duty=0.5).' },
+    { label: 'PID',           kind: 'Class', insertText: 'PID(${1:kp}, ${2:ki}, ${3:kd}, ${4:sample_rate})',
+      doc: 'PID controller. Set .setpoint, then call .calculate(value, value_change=None).' },
+    { label: 'ShiftRegister', kind: 'Class', insertText: 'ShiftRegister(${1:clk}, ${2:lat}, ${3:dat})',
+      doc: 'Shift register reader. Methods: .read(), .is_set(mask); iterable/indexable for individual bits.' },
+    { label: 'NORMAL_DIR',    kind: 'Constant', doc: 'Motor/encoder direction: normal (0x00).' },
+    { label: 'REVERSED_DIR',  kind: 'Constant', doc: 'Motor/encoder direction: reversed (0x01).' },
+  ],
+
+  // ── Badge: urllib.urequest ─────────────────────────────────────────────────
+  urllib: [
+    { label: 'urequest', kind: 'Module', doc: 'Minimal urlopen. import urllib.urequest; urllib.urequest.urlopen(url).' },
+  ],
+  urequest: [
+    { label: 'urlopen', kind: 'Function', insertText: 'urlopen(${1:url})',
+      doc: 'Open a URL (fetch-backed). urlopen(url, data=None, method="GET"). Returns a stream with .read()/.readline()/.close() and .status.' },
   ],
 };
 

@@ -4243,8 +4243,139 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
   }
   
 
+  function _mp_js_fetch_body_copy(dest) { if (__mpFetch) { HEAPU8.set(__mpFetch.body, dest); } }
+
+  function _mp_js_fetch_body_len() { return __mpFetch ? __mpFetch.body.length : 0; }
+
+  function _mp_js_fetch_poll() { return __mpFetch ? __mpFetch.done : 2; }
+
+  function _mp_js_fetch_start(methodPtr, urlPtr, headersPtr, bodyPtr, bodyLen) {
+          var method = UTF8ToString(methodPtr);
+          var url = UTF8ToString(urlPtr);
+          var headerStr = UTF8ToString(headersPtr);
+  
+          var state = { done: 0, status: 0, reason: "", headers: "", body: new Uint8Array(0), error: "" };
+          __mpFetch = state;
+  
+          var opts = { method: method };
+          if (headerStr) {
+              var h = {};
+              headerStr.split("\n").forEach(function (line) {
+                  var i = line.indexOf(":");
+                  if (i > 0) { h[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+              });
+              opts.headers = h;
+          }
+          if (bodyLen > 0) {
+              // Copy out of the WASM heap; the C buffer may be gone by the time
+              // fetch reads it.
+              opts.body = HEAPU8.slice(bodyPtr, bodyPtr + bodyLen);
+          }
+  
+          fetch(url, opts).then(function (r) {
+              state.status = r.status;
+              state.reason = r.statusText || "";
+              var hs = [];
+              r.headers.forEach(function (v, k) { hs.push(k + ": " + v); });
+              state.headers = hs.join("\r\n");
+              return r.arrayBuffer();
+          }).then(function (buf) {
+              state.body = new Uint8Array(buf);
+              state.done = 1;
+          }).catch(function (e) {
+              state.error = (e && e.message) ? e.message : ("" + e);
+              state.done = 2;
+          });
+      }
+
+  function _mp_js_fetch_status() { return __mpFetch ? __mpFetch.status : 0; }
+
+  function _mp_js_fetch_str(which) {
+          var s = "";
+          if (__mpFetch) { s = which === 0 ? __mpFetch.reason : which === 1 ? __mpFetch.headers : __mpFetch.error; }
+          return stringToNewUTF8(s || "");
+      }
+
   var _mp_js_random_u32 = () =>
           globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+
+  function _mp_js_sfetch_done() {
+          if (!__mpSFetch) { return 1; }
+          return (__mpSFetch.readDone && __mpSFetch.avail === 0) ? 1 : 0;
+      }
+
+  function _mp_js_sfetch_phase() { return __mpSFetch ? __mpSFetch.phase : 3; }
+
+  function _mp_js_sfetch_read(dest, maxlen) {
+          var st = __mpSFetch;
+          if (!st || st.avail === 0) { return 0; }
+          var written = 0;
+          while (written < maxlen && st.chunks.length > 0) {
+              var head = st.chunks[0];
+              var take = Math.min(head.length, maxlen - written);
+              HEAPU8.set(head.subarray(0, take), dest + written);
+              written += take;
+              if (take === head.length) { st.chunks.shift(); }
+              else { st.chunks[0] = head.subarray(take); }
+          }
+          st.avail -= written;
+          return written;
+      }
+
+  function _mp_js_sfetch_start(methodPtr, urlPtr, headersPtr, bodyPtr, bodyLen) {
+          var method = UTF8ToString(methodPtr);
+          var url = UTF8ToString(urlPtr);
+          var headerStr = UTF8ToString(headersPtr);
+  
+          // phase: 0 pending, 1 response received (streaming), 3 error.
+          var st = { phase: 0, status: 0, reason: "", headers: "", chunks: [], avail: 0, readDone: false, error: "" };
+          __mpSFetch = st;
+  
+          var opts = { method: method };
+          if (headerStr) {
+              var h = {};
+              headerStr.split("\n").forEach(function (line) {
+                  var i = line.indexOf(":");
+                  if (i > 0) { h[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+              });
+              opts.headers = h;
+          }
+          if (bodyLen > 0) { opts.body = HEAPU8.slice(bodyPtr, bodyPtr + bodyLen); }
+  
+          fetch(url, opts).then(function (r) {
+              st.status = r.status;
+              st.reason = r.statusText || "";
+              var hs = [];
+              r.headers.forEach(function (v, k) { hs.push(k + ": " + v); });
+              st.headers = hs.join("\r\n");
+              st.phase = 1;
+              if (!r.body) { st.readDone = true; return; }
+              var reader = r.body.getReader();
+              var pump = function () {
+                  reader.read().then(function (res) {
+                      if (res.done) { st.readDone = true; return; }
+                      st.chunks.push(res.value);
+                      st.avail += res.value.length;
+                      pump();
+                  }).catch(function (e) {
+                      st.error = (e && e.message) ? e.message : ("" + e);
+                      st.readDone = true;
+                  });
+              };
+              pump();
+          }).catch(function (e) {
+              st.error = (e && e.message) ? e.message : ("" + e);
+              st.phase = 3;
+          });
+      }
+
+  function _mp_js_sfetch_status() { return __mpSFetch ? __mpSFetch.status : 0; }
+
+  function _mp_js_sfetch_str(which) {
+          var s = "";
+          if (__mpSFetch) { s = which === 0 ? __mpSFetch.reason : which === 1 ? __mpSFetch.headers : __mpSFetch.error; }
+          return stringToNewUTF8(s || "");
+      }
 
   var _mp_js_ticks_ms = () => Date.now() - MP_JS_EPOCH;
 
@@ -4506,7 +4637,9 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.preloadFile = FS_preloadFile;
   FS.staticInit();;
+var __mpFetch = null;;
 if (globalThis.crypto === undefined) { globalThis.crypto = require('crypto'); };
+var __mpSFetch = null;;
 var MP_JS_EPOCH = Date.now();
 // End JS library code
 
@@ -4979,22 +5112,22 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('onSbrkGrow');
 }
 var ASM_CONSTS = {
-  226510: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
- 226613: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
- 226716: ($0) => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.backlight = $0 / 255; } },  
- 226844: () => { var w = (typeof WorkerGlobalScope !== 'undefined') ? WorkerGlobalScope.worker : null; return (w && w.running && w.paused) ? 1 : 0; },  
- 226979: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return $1 ? 1 : 0; if(s.machine.gpio_in[$0] !== undefined) return s.machine.gpio_in[$0] | 0; if($1 && (s.input & $1)) return 0; if($1) return 1; return s.machine.gpio[$0] | 0; },  
- 227386: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; s.machine.gpio[$0] = $1 ? 1 : 0; },  
- 227658: ($0, $1, $2) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; var p = s.machine.pwm[$0]; if(!p) { p = {}; s.machine.pwm[$0] = p; } p.freq = $1; p.duty = $2; if($0 >= 0 && $0 < 4) { s.machine.caselights[$0] = $2 / 65535; if(s.update_caselights) s.update_caselights(); } },  
- 228104: ($0) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(s && s.machine.adc[$0] !== undefined) return s.machine.adc[$0] | 0; if($0 === 0) return 39700; if($0 === 2) return 21845; if($0 === 3) return 40000; return 0; },  
- 228490: () => { return new Date().getFullYear(); },  
- 228527: () => { return new Date().getMonth() + 1; },  
- 228565: () => { return new Date().getDate(); },  
- 228598: () => { return (new Date().getDay() + 6) % 7; },  
- 228640: () => { return new Date().getHours(); },  
- 228674: () => { return new Date().getMinutes(); },  
- 228710: () => { return new Date().getSeconds(); },  
- 228746: () => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.postMessage({reset: true}); } }
+  244846: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
+ 244949: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
+ 245052: ($0) => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.backlight = $0 / 255; } },  
+ 245180: () => { var w = (typeof WorkerGlobalScope !== 'undefined') ? WorkerGlobalScope.worker : null; return (w && w.running && w.paused) ? 1 : 0; },  
+ 245315: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return $1 ? 1 : 0; if(s.machine.gpio_in[$0] !== undefined) return s.machine.gpio_in[$0] | 0; if($1 && (s.input & $1)) return 0; if($1) return 1; return s.machine.gpio[$0] | 0; },  
+ 245722: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; s.machine.gpio[$0] = $1 ? 1 : 0; },  
+ 245994: ($0, $1, $2) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; var p = s.machine.pwm[$0]; if(!p) { p = {}; s.machine.pwm[$0] = p; } p.freq = $1; p.duty = $2; if($0 >= 0 && $0 < 4) { s.machine.caselights[$0] = $2 / 65535; if(s.update_caselights) s.update_caselights(); } },  
+ 246440: ($0) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(s && s.machine.adc[$0] !== undefined) return s.machine.adc[$0] | 0; if($0 === 0) return 39700; if($0 === 2) return 21845; if($0 === 3) return 40000; return 0; },  
+ 246826: () => { return new Date().getFullYear(); },  
+ 246863: () => { return new Date().getMonth() + 1; },  
+ 246901: () => { return new Date().getDate(); },  
+ 246934: () => { return (new Date().getDay() + 6) % 7; },  
+ 246976: () => { return new Date().getHours(); },  
+ 247010: () => { return new Date().getMinutes(); },  
+ 247046: () => { return new Date().getSeconds(); },  
+ 247082: () => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.postMessage({reset: true}); } }
 };
 function proxy_convert_mp_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); proxy_convert_js_to_mp_obj_jsside_force_double_proxy(ret, out); }
 proxy_convert_mp_to_js_then_js_to_mp_obj_jsside.sig = 'vi';
@@ -5272,7 +5405,31 @@ var wasmImports = {
   /** @export */
   lookup_attr,
   /** @export */
+  mp_js_fetch_body_copy: _mp_js_fetch_body_copy,
+  /** @export */
+  mp_js_fetch_body_len: _mp_js_fetch_body_len,
+  /** @export */
+  mp_js_fetch_poll: _mp_js_fetch_poll,
+  /** @export */
+  mp_js_fetch_start: _mp_js_fetch_start,
+  /** @export */
+  mp_js_fetch_status: _mp_js_fetch_status,
+  /** @export */
+  mp_js_fetch_str: _mp_js_fetch_str,
+  /** @export */
   mp_js_random_u32: _mp_js_random_u32,
+  /** @export */
+  mp_js_sfetch_done: _mp_js_sfetch_done,
+  /** @export */
+  mp_js_sfetch_phase: _mp_js_sfetch_phase,
+  /** @export */
+  mp_js_sfetch_read: _mp_js_sfetch_read,
+  /** @export */
+  mp_js_sfetch_start: _mp_js_sfetch_start,
+  /** @export */
+  mp_js_sfetch_status: _mp_js_sfetch_status,
+  /** @export */
+  mp_js_sfetch_str: _mp_js_sfetch_str,
   /** @export */
   mp_js_ticks_ms: _mp_js_ticks_ms,
   /** @export */

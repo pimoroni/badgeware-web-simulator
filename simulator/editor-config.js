@@ -32,9 +32,9 @@ function configureMonaco(monaco) {
 
   /* ── Completion provider ───────────────────────────────────────── */
   monaco.languages.registerCompletionItemProvider('python', {
-    triggerCharacters: ['.'],
+    triggerCharacters: ['.', '(', '|'],
 
-    provideCompletionItems(model, position) {
+    provideCompletionItems(model, position, context) {
       const linePrefix = model.getValueInRange({
         startLineNumber: position.lineNumber,
         startColumn: 1,
@@ -80,6 +80,40 @@ function configureMonaco(monaco) {
           });
         }
         return { suggestions };
+      }
+
+      // ── badge.mode() flag completion ────────────────────────────
+      // Inside a badge.mode( … ) call, offer the display-mode flags.
+      // LORES / HIRES are the mutually-exclusive resolution choices, so once
+      // one of them is present we stop offering either (you can't combine them).
+      const modeMatch = linePrefix.match(/badge\.mode\(\s*([^)]*)$/);
+      if (modeMatch) {
+        const hasResolution = /\b(?:LORES|HIRES)\b/.test(modeMatch[1]);
+        const order = hasResolution
+          ? ['VSYNC', 'DITHER', 'FAST_UPDATE', 'MEDIUM_UPDATE', 'FULL_UPDATE']
+          : ['LORES', 'HIRES', 'VSYNC', 'DITHER', 'FAST_UPDATE', 'MEDIUM_UPDATE', 'FULL_UPDATE'];
+        const word  = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          startColumn:     word.startColumn,
+          endLineNumber:   position.lineNumber,
+          endColumn:       word.endColumn,
+        };
+        const suggestions = order
+          .map(label => BADGEWARE_GLOBALS.find(g => g.label === label))
+          .filter(Boolean)
+          .map((entry, i) => {
+            const item = toCompletionItem(entry, range, monaco);
+            item.sortText = String(i).padStart(2, '0');   // preserve our order
+            return item;
+          });
+        return { suggestions };
+      }
+
+      // '(' / '|' only drive the badge.mode() list above; elsewhere they
+      // shouldn't pop the full global list.
+      if (context && (context.triggerCharacter === '(' || context.triggerCharacter === '|')) {
+        return { suggestions: [] };
       }
 
       // Detect "identifier." at end of typed text

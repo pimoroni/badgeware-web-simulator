@@ -24,8 +24,9 @@ async function initApp() {
     parameterHints: { enabled: true },
   });
 
-  // Load default example into the editor
-  const defaultCode = await fetch('/simulator/examples/default_code.py')
+  // Load the system boot script into the editor — it's the default app that
+  // runs on startup (launches /system/apps/menu).
+  const defaultCode = await fetch('/simulator/filesystem/system/main.py')
     .then(r => r.ok ? r.text() : null)
     .catch(() => null)
     ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
@@ -39,7 +40,7 @@ async function initApp() {
   const openOrder     = [];         // ordered list of open tabKeys
 
   // Bootstrap the default scratch tab (openScratchTab is hoisted as a function decl)
-  openScratchTab('default_code.py', defaultCode);
+  openScratchTab('main.py', defaultCode);
 
   /* ── Simulator ─────────────────────────────────────────────────── */
   const simHost   = document.getElementById('sim-host');

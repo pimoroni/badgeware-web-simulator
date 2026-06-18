@@ -6,7 +6,7 @@ APP_DIR = "/system/apps/demos"
 sys.path.insert(0, APP_DIR)
 os.chdir(APP_DIR)
 
-badge.mode(LORES)
+badge.mode(LORES | VSYNC)
 
 
 import gc
@@ -44,10 +44,10 @@ load_demo(0)
 def update():
   global selected, menu_index
 
-  if BUTTON_DOWN in badge.pressed():
+  if badge.pressed(BUTTON_DOWN):
     load_demo(selected + 1)
 
-  if BUTTON_UP in badge.pressed():
+  if badge.pressed(BUTTON_UP):
     load_demo(selected - 1)
 
   # make sure a font is loaded by default in case the example wishes to use it
@@ -85,6 +85,4 @@ def update():
       screen.pen = color.rgb(255, 255, 255, alpha)
       screen.text(name, 5, y)
 
-
-if __name__ == "__main__":
-  run(update)
+run(update)

@@ -585,3 +585,102 @@
     #left-resize-handle::after { content: ''; position: absolute; inset: 0 -4px; }
     #left-resize-handle:hover,
     #left-resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+
+    /* ── Mobile nav (hidden on desktop) ─────────────────────────── */
+    #mobile-nav { display: none; }
+
+    /* ── Mobile layout ───────────────────────────────────────────── */
+    @media (max-width: 767px) {
+
+      /* Compact toolbar */
+      #example-select { display: none; }
+
+      /* Main: stack vertically */
+      #main {
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Side panel: badge-only strip at the top */
+      #side-panel {
+        order: -1;
+        width: 100%;
+        flex-shrink: 0;
+        border-left: none;
+        border-bottom: 1px solid var(--border);
+        overflow: visible;  /* keep 3D canvas visible */
+      }
+
+      /* Reset the desktop spill margins so badge stays inside its strip */
+      #badge-3d-wrap {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        transition: none;
+      }
+
+      /* stdout hidden unless Output tab active */
+      #stdout-wrap { display: none; }
+
+      /* File panel: full-width, hidden until Files tab */
+      #file-panel {
+        display: none;
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        border-right: none;
+      }
+
+      /* Editor panel: full-width, hidden until Code tab */
+      #editor-panel {
+        display: none;
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+      }
+
+      /* Hide both resize handles */
+      #resize-handle,
+      #left-resize-handle { display: none; }
+
+      /* ── Per-tab visibility ──────────────────────────────────── */
+      body[data-mobile-tab="files"]  #file-panel   { display: flex; }
+      body[data-mobile-tab="code"]   #editor-panel { display: flex; }
+
+      /* Output tab: side-panel grows to fill, stdout revealed */
+      body[data-mobile-tab="output"] #side-panel   { flex: 1; overflow: hidden; }
+      body[data-mobile-tab="output"] #stdout-wrap  { display: flex; }
+
+      /* ── Mobile nav ──────────────────────────────────────────── */
+      #mobile-nav {
+        display: flex;
+        flex-shrink: 0;
+        background: rgba(6, 14, 22, 0.95);
+        border-top: 1px solid var(--border);
+        backdrop-filter: blur(1rem);
+        /* Safe area for iOS home bar */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+
+      .m-tab {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 0;
+        background: none;
+        border: none;
+        border-top: 2px solid transparent;
+        color: var(--dim);
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        touch-action: manipulation;
+        transition: color 0.15s;
+        user-select: none;
+      }
+      .m-tab:hover  { color: var(--faint); }
+      .m-tab.active { color: var(--orange); border-top-color: var(--orange); }
+    }

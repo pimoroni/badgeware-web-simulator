@@ -865,6 +865,23 @@ async function initApp() {
 
   initResizeHandlers();
 
+  /* ── Mobile tab switching ──────────────────────────────────────── */
+  {
+    const mobileNav = document.getElementById('mobile-nav');
+    const setMobileTab = (tab) => {
+      document.body.dataset.mobileTab = tab;
+      mobileNav.querySelectorAll('[data-tab]').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === tab)
+      );
+      if (tab === 'code') requestAnimationFrame(() => editor.layout());
+    };
+    setMobileTab('code');
+    mobileNav.addEventListener('click', e => {
+      const btn = e.target.closest('[data-tab]');
+      if (btn) setMobileTab(btn.dataset.tab);
+    });
+  }
+
   /* ── Auto-run on load ──────────────────────────────────────────── */
   await runCode();
 }

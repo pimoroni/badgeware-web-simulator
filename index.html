@@ -639,6 +639,7 @@
 <script src="/simulator/badgeware.js"></script>
 
 <script src="/simulator/completions.js"></script>
+<script src="/simulator/ppf.js"></script>
 
 <script>
 /* ── Base64 helpers ──────────────────────────────────────────────────────── */
@@ -1513,10 +1514,14 @@ require(['vs/editor/editor.main'], async function () {
       const imgTag = document.getElementById('img-preview-img');
       imgTag.src = info.imgUrl;
       document.getElementById('img-preview-name').textContent = tabLabel(key);
-      document.getElementById('img-preview-dim').textContent  = '';
-      imgTag.onload = () => {
-        document.getElementById('img-preview-dim').textContent = imgTag.naturalWidth + ' × ' + imgTag.naturalHeight + ' px';
-      };
+      if (info.dimText) {
+        document.getElementById('img-preview-dim').textContent = info.dimText;
+      } else {
+        document.getElementById('img-preview-dim').textContent = '';
+        imgTag.onload = () => {
+          document.getElementById('img-preview-dim').textContent = imgTag.naturalWidth + ' × ' + imgTag.naturalHeight + ' px';
+        };
+      }
     } else {
       editorEl.style.display  = '';
       imgEl.style.display     = 'none';
@@ -1685,6 +1690,7 @@ require(['vs/editor/editor.main'], async function () {
 
   async function openSysFile(path, transient = false) {
     const ext = path.slice(path.lastIndexOf('.'));
+    if (ext === '.ppf') { await openSysPpfFile(path, transient); return; }
     if (!TEXT_EXTS.has(ext)) return;
     const key = 'sys:' + path;
     if (openModels.has(key)) {
@@ -1714,6 +1720,7 @@ require(['vs/editor/editor.main'], async function () {
     if (!entry || entry.isDir) return;
     const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
     if (IMAGE_EXTS.has(ext)) { openUserImageFile(path, entry, transient); return; }
+    if (ext === '.ppf') { openUserPpfFile(path, entry, transient); return; }
     if (entry.binary) return;
     if (openModels.has(path)) {
       if (!transient && openModels.get(path).transient) promoteTab(path);
@@ -1747,6 +1754,47 @@ require(['vs/editor/editor.main'], async function () {
     openOrder.push(imgKey);
     if (transient) transientTabKey = imgKey;
     focusTab(imgKey);
+  }
+
+  async function openSysPpfFile(path, transient = false) {
+    const key = 'ppf:sys:' + path;
+    if (openModels.has(key)) {
+      if (!transient && openModels.get(key).transient) promoteTab(key);
+      focusTab(key);
+      statusEl.textContent = path + ' — read-only';
+      return;
+    }
+    if (transient) evictTransient(key);
+    try {
+      const buf  = await fetch('/simulator/filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+      const font = ppfParse(buf);
+      const { dataUrl, dimText } = ppfPreview(font);
+      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
+      openOrder.push(key);
+      if (transient) transientTabKey = key;
+    } catch (_) { return; }
+    focusTab(key);
+    statusEl.textContent = path + ' — read-only';
+  }
+
+  function openUserPpfFile(path, entry, transient = false) {
+    const key = 'ppf:' + path;
+    if (openModels.has(key)) {
+      if (!transient && openModels.get(key).transient) promoteTab(key);
+      focusTab(key);
+      return;
+    }
+    if (transient) evictTransient(key);
+    try {
+      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
+      const buf   = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const font  = ppfParse(buf);
+      const { dataUrl, dimText } = ppfPreview(font);
+      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl: dataUrl, dimText, label: path.split('/').pop(), transient });
+      openOrder.push(key);
+      if (transient) transientTabKey = key;
+    } catch (_) { return; }
+    focusTab(key);
   }
 
   /* ── User-tree renderer (hierarchical, with context menu + actions) */

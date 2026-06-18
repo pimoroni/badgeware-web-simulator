@@ -219,11 +219,11 @@ except NameError:
       }
     }
 
-    // Prints "MicroPython 1.26.0" (or similar) to stdout on startup
-    // Not strictly necessary, but useful.
-    mp.runPython(`import platform
+    // Print a banner matching the hardware REPL, e.g.
+    // "MicroPython 1.28.0; Pimoroni Tufty 2350 with RP2350"
+    mp.runPython(`import platform, sys
 __version__ = platform.platform().split("-")[1]
-print(f"MicroPython {__version__}")`)
+print(f"MicroPython {__version__}; {sys.implementation._machine}")`)
     worker.postMessage({ ready: true })
   })
 

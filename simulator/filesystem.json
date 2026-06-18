@@ -1,7 +1,10 @@
 {
     "files": [
+        "/breakout_bme280.py",
         "/powman.py",
         "/pcf85063a.py",
+        "/lsm6ds3.py",
+        "/breakout_ltr559.py",
         "/badgeware/memory.py",
         "/badgeware/filesystem.py",
         "/badgeware/__init__.py",

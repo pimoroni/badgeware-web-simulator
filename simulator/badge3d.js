@@ -12,13 +12,21 @@ function initBadge3D(simulator, appendOut) {
     screenTex.minFilter  = three.NearestFilter;
     screenTex.flipY      = false;
     screenTex.colorSpace = three.SRGBColorSpace;
-    // MeshBasicMaterial is unlit — scene lights can't lift the blacks.
-    if (!(screenMesh.material instanceof three.MeshBasicMaterial)) {
-      screenMesh.material = new three.MeshBasicMaterial();
+    // Standard material driven by the emissive channel: the diffuse is black so
+    // scene lights can't lift the blacks, and the picture comes from the
+    // emissive map — slightly over 1.0 so the panel reads as gently self-lit.
+    if (!(screenMesh.material instanceof three.MeshStandardMaterial)) {
+      screenMesh.material = new three.MeshStandardMaterial();
     }
-    screenMesh.material.map         = screenTex;
-    screenMesh.material.color.setRGB(1, 1, 1);  // show the texture unmodified
-    screenMesh.material.needsUpdate = true;
+    const m = screenMesh.material;
+    m.color.setRGB(0, 0, 0);
+    m.metalness        = 0;
+    m.roughness        = 1;
+    m.map              = null;
+    m.emissiveMap      = screenTex;
+    m.emissive.setRGB(1, 1, 1);
+    m.emissiveIntensity = 1.5;   // slight glow on top of the displayed image
+    m.needsUpdate       = true;
     screenLive = true;
   }
 
@@ -31,9 +39,14 @@ function initBadge3D(simulator, appendOut) {
     if (screenMesh && screenMesh.material) {
       // Drop the texture and paint the panel black so a stopped badge reads
       // as "off" rather than a blank white screen.
-      screenMesh.material.map         = null;
-      screenMesh.material.color.setRGB(0, 0, 0);
-      screenMesh.material.needsUpdate = true;
+      const m = screenMesh.material;
+      m.map = null;
+      m.color.setRGB(0, 0, 0);
+      if ('emissiveMap' in m) {
+        m.emissiveMap = null;
+        m.emissive.setRGB(0, 0, 0);
+      }
+      m.needsUpdate = true;
     }
     if (screenTex) { screenTex.dispose(); screenTex = null; }
   }

@@ -251,6 +251,13 @@
       /* spill slightly past the container: up over the toolbar, down over OUTPUT */
       margin-top: -8%;
       margin-bottom: -24px;
+      transition: margin 0.45s ease;
+    }
+    /* When the screen is zoomed in, pull the badge back inside its container so
+       the framed screen never overlaps the toolbar or the OUTPUT box. */
+    #badge-3d-wrap.screen-zoomed {
+      margin-top: 10px;
+      margin-bottom: 5px;
     }
 
     #badge-3d-wrap > canvas {
@@ -271,7 +278,7 @@
       transform: translateY(-50%);
       display: flex;
       justify-content: space-between;
-      padding: 0 2px;
+      padding: 0 10px;
       pointer-events: none;
       z-index: 6;
     }
@@ -285,7 +292,7 @@
       justify-content: center;
       background: rgba(10, 20, 30, 0.6);
       border: 1px solid var(--border);
-      border-radius: 50%;
+      border-radius: 25%;
       color: var(--faint);
       font-family: inherit;
       font-size: 16px;

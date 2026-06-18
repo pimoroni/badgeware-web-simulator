@@ -76,8 +76,53 @@ function initBadge3D(simulator, appendOut) {
 
       // Exposed so the host can wire up the spin buttons (dir: -1 or +1).
       rotateView = (dir) => {
+        if (zoomed) focusScreen(false);   // spinning drops back to the default view
         viewTargetY += Math.sign(dir || 1) * Math.PI;
       };
+
+      /* ── Double-click the screen to zoom in / out ──────────────────────────
+         A "home" pose is captured at load; the render loop eases the camera
+         between home and a face-on framing of the screen. */
+      let   screenFocusReady = false;
+      let   zoomed           = false;
+      let   camEasing        = false;
+      const homePos     = new THREE.Vector3();
+      const homeLook    = new THREE.Vector3();
+      const camPosGoal  = new THREE.Vector3();
+      const camLookGoal = new THREE.Vector3();
+      const camLookNow  = new THREE.Vector3();
+
+      // Camera pose that frames just the screen, dead-on along its normal.
+      function framedScreenPose() {
+        const center = new THREE.Box3().setFromObject(screenMesh).getCenter(new THREE.Vector3());
+        const normal = new THREE.Vector3(0, 1, 0).transformDirection(screenMesh.matrixWorld).normalize();
+        screenMesh.geometry.computeBoundingBox();
+        const size = screenMesh.geometry.boundingBox.getSize(new THREE.Vector3());
+        const ws   = screenMesh.getWorldScale(new THREE.Vector3());
+        // Screen lies in its local XZ plane: X = width, Z = height, Y = normal.
+        const halfTan = Math.tan((camera.fov * Math.PI / 180) / 2);
+        const distH = (size.z * ws.z / 2) / halfTan;                   // fit height
+        const distW = (size.x * ws.x / 2) / (halfTan * camera.aspect); // fit width
+        const dist  = Math.max(distH, distW) * 1.12;                   // small margin
+        return { pos: center.clone().addScaledVector(normal, dist), look: center };
+      }
+
+      function focusScreen(on) {
+        if (!screenFocusReady) return;
+        if (on) {
+          const { pos, look } = framedScreenPose();
+          camPosGoal.copy(pos);
+          camLookGoal.copy(look);
+        } else {
+          camPosGoal.copy(homePos);
+          camLookGoal.copy(homeLook);
+        }
+        zoomed    = on;
+        camEasing = true;
+        // Reel the badge back inside its container (CSS transitions the margins)
+        // so the framed screen doesn't spill over the toolbar / OUTPUT box.
+        wrap.classList.toggle('screen-zoomed', on);
+      }
 
       /* Forward badge key events from the 3D canvas */
       const keyMap = { 38: 2, 40: 1, 37: 16, 39: 4, 32: 8, 27: 32 };
@@ -177,6 +222,21 @@ function initBadge3D(simulator, appendOut) {
         if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+      });
+
+      // Double-click the screen to frame it; double-click again to zoom back out.
+      renderer.domElement.addEventListener('dblclick', ev => {
+        if (!screenFocusReady) return;
+        if (zoomed) { focusScreen(false); return; }
+        const rect  = renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((ev.clientX - rect.left) / rect.width)  *  2 - 1,
+          ((ev.clientY - rect.top)  / rect.height) * -2 + 1,
+        );
+        raycaster.setFromCamera(mouse, camera);
+        // Only zoom in when the double-click actually lands on the (front-facing)
+        // screen mesh — back-face culling means this misses when spun to the rear.
+        if (raycaster.intersectObject(screenMesh, false).length) focusScreen(true);
       });
 
       /* ── Button press animation (siloed — swap out when geometry improves) ──
@@ -381,6 +441,14 @@ function initBadge3D(simulator, appendOut) {
             .addScaledVector(screenNormal, dist)
             .addScaledVector(new THREE.Vector3(1, 0, 0), maxDim * 0.12);
           camera.lookAt(center);
+
+          // Remember this as the "home" pose for the double-click zoom toggle.
+          homePos.copy(camera.position);
+          homeLook.copy(center);
+          camPosGoal.copy(camera.position);
+          camLookGoal.copy(center);
+          camLookNow.copy(center);
+          screenFocusReady = true;
         }
 
         /* Collect all tufty meshes for raycasting — button detection uses hit position */
@@ -417,6 +485,20 @@ function initBadge3D(simulator, appendOut) {
         if (viewNode) {
           const k = Math.min(1, 10 * dt);
           viewNode.rotation.y += (viewTargetY - viewNode.rotation.y) * k;
+        }
+        // Ease the camera between the home and screen-framed poses.
+        if (camEasing) {
+          const k = Math.min(1, 8 * dt);
+          camera.position.lerp(camPosGoal, k);
+          camLookNow.lerp(camLookGoal, k);
+          camera.lookAt(camLookNow);
+          if (camera.position.distanceToSquared(camPosGoal) < 1e-8 &&
+              camLookNow.distanceToSquared(camLookGoal) < 1e-8) {
+            camera.position.copy(camPosGoal);
+            camLookNow.copy(camLookGoal);
+            camera.lookAt(camLookNow);
+            camEasing = false;
+          }
         }
         if (screenLive && screenTex) screenTex.needsUpdate = true;
         if (buttonAnimator) buttonAnimator.update(dt);

@@ -100,11 +100,15 @@
   <div id="resize-handle" title="Drag to resize"></div>
   <div id="side-panel">
     <div id="simulator-wrap">
-      <div id="sim-label">Simulator</div>
       <!-- sim-host is fixed off-screen; canvas stays alive for OffscreenCanvas transfer -->
       <div id="sim-host" class="badgeware-simulator"></div>
       <!-- 3D badge view — buttons are interactive hit areas on the model -->
       <div id="badge-3d-wrap"></div>
+      <!-- Spin the 3D badge in 180° steps -->
+      <div id="badge-view-controls">
+        <button id="view-prev-btn" class="view-btn" title="Spin left">&#8249;</button>
+        <button id="view-next-btn" class="view-btn" title="Spin right">&#8250;</button>
+      </div>
     </div>
     <div id="stdout-wrap">
       <div id="stdout-header">

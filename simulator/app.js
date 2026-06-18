@@ -57,7 +57,7 @@ async function initApp() {
   };
 
   /* ── 3D badge display (non-blocking) ──────────────────────────── */
-  const { applyCanvasToScreen, pauseScreen } = initBadge3D(simulator, appendOut);
+  const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
 
   /* ── Runtime error → Monaco marker wiring ─────────────────────── */
   let lastRunKey   = null;   // tab key active when Run was pressed
@@ -194,6 +194,10 @@ async function initApp() {
   /* ── Toolbar wiring ────────────────────────────────────────────── */
   runBtn.addEventListener('click', runCode);
   stopBtn.addEventListener('click', stopCode);
+
+  /* ── 3D badge spin buttons (180° steps) ────────────────────────── */
+  document.getElementById('view-prev-btn').addEventListener('click', () => rotateView(-1));
+  document.getElementById('view-next-btn').addEventListener('click', () => rotateView(+1));
 
   document.getElementById('example-select').addEventListener('change', async (e) => {
     if (!e.target.value) return;

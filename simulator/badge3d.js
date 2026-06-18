@@ -2,6 +2,7 @@
 function initBadge3D(simulator, appendOut) {
   let three = null, screenMesh = null, screenTex = null;
   let screenLive = false;   // true while the live simulator canvas is being shown
+  let rotateView = () => {};  // assigned once the scene is ready (spin in 180° steps)
 
   function applyCanvasToScreen() {
     if (!three || !screenMesh || !simulator.canvas) return;
@@ -41,7 +42,6 @@ function initBadge3D(simulator, appendOut) {
     try {
       const THREE              = await import('three');
       const { GLTFLoader }     = await import('three/addons/loaders/GLTFLoader.js');
-      const { OrbitControls }  = await import('three/addons/controls/OrbitControls.js');
       three = THREE;
 
       const wrap = document.getElementById('badge-3d-wrap');
@@ -55,14 +55,16 @@ function initBadge3D(simulator, appendOut) {
       const scene  = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(22, wrap.clientWidth / wrap.clientHeight, 0.001, 10);
 
-      /* OrbitControls — drag to rotate, no pan/zoom extremes */
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping  = true;
-      controls.dampingFactor  = 0.06;
-      controls.enablePan      = false;
-      controls.minDistance    = 0.05;
-      controls.maxDistance    = 0.8;
-      controls.rotateSpeed    = 0.6;
+      /* View — the model spins around its Y axis in 180° steps. No free orbit;
+         rotateView(±1) nudges the target angle and the render loop eases to it. */
+      const FRONT_Y = -0.2;            // slight tilt that reads as "front"
+      let viewNode    = null;          // the tufty node we rotate
+      let viewTargetY = FRONT_Y;       // angle we're easing toward
+
+      // Exposed so the host can wire up the spin buttons (dir: -1 or +1).
+      rotateView = (dir) => {
+        viewTargetY += Math.sign(dir || 1) * Math.PI;
+      };
 
       /* Forward badge key events from the 3D canvas */
       const keyMap = { 38: 2, 40: 1, 37: 16, 39: 4, 32: 8, 27: 32 };
@@ -136,7 +138,7 @@ function initBadge3D(simulator, appendOut) {
         return { mask: 0, worldPt: null };
       }
 
-      // Capture-phase pointerdown so button hits block OrbitControls entirely
+      // Capture-phase pointerdown so button hits are handled before anything else
       renderer.domElement.addEventListener('pointerdown', ev => {
         const { mask, worldPt } = buttonMaskAt(ev);
         if (!mask) return;
@@ -144,7 +146,6 @@ function initBadge3D(simulator, appendOut) {
         simulator.buttons |= mask;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
         if (buttonAnimator) buttonAnimator.press(mask, worldPt);
-        controls.enabled = false;
         ev.stopPropagation();
       }, true);
 
@@ -154,7 +155,6 @@ function initBadge3D(simulator, appendOut) {
         if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
-        controls.enabled = true;
         ev.stopPropagation();
       }, true);
 
@@ -164,7 +164,6 @@ function initBadge3D(simulator, appendOut) {
         if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
         if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
-        controls.enabled = true;
       });
 
       /* ── Button press animation (siloed — swap out when geometry improves) ──
@@ -334,8 +333,11 @@ function initBadge3D(simulator, appendOut) {
           if (simulator.canvas) applyCanvasToScreen();
         }
 
-        /* Slight default Y tilt for visual style */
-        if (tuftyNode) tuftyNode.rotation.y = -0.2;
+        /* Register the node we spin between Front/Back, starting on the front. */
+        if (tuftyNode) {
+          viewNode = tuftyNode;
+          tuftyNode.rotation.y = FRONT_Y;
+        }
 
         /* Position camera along screen's outward normal for a face-on view.
            The screen mesh lies in the local XZ plane, so local +Y is the face normal. */
@@ -355,8 +357,6 @@ function initBadge3D(simulator, appendOut) {
             .addScaledVector(screenNormal, dist)
             .addScaledVector(new THREE.Vector3(1, 0, 0), maxDim * 0.12);
           camera.lookAt(center);
-          controls.target.copy(center);
-          controls.update();
         }
 
         /* Collect all tufty meshes for raycasting — button detection uses hit position */
@@ -389,7 +389,11 @@ function initBadge3D(simulator, appendOut) {
         requestAnimationFrame(loop);
         const dt = Math.min((t - _loopLastT) / 1000, 0.1);
         _loopLastT = t;
-        controls.update();
+        // Ease the badge toward the selected Front/Back orientation.
+        if (viewNode) {
+          const k = Math.min(1, 10 * dt);
+          viewNode.rotation.y += (viewTargetY - viewNode.rotation.y) * k;
+        }
         if (screenLive && screenTex) screenTex.needsUpdate = true;
         if (buttonAnimator) buttonAnimator.update(dt);
         if (ledState && !_ledSimActive) {
@@ -407,5 +411,5 @@ function initBadge3D(simulator, appendOut) {
     }
   })();
 
-  return { applyCanvasToScreen, pauseScreen };
+  return { applyCanvasToScreen, pauseScreen, rotateView: (dir) => rotateView(dir) };
 }

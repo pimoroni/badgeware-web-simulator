@@ -37,6 +37,8 @@
       gap: 8px;
       flex-shrink: 0;
       user-select: none;
+      position: relative;
+      z-index: 1;
     }
 
     #run-btn, #stop-btn {
@@ -88,7 +90,9 @@
     #main {
       display: flex;
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
+      /* visible so the 3D badge can spill up over the toolbar */
+      overflow: visible;
     }
 
     /* ── Editor panel ────────────────────────────────────────────── */
@@ -221,26 +225,20 @@
       display: flex;
       flex-direction: column;
       background: var(--panel);
-      overflow: hidden;
+      /* visible so the 3D badge can spill out top and bottom */
+      overflow: visible;
     }
 
     /* ── Simulator ───────────────────────────────────────────────── */
     #simulator-wrap {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(10, 20, 30, 0.6);
+      padding: 0 12px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-    }
-
-    #sim-label {
-      font-size: 10px;
-      font-weight: 400;
-      color: var(--dim);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      /* lifted above the toolbar and OUTPUT box so the spilled badge sits on top */
+      position: relative;
+      z-index: 5;
+      overflow: visible;
     }
 
     #badge-3d-wrap {
@@ -249,18 +247,55 @@
       aspect-ratio: 4 / 3;
       background: transparent;
       position: relative;
-      overflow: hidden;
+      overflow: visible;
+      /* spill slightly past the container: up over the toolbar, down over OUTPUT */
+      margin-top: -8%;
+      margin-bottom: -24px;
     }
 
     #badge-3d-wrap > canvas {
       display: block;
       width: 100% !important;
       height: 100% !important;
+      outline: none;
     }
 
-    #badge-3d-wrap > canvas:focus {
-      outline: 2px solid var(--orange);
-      outline-offset: -2px;
+    /* ── 3D badge spin buttons (180° steps) ──────────────────────── */
+    /* Container spans the view but ignores pointer events, so only the two
+       edge buttons are clickable and the badge stays raycastable between them. */
+    #badge-view-controls {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      justify-content: space-between;
+      padding: 0 2px;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    .view-btn {
+      pointer-events: auto;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 20, 30, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      color: var(--faint);
+      font-family: inherit;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+    .view-btn:hover {
+      color: var(--white);
+      background: rgba(10, 20, 30, 0.85);
     }
 
     /* Simulator host stays composited so the OffscreenCanvas renders and

@@ -1,0 +1,535 @@
+:root {
+      --bg:          rgb(10, 20, 30);
+      --panel:       rgba(20, 30, 40, 0.6);
+      --border:      rgba(180, 190, 200, 0.12);
+      --white:       rgba(235, 245, 255);
+      --faint:       rgba(180, 190, 200);
+      --orange:      rgb(224, 137, 32);
+      --green:       rgb(32, 224, 70);
+      --blue:        rgb(32, 189, 224);
+      --faint-orange:rgba(224, 137, 32, 0.15);
+      --faint-green: rgba(32, 224, 70,  0.12);
+      --faint-white: rgba(235, 245, 255, 0.5);
+      --dim:         rgba(180, 190, 200, 0.4);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--white);
+      font-family: Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      font-weight: 300;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Toolbar ─────────────────────────────────────────────────── */
+    #toolbar {
+      background: rgba(10, 20, 30, 0.85);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(1rem);
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #run-btn {
+      background: var(--orange);
+      color: rgb(10, 20, 30);
+      border: none;
+      padding: 4px 14px 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: filter 0.1s;
+    }
+    #run-btn:hover  { filter: brightness(1.15); }
+    #run-btn:active { filter: brightness(0.9); }
+
+    #example-select {
+      background: var(--panel);
+      color: var(--white);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 300;
+      border-radius: 0.4rem;
+      cursor: pointer;
+    }
+    #example-select:focus { outline: 1px solid var(--orange); }
+
+    #status {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* ── Main layout ─────────────────────────────────────────────── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Editor panel ────────────────────────────────────────────── */
+    #editor-panel {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Tab bar ─────────────────────────────────────────────────── */
+    #tab-bar {
+      height: 33px;
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: rgba(6, 14, 22, 0.95);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #tab-bar::-webkit-scrollbar { height: 0; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 8px 0 12px;
+      font-size: 12px;
+      color: var(--dim);
+      cursor: pointer;
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      flex-shrink: 0;
+      max-width: 180px;
+      transition: color 0.1s, background 0.1s;
+      user-select: none;
+      position: relative;
+    }
+    .tab:hover { color: var(--faint); background: rgba(235,245,255,0.03); }
+    .tab.active {
+      color: var(--white);
+      background: var(--bg);
+      border-bottom: 2px solid var(--orange);
+      margin-bottom: -1px;
+    }
+    /* dot for unsaved scratch tabs */
+    .tab.dirty .tab-name::after {
+      content: '●'; font-size: 7px; color: var(--orange);
+      margin-left: 4px; vertical-align: super;
+    }
+    .tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .tab.transient .tab-name { font-style: italic; }
+    .tab-readonly { font-size: 9px; color: var(--dim); margin-left: 2px; }
+
+    .tab-close {
+      background: none; border: none;
+      color: inherit; opacity: 0;
+      cursor: pointer; font-size: 10px;
+      line-height: 1; padding: 2px 3px;
+      border-radius: 2px; flex-shrink: 0;
+    }
+    .tab:hover .tab-close { opacity: 0.4; }
+    .tab-close:hover { opacity: 1 !important; background: rgba(235,245,255,0.1); }
+
+    #editor {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Image preview (shown instead of #editor for image tabs) ─── */
+    #img-preview {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px;
+      background: rgba(0,0,0,0.25);
+    }
+    #img-preview img {
+      max-width: 100%;
+      max-height: calc(100% - 40px);
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .img-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* ── Resize handle ───────────────────────────────────────────── */
+    #resize-handle {
+      width: 4px;
+      flex-shrink: 0;
+      background: var(--border);
+      cursor: col-resize;
+      transition: background 0.15s;
+      position: relative;
+    }
+    /* Widen the hit area without changing the visual strip */
+    #resize-handle::after {
+      content: '';
+      position: absolute;
+      inset: 0 -4px;
+    }
+    #resize-handle:hover,
+    #resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+
+    /* Transparent overlay absorbs pointer events from Monaco + canvas during drag */
+    #drag-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      cursor: col-resize;
+    }
+    #drag-overlay.active { display: block; }
+
+    /* ── Side panel ──────────────────────────────────────────────── */
+    #side-panel {
+      width: 342px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    /* ── Simulator ───────────────────────────────────────────────── */
+    #simulator-wrap {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 20, 30, 0.6);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #sim-label {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    #badge-3d-wrap {
+      flex: 1;
+      min-width: 0;
+      aspect-ratio: 4 / 3;
+      background: transparent;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #badge-3d-wrap > canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #badge-3d-wrap > canvas:focus {
+      outline: 2px solid var(--orange);
+      outline-offset: -2px;
+    }
+
+    /* Simulator host stays composited so the OffscreenCanvas renders and
+       CanvasTexture reads succeed. Opacity near-zero keeps it invisible. */
+    .badgeware-simulator {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 320px;
+      height: 240px;
+      opacity: 0.001;
+      pointer-events: none;
+    }
+
+    .badgeware-simulator canvas {
+      width: 320px;
+      height: 240px;
+      display: block;
+    }
+
+    /* ── Output ──────────────────────────────────────────────────── */
+    #stdout-wrap {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #stdout-header {
+      padding: 5px 12px;
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #clear-btn {
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: 10px;
+      font-family: inherit;
+      padding: 0 2px;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+    #clear-btn:hover { color: var(--white); }
+
+    #stdout {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--green);
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: transparent;
+    }
+
+    #stdout::-webkit-scrollbar       { width: 6px; }
+    #stdout::-webkit-scrollbar-track { background: transparent; }
+    #stdout::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.15); border-radius: 3px; }
+
+    .out-dim   { color: var(--dim); }
+    .out-error { color: rgba(240, 141, 73, 1); }
+
+    /* ── File panel ──────────────────────────────────────────────── */
+    #file-panel {
+      width: 200px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: rgba(10, 20, 30, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .fp-section-head {
+      padding: 5px 8px 4px;
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .fp-section-title { flex: 1; }
+
+    .fp-icon-btn {
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-family: inherit;
+    }
+    .fp-icon-btn:hover { color: var(--white); background: rgba(235,245,255,0.06); }
+
+    /* ── User section (resizable) ────────────────────────────────── */
+    #fp-user-wrap {
+      flex-shrink: 0;
+      height: 220px;        /* default; drag handle overrides via inline style */
+      min-height: 40px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #fp-user-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .fp-empty {
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--dim);
+      font-style: italic;
+    }
+
+    /* ── Vertical resize handle ──────────────────────────────────── */
+    #fp-v-resize {
+      height: 4px;
+      flex-shrink: 0;
+      background: var(--border);
+      cursor: row-resize;
+      transition: background 0.15s;
+      position: relative;
+    }
+    #fp-v-resize::after { content: ''; position: absolute; inset: -4px 0; }
+    #fp-v-resize:hover,
+    #fp-v-resize.dragging { background: rgba(224, 137, 32, 0.5); }
+
+    /* ── System section (fills remaining space) ──────────────────── */
+    #fp-sys-wrap {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 60px;
+    }
+
+    #fp-sys-tree {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    #fp-user-list::-webkit-scrollbar,
+    #fp-sys-tree::-webkit-scrollbar { width: 4px; }
+    #fp-user-list::-webkit-scrollbar-track,
+    #fp-sys-tree::-webkit-scrollbar-track { background: transparent; }
+    #fp-user-list::-webkit-scrollbar-thumb,
+    #fp-sys-tree::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.12); border-radius: 2px; }
+
+    /* ── Context menu ────────────────────────────────────────────── */
+    #file-ctx-menu {
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      background: rgb(15, 25, 35);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 0;
+      min-width: 145px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.55);
+    }
+
+    .ctx-item {
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--faint);
+      cursor: pointer;
+      user-select: none;
+    }
+    .ctx-item:hover { background: rgba(235,245,255,0.06); color: var(--white); }
+    .ctx-item.ctx-danger { color: rgba(240,141,73,0.8); }
+    .ctx-item.ctx-danger:hover { color: rgba(240,141,73,1); background: rgba(240,141,73,0.07); }
+    .ctx-sep { height: 1px; background: var(--border); padding: 0; margin: 3px 0; cursor: default; }
+    .ctx-sep:hover { background: var(--border); }
+
+    /* ── Tree rows ───────────────────────────────────────────────── */
+    .tree-row {
+      display: flex;
+      align-items: center;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--faint);
+      cursor: pointer;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      user-select: none;
+    }
+    .tree-row:hover { background: rgba(235,245,255,0.05); color: var(--white); }
+    .tree-row.active { background: var(--faint-orange); color: var(--orange); }
+
+    .tree-row .row-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tree-row .row-badge {
+      font-size: 9px;
+      color: var(--dim);
+      flex-shrink: 0;
+    }
+
+    .row-actions { display: none; gap: 1px; flex-shrink: 0; }
+    .tree-row:hover .row-actions { display: flex; }
+
+    .row-action {
+      background: none;
+      border: none;
+      color: inherit;
+      opacity: 0.6;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .row-action:hover { opacity: 1; }
+
+    /* ── Collapsible system directories ─────────────────────────── */
+    details.tree-dir { }
+
+    details.tree-dir > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--faint);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    details.tree-dir > summary::-webkit-details-marker { display: none; }
+    details.tree-dir > summary:hover { background: rgba(235,245,255,0.05); color: var(--white); }
+
+    .dir-arrow {
+      font-size: 8px;
+      flex-shrink: 0;
+      transition: transform 0.12s;
+      display: inline-block;
+    }
+    details.tree-dir[open] > summary .dir-arrow { transform: rotate(90deg); }
+
+    .dir-children { padding-left: 10px; }
+
+    /* ── Left resize handle ──────────────────────────────────────── */
+    #left-resize-handle {
+      width: 4px;
+      flex-shrink: 0;
+      background: var(--border);
+      cursor: col-resize;
+      transition: background 0.15s;
+      position: relative;
+    }
+    #left-resize-handle::after { content: ''; position: absolute; inset: 0 -4px; }
+    #left-resize-handle:hover,
+    #left-resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }

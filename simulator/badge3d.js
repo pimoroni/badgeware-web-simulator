@@ -114,6 +114,9 @@ function initBadge3D(simulator, appendOut) {
     try {
       const THREE              = await import('three');
       const { GLTFLoader }     = await import('three/addons/loaders/GLTFLoader.js');
+      // The badge model is meshopt-compressed (EXT_meshopt_compression) — the
+      // decoder is a small (~30KB) module from the same three addons CDN.
+      const { MeshoptDecoder }  = await import('three/addons/libs/meshopt_decoder.module.js');
       three = THREE;
 
       const wrap = document.getElementById('badge-3d-wrap');
@@ -451,7 +454,8 @@ function initBadge3D(simulator, appendOut) {
       }
 
       /* Load the Tufty badge model */
-      new GLTFLoader().load(new URL('../static/models/badgeware.glb', _badge3dBase).href, (gltf) => {
+      const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+      gltfLoader.load(new URL('../static/models/badgeware.glb', _badge3dBase).href, (gltf) => {
         const root      = gltf.scene;
         const tuftyNode = root.getObjectByName('tufty');
         const caseBack  = root.getObjectByName('badger_case_back');

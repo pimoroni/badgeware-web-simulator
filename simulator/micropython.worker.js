@@ -26,7 +26,18 @@ worker.machine = {
 // Snapshot used to avoid posting unchanged caselight values every frame.
 worker._caselights_last = "0,0,0,0"
 
-import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
+// We ship two builds: a JSPI (Wasm stack switching) one and an Asyncify one.
+// JSPI is lighter/faster but isn't in mainline Safari yet, so pick at runtime:
+// use JSPI when the engine exposes it, otherwise fall back to Asyncify. Each
+// build self-declares its async mode to api.js, so loading the right .mjs is the
+// only decision here.
+worker.async_backend =
+  (typeof WebAssembly.Suspending === 'function' && typeof WebAssembly.promising === 'function')
+    ? 'jspi'
+    : 'asyncify'
+console.log(`WORKER: MicroPython async backend: ${worker.async_backend}`)
+
+import(new URL(`./${worker.async_backend}/micropython.mjs`, import.meta.url).href).then((mp_mjs) => {
   const stdoutWriter = (line) => {
     if (worker.debug) console.log(`WORKER: stdout: ${line}`)
     worker.postMessage({stdout: line})

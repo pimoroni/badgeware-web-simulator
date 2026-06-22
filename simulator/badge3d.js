@@ -16,6 +16,19 @@ function initBadge3D(simulator, appendOut) {
   let frameDirty  = false;  // a frame is waiting to be uploaded
   let texW = 0, texH = 0;   // current DataTexture dimensions
 
+  // A 1×1 near-black texture used as the screen's emissive map when there's no
+  // live frame — so a not-yet-started or stopped panel reads as a powered-down
+  // LCD instead of flashing solid white (emissive with no map = uniform white).
+  let offTex = null;
+  function offTexture() {
+    if (!offTex && three) {
+      offTex = new three.DataTexture(new Uint8Array([6, 6, 9, 255]), 1, 1, three.RGBAFormat, three.UnsignedByteType);
+      offTex.colorSpace = three.SRGBColorSpace;
+      offTex.needsUpdate = true;
+    }
+    return offTex;
+  }
+
   // Configure the screen mesh material; the picture is filled in by uploadFrame().
   function applyCanvasToScreen() {
     if (!three || !screenMesh) return;
@@ -32,6 +45,8 @@ function initBadge3D(simulator, appendOut) {
     m.map               = null;
     m.emissive.setRGB(1, 1, 1);
     m.emissiveIntensity = 1.5;   // slight glow on top of the displayed image
+    // Near-black until the first frame lands, so the panel never flashes white.
+    m.emissiveMap       = screenTex || offTexture();
     m.needsUpdate       = true;
     screenLive  = true;
     frameDirty  = latestFrame !== null;  // upload whatever we already have
@@ -67,20 +82,18 @@ function initBadge3D(simulator, appendOut) {
     screenLive  = false;
     frameDirty  = false;
     latestFrame = null;
+    if (screenTex) { screenTex.dispose(); screenTex = null; }
+    texW = texH = 0;
     if (screenMesh && screenMesh.material) {
-      // Drop the texture and paint the panel black so a stopped badge reads
-      // as "off" rather than a blank white screen.
+      // Show the near-black "off" panel rather than a blank white screen.
       const m = screenMesh.material;
       m.map = null;
       m.color.setRGB(0, 0, 0);
-      if ('emissiveMap' in m) {
-        m.emissiveMap = null;
-        m.emissive.setRGB(0, 0, 0);
-      }
+      m.emissive.setRGB(1, 1, 1);
+      m.emissiveIntensity = 1.5;
+      m.emissiveMap = offTexture();
       m.needsUpdate = true;
     }
-    if (screenTex) { screenTex.dispose(); screenTex = null; }
-    texW = texH = 0;
   }
 
   // The worker pushes a fresh framebuffer on every flip; just stash it.

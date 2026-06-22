@@ -150,7 +150,7 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
       worker.send_frame(data, 320, 240);
     }
 
-    worker.onmessage = async ({ data: { program, canvas, stop, buttons, pause, file, files, debug } }) => {
+    worker.onmessage = async ({ data: { program, stop, buttons, pause, file, files, debug } }) => {
       if (typeof buttons !== 'undefined') {
         if (worker.debug) console.log(`WORKER: Got buttons`)
         worker.input = buttons
@@ -159,15 +159,6 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
 
       if (typeof debug !== 'undefined') {
         worker.debug = debug
-      }
-
-      if (canvas) {
-        // Received but unused: the host still transfers a canvas (it doubles as a
-        // host-side "running" sentinel), but the worker no longer draws to it —
-        // frames go straight to the host via send_frame(). (Host-side canvas can
-        // be removed as a follow-up.)
-        worker.canvas = canvas
-        if (worker.debug) console.log(`WORKER: Got canvas ${worker.canvas.width}x${worker.canvas.height}`)
       }
 
       // Inject user files into the WASM FS before the program runs

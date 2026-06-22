@@ -470,7 +470,8 @@ function initBadge3D(simulator, appendOut) {
         screenMesh = root.getObjectByName('tufty_screen_active');
         if (screenMesh) {
           screenMesh.material = screenMesh.material.clone();
-          if (simulator.canvas) applyCanvasToScreen();
+          // If the model finishes loading mid-run, wire the screen up now.
+          if (simulator.micropython) applyCanvasToScreen();
         }
 
         /* Register the node we spin between Front/Back, starting on the front. */

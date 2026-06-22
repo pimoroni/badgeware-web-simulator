@@ -29,40 +29,8 @@ const BadgewareSimulator = async (target) => {
         target.appendChild(simulator.dom_stdout)
     }
 
-    const sendInput = async (buttons) => {
-        if(simulator.micropython) {
-            debug_log(`HOST: Sending input to worker. ${buttons}`)
-            await simulator.micropython.postMessage({buttons: buttons})
-        }
-    }
-
-    const getButton = (keycode) => {{
-        switch(keycode) {
-            case 38: return simulator.BUTTON_UP     // Arrow keys up
-            case 40: return simulator.BUTTON_DOWN   // Arrow keys down
-            case 37: return simulator.BUTTON_LEFT   // Arrow keys left
-            case 39: return simulator.BUTTON_RIGHT  // Arrow keys right
-            case 32: return simulator.BUTTON_SELECT // Spacebar
-            case 27: return simulator.BUTTON_HOME   // Escape
-            default: return 0
-        }
-    }}
-
-    const onkeydown = async (ev) => {
-        let button = getButton(ev.keyCode)
-        if (button == 0) return
-        simulator.buttons |= button
-        await sendInput(simulator.buttons)
-        ev.preventDefault()
-    }
-
-    const onkeyup = async (ev) => {
-        let button = getButton(ev.keyCode)
-        if (button == 0) return
-        simulator.buttons &= ~button
-        await sendInput(simulator.buttons)
-        ev.preventDefault()
-    }
+    // Keyboard input is handled by the 3D badge canvas (badge3d.js), which posts
+    // { buttons } to the worker directly — no key handling is needed here.
 
     simulator.resume = async () => {
         if(simulator.micropython) {
@@ -110,11 +78,6 @@ const BadgewareSimulator = async (target) => {
             simulator.micropython.terminate()
             simulator.micropython = null
         }
-        // Remove the canvas element. We need a new one for each Worker.
-        [...target.querySelectorAll("canvas")].forEach((node) => {
-            target.removeChild(node)
-        })
-        simulator.canvas = null
         await simulator.caselights([0, 0, 0, 0])
     }
 
@@ -125,22 +88,9 @@ const BadgewareSimulator = async (target) => {
         // Stop any old workers
         await simulator.stop()
 
-        // Create a new canvas element
-        // We can only "transferControlToOffscreen" a canvas once.
-        const canvas = document.createElement("canvas")
-        canvas.width = 320
-        canvas.height = 240
-        canvas.tabIndex = 1
-        target.appendChild(canvas)
-        simulator.canvas = canvas
-
-        // Set up keyboard input
-        canvas.addEventListener("keydown", onkeydown, true)
-        canvas.addEventListener("keyup", onkeyup, true)
-
-        // Optional, pause/resume on blur/focus
-        // canvas.addEventListener("focus", async (ev) => {await simulator.resume()}, true)
-        // canvas.addEventListener("blur", async (ev) => {await simulator.pause()}, true)
+        // No 2D canvas: the badge screen is rendered by the 3D view (badge3d.js)
+        // from frame buffers the worker pushes via send_frame(), and keyboard
+        // input is handled on the 3D canvas. Nothing to create or transfer here.
 
         // Create an observer for pausing/resuming our simulators as they are
         // scrolled out of and into view.
@@ -165,9 +115,8 @@ const BadgewareSimulator = async (target) => {
             }
 
             if (ready){
-                // Run when the worker is ready to accept a canvas/code
-                const offscreen_canvas = canvas.transferControlToOffscreen()
-                await simulator.micropython.postMessage({canvas: offscreen_canvas, program: code, debug: simulator.debug, files: userFiles}, [offscreen_canvas])
+                // Worker is ready — hand it the program to run.
+                await simulator.micropython.postMessage({program: code, debug: simulator.debug, files: userFiles})
                 return
             }
 

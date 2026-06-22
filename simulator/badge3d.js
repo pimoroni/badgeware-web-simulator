@@ -214,6 +214,7 @@ function initBadge3D(simulator, appendOut) {
       let   buttonAnimator  = null;
       let   ledState        = null;   // { lights: SpotLight[4], coverMesh }
       let   _ledSimActive   = false;  // true once MicroPython has sent caselights data
+      let   sceneReady      = true;   // gate: false while the model's shaders compile
 
       // Drive the 3D case LEDs when badge.caselights() is called from MicroPython
       simulator.caselights = (values) => {
@@ -520,6 +521,16 @@ function initBadge3D(simulator, appendOut) {
           buttonAnimator = initButtonAnimator(root, tuftyNode);
           ledState = createLedLights(root);
         }
+
+        /* Pre-compile the model's materials off the blocking path (uses
+           KHR_parallel_shader_compile where available) and skip rendering until
+           it's done — otherwise the first frame stalls ~75ms linking shaders.
+           Materials are in their final state here, so no recompile follows. */
+        sceneReady = false;
+        renderer.compileAsync(scene, camera).then(
+          () => { sceneReady = true; },
+          () => { sceneReady = true; },   // unsupported/failed → render anyway
+        );
       });
 
       /* Keep renderer sized to container */
@@ -529,7 +540,7 @@ function initBadge3D(simulator, appendOut) {
         renderer.setSize(w, h);
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
-        renderer.render(scene, camera);
+        if (sceneReady) renderer.render(scene, camera);
       }).observe(wrap);
 
       /* Render loop */
@@ -566,7 +577,8 @@ function initBadge3D(simulator, appendOut) {
           });
           if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...lights.map(l => l.intensity)) / 2;
         }
-        renderer.render(scene, camera);
+        // Hold off rendering while the model's shaders compile in the background.
+        if (sceneReady) renderer.render(scene, camera);
       })();
 
     } catch (e) {

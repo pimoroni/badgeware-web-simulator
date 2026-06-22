@@ -15,6 +15,7 @@ function initBadge3D(simulator, appendOut) {
   let latestFrame = null;   // { buffer: ArrayBuffer, width, height }
   let frameDirty  = false;  // a frame is waiting to be uploaded
   let texW = 0, texH = 0;   // current DataTexture dimensions
+  let renderDirty = true;   // render-on-demand: one-shot "something changed, redraw"
 
   // A 1×1 near-black texture used as the screen's emissive map when there's no
   // live frame — so a not-yet-started or stopped panel reads as a powered-down
@@ -50,12 +51,13 @@ function initBadge3D(simulator, appendOut) {
     m.needsUpdate       = true;
     screenLive  = true;
     frameDirty  = latestFrame !== null;  // upload whatever we already have
+    renderDirty = true;                  // material changed — redraw
   }
 
   // Upload the newest worker frame into the screen's DataTexture (cheap, direct).
-  // Called from the render loop; a no-op unless a new frame is pending.
+  // Called from the render loop; returns true if a new frame was uploaded.
   function uploadFrame() {
-    if (!screenLive || !frameDirty || !latestFrame) return;
+    if (!screenLive || !frameDirty || !latestFrame) return false;
     frameDirty = false;
     const { buffer, width, height } = latestFrame;
     const data = new Uint8Array(buffer);
@@ -66,14 +68,19 @@ function initBadge3D(simulator, appendOut) {
       screenTex.minFilter  = three.NearestFilter;
       screenTex.colorSpace = three.SRGBColorSpace;
       texW = width; texH = height;
+      // Swap the emissive map to the new texture. Don't set material.needsUpdate
+      // — emissiveMap is already non-null (the off-texture from applyCanvasToScreen),
+      // so this is a texture→texture swap with no shader-define change. Setting
+      // needsUpdate here would force a program *recompile* on the first frame,
+      // undoing compileAsync's precompile (~95ms getProgramParameter in the loop).
       if (screenMesh && screenMesh.material) {
-        screenMesh.material.emissiveMap  = screenTex;
-        screenMesh.material.needsUpdate = true;
+        screenMesh.material.emissiveMap = screenTex;
       }
     } else {
       screenTex.image.data = data;
     }
     screenTex.needsUpdate = true;
+    return true;
   }
 
   // Stop driving the screen. Safe to call before the worker is torn down — the
@@ -94,6 +101,7 @@ function initBadge3D(simulator, appendOut) {
       m.emissiveMap = offTexture();
       m.needsUpdate = true;
     }
+    renderDirty = true;   // panel went to "off" — redraw once
   }
 
   // The worker pushes a fresh framebuffer on every flip; just stash it.
@@ -219,6 +227,7 @@ function initBadge3D(simulator, appendOut) {
       // Drive the 3D case LEDs when badge.caselights() is called from MicroPython
       simulator.caselights = (values) => {
         _ledSimActive = true;
+        renderDirty = true;   // LED levels changed — render this frame
         if (!ledState) return;
         const { lights, coverMesh } = ledState;
         lights.forEach((l, i) => { l.intensity = (values[i] || 0) * 2; });
@@ -374,19 +383,24 @@ function initBadge3D(simulator, appendOut) {
             hitData.forEach(h => { if (mask & h.mask) targets[h.idx] = 0; });
           },
           update(dt) {
+            let busy = false;
             for (let i = 0; i < 5; i++) {
               const spd = targets[i] > pressVals[i] ? PRESS_SPD : RELEASE_SPD;
               pressVals[i] += (targets[i] - pressVals[i]) * Math.min(1, spd * dt);
+              if (Math.abs(targets[i] - pressVals[i]) > 1e-3) busy = true;
+              else pressVals[i] = targets[i];
             }
 
             ripplePool.forEach(r => {
               if (r.t < 0) return;
+              busy = true;
               r.t += dt / RIPPLE_DUR;
               if (r.t >= 1) { r.t = -1; r.mesh.visible = false; return; }
               const ease = 1 - Math.pow(1 - r.t, 2);
               r.mesh.scale.setScalar(0.15 + ease * 1.85);
               r.mesh.material.opacity = 0.55 * (1 - r.t);
             });
+            return busy;   // render-on-demand: keep rendering while animating
           },
         };
       }
@@ -528,8 +542,8 @@ function initBadge3D(simulator, appendOut) {
            Materials are in their final state here, so no recompile follows. */
         sceneReady = false;
         renderer.compileAsync(scene, camera).then(
-          () => { sceneReady = true; },
-          () => { sceneReady = true; },   // unsupported/failed → render anyway
+          () => { sceneReady = true; renderDirty = true; },
+          () => { sceneReady = true; renderDirty = true; },   // unsupported/failed → render anyway
         );
       });
 
@@ -540,6 +554,7 @@ function initBadge3D(simulator, appendOut) {
         renderer.setSize(w, h);
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
+        renderDirty = true;   // size changed — needs a redraw
         if (sceneReady) renderer.render(scene, camera);
       }).observe(wrap);
 
@@ -553,6 +568,7 @@ function initBadge3D(simulator, appendOut) {
         if (viewNode) {
           const k = Math.min(1, 10 * dt);
           viewNode.rotation.y += (viewTargetY - viewNode.rotation.y) * k;
+          if (Math.abs(viewTargetY - viewNode.rotation.y) < 1e-4) viewNode.rotation.y = viewTargetY;
         }
         // Ease the camera between the home and screen-framed poses.
         if (camEasing) {
@@ -568,17 +584,27 @@ function initBadge3D(simulator, appendOut) {
             camEasing = false;
           }
         }
-        uploadFrame();   // re-uploads only when the worker has sent a new frame
-        if (buttonAnimator) buttonAnimator.update(dt);
-        if (ledState && !_ledSimActive) {
+        const newFrame    = uploadFrame();   // true only when the worker sent a new frame
+        const buttonsBusy = buttonAnimator ? buttonAnimator.update(dt) : false;
+        const ledIdle     = ledState && !_ledSimActive;
+        if (ledIdle) {
           const { lights, coverMesh } = ledState;
           lights.forEach((l, i) => {
             l.intensity = Math.max(0, Math.cos(t * 0.0025 + i * Math.PI * 0.5)) ** 2 * 2;
           });
           if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...lights.map(l => l.intensity)) / 2;
         }
-        // Hold off rendering while the model's shaders compile in the background.
-        if (sceneReady) renderer.render(scene, camera);
+        const rotating  = viewNode && viewNode.rotation.y !== viewTargetY;
+        const animating = camEasing || rotating || buttonsBusy || ledIdle;
+
+        // Render-on-demand: only touch the GPU when something actually changed —
+        // a new badge frame, an in-progress animation, or a one-shot dirty event.
+        // A stopped/idle badge does no render work. (Held off entirely while the
+        // model's shaders are still compiling in the background.)
+        if (sceneReady && (renderDirty || newFrame || animating)) {
+          renderer.render(scene, camera);
+        }
+        renderDirty = false;
       })();
 
     } catch (e) {

@@ -1,7 +1,110 @@
-/* ── Main application — called from the Monaco require() callback ────────── */
+/* ── badgeware-web entry point ──────────────────────────────────────────────
+   Two phases that run in parallel:
+     • bootSimulator()  — spins up the simulator + 3D badge and runs main.py.
+       Has no dependency on Monaco, so it's kicked off immediately (see bottom
+       of file) rather than waiting for the editor bundle to download.
+     • initApp()        — called once Monaco is ready; builds the editor and
+       wires the UI to the already-running simulator. */
 const APP_BASE = new URL('.', document.currentScript.src).href;
 
+/* ── Simulator boot (Monaco-independent) ───────────────────────────────────
+   Resolves to a shared context the editor wires itself into. Idempotent. */
+let _bootCtx = null;
+function bootSimulator() {
+  if (_bootCtx) return _bootCtx;
+  _bootCtx = (async () => {
+    const stdoutEl = document.getElementById('stdout');
+    const statusEl = document.getElementById('status');
+    const stopBtn  = document.getElementById('stop-btn');
+    const simHost  = document.getElementById('sim-host');
+
+    const appendOut = (text, cls) => {
+      const span = document.createElement('span');
+      span.textContent = text + '\n';
+      if (cls) span.className = cls;
+      stdoutEl.appendChild(span);
+      stdoutEl.scrollTop = stdoutEl.scrollHeight;
+    };
+
+    const simulator = await BadgewareSimulator(simHost);
+    const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
+
+    /* Run / Stop state (the Stop button is meaningful only while running). */
+    let isRunning = false;
+    const setRunning = (running) => { isRunning = running; stopBtn.disabled = !running; };
+    const onSimulatorStopped = () => {
+      if (!isRunning) return;
+      setRunning(false);
+      statusEl.textContent = 'Stopped (error)';
+    };
+
+    /* Incremental MicroPython traceback parsing. The editor attaches marker
+       hooks (trace.clear / trace.apply) later; until then they're no-ops. */
+    const trace = { frames: [], lastRunKey: null, clear: null, apply: null };
+    function parseTracebackLine(text) {
+      const fileMatch = text.match(/^\s+File "([^"]+)", line (\d+)/);
+      if (fileMatch) {
+        trace.frames.push({ file: fileMatch[1], line: parseInt(fileMatch[2], 10) });
+        return;
+      }
+      if (text.startsWith('Traceback (most recent call last):')) {
+        trace.frames = [];
+        return;
+      }
+      // Terminal error line: non-whitespace start, frames already accumulated.
+      if (trace.frames.length > 0 && /^\w/.test(text)) {
+        if (trace.apply) trace.apply(text, trace.frames, trace.lastRunKey);
+        trace.frames = [];
+        onSimulatorStopped();   // a fatal exception ends the program
+      }
+    }
+    simulator.stdout = async (text) => { parseTracebackLine(text); appendOut(text); };
+
+    /* Shared run/stop, used by both the boot run and the editor's Run button. */
+    const runProgram = async (code, { tabKey = null, status = '' } = {}) => {
+      if (trace.clear) trace.clear();
+      trace.frames = [];
+      trace.lastRunKey = tabKey;
+      stdoutEl.innerHTML = '';
+      appendOut('▶ Running…', 'out-dim');
+      statusEl.textContent = 'Running…';
+      setRunning(true);
+      // simulator.run() tears down the old worker first; drop the screen texture
+      // so the render loop never touches a destroyed frame source.
+      pauseScreen();
+      try {
+        await simulator.run(code, userFS.workerFiles());
+        applyCanvasToScreen();
+        statusEl.textContent = status;
+      } catch (err) {
+        appendOut('✕ ' + err, 'out-error');
+        statusEl.textContent = 'Error';
+        setRunning(false);
+      }
+    };
+    const stopProgram = async () => {
+      pauseScreen();
+      await simulator.stop();
+      setRunning(false);
+      statusEl.textContent = 'Stopped';
+    };
+
+    // The system boot script (launches /system/apps/menu). Fetch and run it now,
+    // in parallel with Monaco loading — don't await the program itself.
+    const defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
+      .then(r => r.ok ? r.text() : null)
+      .catch(() => null)
+      ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
+    runProgram(defaultCode, {});
+
+    return { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode };
+  })();
+  return _bootCtx;
+}
+
 async function initApp() {
+  // Adopt the (already in-flight) simulator boot.
+  const { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode } = await bootSimulator();
 
   configureMonaco(monaco);
 
@@ -26,13 +129,6 @@ async function initApp() {
     parameterHints: { enabled: true },
   });
 
-  // Load the system boot script into the editor — it's the default app that
-  // runs on startup (launches /system/apps/menu).
-  const defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
-    .then(r => r.ok ? r.text() : null)
-    .catch(() => null)
-    ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
-
   /* ── File / model state (needed early so model functions can reference them) */
   let currentFilePath = null;   // FS path when a user file is active, otherwise null
   let currentReadOnly = false;
@@ -41,41 +137,20 @@ async function initApp() {
   const openModels    = new Map();  // tabKey → { model, dirty, readOnly, transient, label? }
   const openOrder     = [];         // ordered list of open tabKeys
 
-  // Bootstrap the default scratch tab (openScratchTab is hoisted as a function decl)
+  // Bootstrap the default scratch tab with the boot script (already running)
   openScratchTab('main.py', defaultCode);
 
-  /* ── Simulator ─────────────────────────────────────────────────── */
-  const simHost   = document.getElementById('sim-host');
-  const stdoutEl  = document.getElementById('stdout');
-  const statusEl  = document.getElementById('status');
-
-  const simulator = await BadgewareSimulator(simHost);
-
-  const appendOut = (text, cls) => {
-    const span = document.createElement('span');
-    span.textContent = text + '\n';
-    if (cls) span.className = cls;
-    stdoutEl.appendChild(span);
-    stdoutEl.scrollTop = stdoutEl.scrollHeight;
-  };
-
-  /* ── 3D badge display (non-blocking) ──────────────────────────── */
-  const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
-
-  /* ── Runtime error → Monaco marker wiring ─────────────────────── */
-  let lastRunKey   = null;   // tab key active when Run was pressed
-  let traceFrames  = [];     // [{file, line}] accumulated during current traceback
-
+  /* ── Runtime error → Monaco markers (wired into the boot's traceback parser) */
   function clearRuntimeMarkers() {
     for (const info of openModels.values()) {
       if (info.model) monaco.editor.setModelMarkers(info.model, 'micropython', []);
     }
   }
 
-  function applyTracebackMarkers(errorMsg) {
+  function applyTracebackMarkers(errorMsg, frames, lastRunKey) {
     // Group frames by model (multiple frames can hit the same file)
     const markersByModel = new Map();
-    for (const frame of traceFrames) {
+    for (const frame of frames) {
       // <stdin> is the code passed directly to runPython — the active tab at run time
       const key  = frame.file === '<stdin>' ? lastRunKey : frame.file;
       if (!key) continue;
@@ -99,52 +174,12 @@ async function initApp() {
     }
   }
 
-  // Called for every stdout line — parse MicroPython traceback incrementally
-  function parseTracebackLine(text) {
-    // "  File "path", line N[, in func]"
-    const fileMatch = text.match(/^\s+File "([^"]+)", line (\d+)/);
-    if (fileMatch) {
-      traceFrames.push({ file: fileMatch[1], line: parseInt(fileMatch[2], 10) });
-      return;
-    }
-    // Start of a new exception block — reset so previous partial traces don't leak
-    if (text.startsWith('Traceback (most recent call last):')) {
-      traceFrames = [];
-      return;
-    }
-    // Terminal error line: non-whitespace start, frames already accumulated
-    // e.g. "TypeError: ...", "SyntaxError: ...", "OSError: ..."
-    if (traceFrames.length > 0 && /^\w/.test(text)) {
-      applyTracebackMarkers(text);
-      traceFrames = [];
-      // A fatal exception ends the program — reflect that in the toolbar.
-      onSimulatorStopped();
-    }
-  }
-
-  // Override the simulator's stdout handler
-  simulator.stdout = async (text) => {
-    parseTracebackLine(text);
-    appendOut(text);
-  };
+  trace.clear = clearRuntimeMarkers;
+  trace.apply = applyTracebackMarkers;
 
   /* ── Run / Stop action ─────────────────────────────────────────── */
   const runBtn  = document.getElementById('run-btn');
   const stopBtn = document.getElementById('stop-btn');
-  let isRunning = false;
-
-  // Stop is only meaningful while something is running; Run always re-runs.
-  const setRunning = (running) => {
-    isRunning = running;
-    stopBtn.disabled = !running;
-  };
-
-  // The simulator stopped on its own (e.g. a fatal exception was raised).
-  const onSimulatorStopped = () => {
-    if (!isRunning) return;
-    setRunning(false);
-    statusEl.textContent = 'Stopped (error)';
-  };
 
   const runCode = async () => {
     const code = editor.getValue();
@@ -152,34 +187,13 @@ async function initApp() {
     if (currentFilePath && !currentReadOnly) {
       userFS.set(currentFilePath, { text: code, binary: false });
     }
-    clearRuntimeMarkers();
-    traceFrames = [];
-    lastRunKey  = currentTabKey;
-    stdoutEl.innerHTML = '';
-    appendOut('▶ Running…', 'out-dim');
-    statusEl.textContent = 'Running…';
-    setRunning(true);
-    // simulator.run() tears down the old worker/canvas first; drop the screen
-    // texture so the render loop never touches the destroyed canvas.
-    pauseScreen();
-    try {
-      await simulator.run(code, userFS.workerFiles());
-      applyCanvasToScreen();
-      statusEl.textContent = currentFilePath && !currentReadOnly ? currentFilePath : '';
-    } catch (err) {
-      appendOut('✕ ' + err, 'out-error');
-      statusEl.textContent = 'Error';
-      setRunning(false);
-    }
+    await runProgram(code, {
+      tabKey: currentTabKey,
+      status: currentFilePath && !currentReadOnly ? currentFilePath : '',
+    });
   };
 
-  const stopCode = async () => {
-    // Halt screen rendering before the canvas is destroyed (see pauseScreen).
-    pauseScreen();
-    await simulator.stop();
-    setRunning(false);
-    statusEl.textContent = 'Stopped';
-  };
+  const stopCode = stopProgram;
 
   // F5 keybinding inside the editor
   editor.addAction({
@@ -883,6 +897,11 @@ async function initApp() {
     });
   }
 
-  /* ── Auto-run on load ──────────────────────────────────────────── */
-  await runCode();
+  // No auto-run here: bootSimulator() already started main.py in parallel with
+  // Monaco loading. The editor is now wired to that running simulator.
 }
+
+// Kick off the simulator boot the moment this script parses — well before the
+// Monaco editor bundle finishes downloading. initApp() (run from the Monaco
+// require() callback) adopts this same in-flight boot.
+bootSimulator();

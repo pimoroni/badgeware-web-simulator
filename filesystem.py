@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-import glob
 import pathlib
 import json
 
-def walk_dir(dir, relative=True):
-    for filename in glob.iglob(str(pathlib.Path(dir) / "**/*"), recursive=True):
-        path = pathlib.Path(filename)
+ROOT = pathlib.Path("simulator/filesystem")
+
+
+def walk_files(root):
+    for path in sorted(root.rglob("*")):
         if path.is_file():
-            if relative:
-                path = path.relative_to(dir)
             yield path
 
-files = [f"/{f}" for f in walk_dir("simulator/filesystem")]
 
-files = {"files": files}
+# Map each path to its byte size. The size lets the worker create lazy files
+# without a synchronous HEAD probe per file (see simulator/micropython.worker.js).
+files = {f"/{p.relative_to(ROOT)}": p.stat().st_size for p in walk_files(ROOT)}
 
-files = json.dumps(files, indent=4)
-
-print(files)
+print(json.dumps({"files": files}, indent=4))

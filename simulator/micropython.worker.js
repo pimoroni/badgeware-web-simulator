@@ -56,22 +56,60 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
       })
     }
 
+    // Create a lazy file whose length we already know (from the manifest), so
+    // Emscripten skips its synchronous HEAD probe. Emscripten's stock
+    // createLazyFile fetches the length on first stat/read via a blocking HEAD,
+    // then a second request for the content (and on gzip it downloads the whole
+    // file just to learn the uncompressed length). We always read whole module
+    // files, so seeding the length and fetching the file in one GET on first
+    // read removes a blocking round-trip per file.
+    //
+    // micropython.mjs is a build artefact, so if its LazyUint8Array shape ever
+    // changes we fall back to the stock (slower) behaviour rather than break.
+    const createKnownLazyFile = (path, url, size) => {
+      const node = mp.FS.createLazyFile("", path, url, true, false)
+      const arr = node.contents
+      if (!arr || typeof arr.setDataGetter !== 'function' || !('lengthKnown' in arr)) {
+        return node  // unexpected internals — leave Emscripten's default behaviour
+      }
+      arr._length = size
+      arr._chunkSize = size || 1   // whole file is a single chunk
+      arr.chunks = []
+      arr.lengthKnown = true
+      arr.setDataGetter(() => {
+        if (arr.chunks[0] === undefined) {
+          const xhr = new XMLHttpRequest()
+          xhr.open('GET', url, false)
+          xhr.responseType = 'arraybuffer'
+          xhr.send(null)
+          if (!(xhr.status >= 200 && xhr.status < 300 || xhr.status === 304)) {
+            throw new Error(`Failed to load ${url}: ${xhr.status}`)
+          }
+          arr.chunks[0] = new Uint8Array(xhr.response)
+        }
+        return arr.chunks[0]
+      })
+      return node
+    }
+
     // Fetch JSON Manifest generated with "python3 filesystem.py > filesystem.json"
+    // Shape: { "files": { "/path": byteSize, ... } }
     await fetch(new URL('./filesystem.json', import.meta.url).href).then(async (response) => {
       if(response.ok) {
         // Pray we don't have a parsing error...
-        const lazy_files = (await response.json())["files"]
+        const file_sizes = (await response.json())["files"]
+        const paths = Object.keys(file_sizes)
 
         // Get a unique list of directories we need to create from the above
-        const directories = [... new Set(lazy_files.map(dirname))]
+        const directories = [... new Set(paths.map(dirname))]
 
         // Iterate through directories and create each node in turn
         directories.forEach(mkdir_recursive);
 
         // Use the file list to create lazy-loading file entries in the FS
         // I am in awe that this works.
-        lazy_files.forEach((file) => {
-          mp.FS.createLazyFile("", `${file}`, new URL(`./filesystem${file}`, import.meta.url).href, true, false)
+        paths.forEach((file) => {
+          createKnownLazyFile(`${file}`, new URL(`./filesystem${file}`, import.meta.url).href, file_sizes[file])
         })
       }
     })

@@ -217,7 +217,8 @@ async function initApp() {
   /* ── Load system file list ─────────────────────────────────────── */
   try {
     const fsData = await fetch(APP_BASE + 'filesystem.json').then(r => r.json());
-    systemPaths = (fsData.files || []);
+    // Manifest shape: { files: { "/path": byteSize } } — we only need the paths here.
+    systemPaths = Object.keys(fsData.files || {});
     // Reset the built flag so refreshFileTree rebuilds the sys tree with real paths
     const sysTreeEl = document.getElementById('fp-sys-tree');
     if (sysTreeEl) { sysTreeEl._built = false; sysTreeEl.innerHTML = ''; }

@@ -125,12 +125,18 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
       }
     }
 
+    // Send the raw RGBA framebuffer to the host for the 3D screen texture. We
+    // transfer a copy so the host can upload it directly (DataTexture) instead
+    // of re-reading our canvas every frame. See badge3d.js uploadFrame().
+    worker.send_frame = (data, width, height) => {
+      const copy = data.slice(0, width * height * 4)   // own, exact-size buffer to transfer
+      worker.postMessage({ frame: { buffer: copy.buffer, width, height } }, [copy.buffer])
+    }
+
     // Handle a flip from a 160x120x4 byte buffer
     worker.flip_lores = (data) => {
-      worker.lores_canvas_image.data.set(data);
-      worker.lores_canvas_context.putImageData(worker.lores_canvas_image, 0, 0);
-      worker.canvas_context.drawImage(worker.lores_canvas, 0, 0, 320, 240);
       worker.update_caselights();
+      worker.send_frame(data, 160, 120);
     }
 
     // Forward case-light values [v0..v3] (0.0–1.0) to the host
@@ -140,9 +146,8 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
 
     // Handle a flip from a 320x240x4 byte buffer
     worker.flip_hires = (data) => {
-      worker.canvas_image.data.set(data);
-      worker.canvas_context.putImageData(worker.canvas_image, 0, 0);
       worker.update_caselights();
+      worker.send_frame(data, 320, 240);
     }
 
     worker.onmessage = async ({ data: { program, canvas, stop, buttons, pause, file, files, debug } }) => {
@@ -157,20 +162,12 @@ import(new URL('./micropython.mjs', import.meta.url).href).then((mp_mjs) => {
       }
 
       if (canvas) {
+        // Received but unused: the host still transfers a canvas (it doubles as a
+        // host-side "running" sentinel), but the worker no longer draws to it —
+        // frames go straight to the host via send_frame(). (Host-side canvas can
+        // be removed as a follow-up.)
         worker.canvas = canvas
         if (worker.debug) console.log(`WORKER: Got canvas ${worker.canvas.width}x${worker.canvas.height}`)
-
-        // 320x240 for mode(HIRES)
-        worker.canvas_context = worker.canvas.getContext('2d')
-        worker.canvas_context.imageSmoothingEnabled = false
-        worker.canvas_image = worker.canvas_context.getImageData(0, 0, worker.canvas.width, worker.canvas.height)
-
-        // 160x120 for mode(LORES) - create an extra offscreen canvas
-        // we'll draw to this at 160x120 and then use drawImage to hires canvas
-        worker.lores_canvas = new OffscreenCanvas(160, 120)
-        worker.lores_canvas_context = worker.lores_canvas.getContext('2d')
-        worker.canvas_context.imageSmoothingEnabled = false
-        worker.lores_canvas_image = worker.lores_canvas_context.getImageData(0, 0, 160, 120)
       }
 
       // Inject user files into the WASM FS before the program runs

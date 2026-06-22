@@ -3,17 +3,22 @@ const _badge3dBase = new URL('.', document.currentScript.src).href;
 
 function initBadge3D(simulator, appendOut) {
   let three = null, screenMesh = null, screenTex = null;
-  let screenLive = false;   // true while the live simulator canvas is being shown
+  let screenLive = false;   // true while the live simulator is driving the screen
   let rotateView = () => {};  // assigned once the scene is ready (spin in 180° steps)
 
+  // Newest framebuffer pushed from the worker, and whether it still needs an
+  // upload. The worker sends raw RGBA bytes per flip (see micropython.worker.js);
+  // we feed them to a DataTexture rather than re-reading a 2D canvas every frame
+  // — Safari's CanvasTexture upload path cost ~16ms/frame and capped the view to
+  // ~10fps. DataTexture's gl.texImage2D(ArrayBufferView) is a direct upload, and
+  // we only touch the GPU when a fresh frame has actually arrived.
+  let latestFrame = null;   // { buffer: ArrayBuffer, width, height }
+  let frameDirty  = false;  // a frame is waiting to be uploaded
+  let texW = 0, texH = 0;   // current DataTexture dimensions
+
+  // Configure the screen mesh material; the picture is filled in by uploadFrame().
   function applyCanvasToScreen() {
-    if (!three || !screenMesh || !simulator.canvas) return;
-    if (screenTex) screenTex.dispose();
-    screenTex = new three.CanvasTexture(simulator.canvas);
-    screenTex.magFilter  = three.NearestFilter;
-    screenTex.minFilter  = three.NearestFilter;
-    screenTex.flipY      = false;
-    screenTex.colorSpace = three.SRGBColorSpace;
+    if (!three || !screenMesh) return;
     // Standard material driven by the emissive channel: the diffuse is black so
     // scene lights can't lift the blacks, and the picture comes from the
     // emissive map — slightly over 1.0 so the panel reads as gently self-lit.
@@ -22,22 +27,46 @@ function initBadge3D(simulator, appendOut) {
     }
     const m = screenMesh.material;
     m.color.setRGB(0, 0, 0);
-    m.metalness        = 0;
-    m.roughness        = 1;
-    m.map              = null;
-    m.emissiveMap      = screenTex;
+    m.metalness         = 0;
+    m.roughness         = 1;
+    m.map               = null;
     m.emissive.setRGB(1, 1, 1);
     m.emissiveIntensity = 1.5;   // slight glow on top of the displayed image
     m.needsUpdate       = true;
-    screenLive = true;
+    screenLive  = true;
+    frameDirty  = latestFrame !== null;  // upload whatever we already have
   }
 
-  // Stop driving the screen from the simulator canvas. Must be called BEFORE
-  // simulator.stop() tears the canvas down — otherwise the render loop keeps
-  // uploading a destroyed offscreen canvas and WebGL floods the console with
-  // "invalid mailbox" / "texture is not a shared image" errors.
+  // Upload the newest worker frame into the screen's DataTexture (cheap, direct).
+  // Called from the render loop; a no-op unless a new frame is pending.
+  function uploadFrame() {
+    if (!screenLive || !frameDirty || !latestFrame) return;
+    frameDirty = false;
+    const { buffer, width, height } = latestFrame;
+    const data = new Uint8Array(buffer);
+    if (!screenTex || texW !== width || texH !== height) {
+      if (screenTex) screenTex.dispose();
+      screenTex = new three.DataTexture(data, width, height, three.RGBAFormat, three.UnsignedByteType);
+      screenTex.magFilter  = three.NearestFilter;
+      screenTex.minFilter  = three.NearestFilter;
+      screenTex.colorSpace = three.SRGBColorSpace;
+      texW = width; texH = height;
+      if (screenMesh && screenMesh.material) {
+        screenMesh.material.emissiveMap  = screenTex;
+        screenMesh.material.needsUpdate = true;
+      }
+    } else {
+      screenTex.image.data = data;
+    }
+    screenTex.needsUpdate = true;
+  }
+
+  // Stop driving the screen. Safe to call before the worker is torn down — the
+  // DataTexture owns its own buffer, so there's no destroyed-canvas to upload.
   function pauseScreen() {
-    screenLive = false;
+    screenLive  = false;
+    frameDirty  = false;
+    latestFrame = null;
     if (screenMesh && screenMesh.material) {
       // Drop the texture and paint the panel black so a stopped badge reads
       // as "off" rather than a blank white screen.
@@ -51,7 +80,14 @@ function initBadge3D(simulator, appendOut) {
       m.needsUpdate = true;
     }
     if (screenTex) { screenTex.dispose(); screenTex = null; }
+    texW = texH = 0;
   }
+
+  // The worker pushes a fresh framebuffer on every flip; just stash it.
+  simulator.onframe = (frame) => {
+    latestFrame = frame;
+    frameDirty  = true;
+  };
 
   (async () => {
     try {
@@ -61,6 +97,11 @@ function initBadge3D(simulator, appendOut) {
 
       const wrap = document.getElementById('badge-3d-wrap');
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      // Skip three.js's per-program getProgramInfoLog() check — it forces a
+      // synchronous GPU sync as each material first compiles (~110ms at startup
+      // in the capture). These are stock three.js/standard-material shaders, so
+      // they won't fail; we only lose dev-time shader error logging.
+      renderer.debug.checkShaderErrors = false;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(wrap.clientWidth, wrap.clientHeight);
       renderer.setClearColor(0x000000, 0);
@@ -502,7 +543,7 @@ function initBadge3D(simulator, appendOut) {
             camEasing = false;
           }
         }
-        if (screenLive && screenTex) screenTex.needsUpdate = true;
+        uploadFrame();   // re-uploads only when the worker has sent a new frame
         if (buttonAnimator) buttonAnimator.update(dt);
         if (ledState && !_ledSimActive) {
           const { lights, coverMesh } = ledState;

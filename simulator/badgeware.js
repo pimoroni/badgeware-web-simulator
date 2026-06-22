@@ -155,7 +155,14 @@ const BadgewareSimulator = async (target) => {
         simulator.micropython = new Worker(_simulatorBase + 'micropython.worker.js?v=2', { type: "module" })
 
         debug_log("HOST: Running MicroPython code from editor...")
-        simulator.micropython.onmessage = async ({ data: { stdout, ready, running, caselights } }) => {
+        simulator.micropython.onmessage = async ({ data: { stdout, ready, running, caselights, frame } }) => {
+
+            if (frame !== undefined) {
+                // A fresh framebuffer for the 3D screen texture. Keep this fast —
+                // it fires on every flip. Default handler is a no-op.
+                simulator.onframe(frame)
+                return
+            }
 
             if (ready){
                 // Run when the worker is ready to accept a canvas/code
@@ -210,6 +217,10 @@ const BadgewareSimulator = async (target) => {
     // Called with an array of 4 floats [0.0–1.0] when badge.caselights() is called.
     // Override this in the host to drive a physical LED representation.
     simulator.caselights = async (_values) => {}
+
+    // Called with { buffer, width, height } on every screen flip. Override in the
+    // host (badge3d.js) to upload the framebuffer; default is a no-op.
+    simulator.onframe = (_frame) => {}
 
     return simulator
 }

@@ -5182,6 +5182,7 @@ create_promise.sig = 'vii';
 var _free = Module['_free'] = makeInvalidEarlyAccess('_free');
 var _malloc = Module['_malloc'] = makeInvalidEarlyAccess('_malloc');
 var _mp_sched_keyboard_interrupt = Module['_mp_sched_keyboard_interrupt'] = makeInvalidEarlyAccess('_mp_sched_keyboard_interrupt');
+var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var _mp_js_init = Module['_mp_js_init'] = makeInvalidEarlyAccess('_mp_js_init');
 var _mp_js_register_js_module = Module['_mp_js_register_js_module'] = makeInvalidEarlyAccess('_mp_js_register_js_module');
 var _mp_js_do_import = Module['_mp_js_do_import'] = makeInvalidEarlyAccess('_mp_js_do_import');
@@ -5214,7 +5215,6 @@ var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
-var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var ___cxa_decrement_exception_refcount = makeInvalidEarlyAccess('___cxa_decrement_exception_refcount');
 var ___cxa_increment_exception_refcount = makeInvalidEarlyAccess('___cxa_increment_exception_refcount');
 var ___thrown_object_from_unwind_exception = makeInvalidEarlyAccess('___thrown_object_from_unwind_exception');
@@ -5228,6 +5228,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['free'] != 'undefined', 'missing Wasm export: free');
   assert(typeof wasmExports['malloc'] != 'undefined', 'missing Wasm export: malloc');
   assert(typeof wasmExports['mp_sched_keyboard_interrupt'] != 'undefined', 'missing Wasm export: mp_sched_keyboard_interrupt');
+  assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['mp_js_init'] != 'undefined', 'missing Wasm export: mp_js_init');
   assert(typeof wasmExports['mp_js_register_js_module'] != 'undefined', 'missing Wasm export: mp_js_register_js_module');
   assert(typeof wasmExports['mp_js_do_import'] != 'undefined', 'missing Wasm export: mp_js_do_import');
@@ -5260,7 +5261,6 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
-  assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['__cxa_decrement_exception_refcount'] != 'undefined', 'missing Wasm export: __cxa_decrement_exception_refcount');
   assert(typeof wasmExports['__cxa_increment_exception_refcount'] != 'undefined', 'missing Wasm export: __cxa_increment_exception_refcount');
   assert(typeof wasmExports['__thrown_object_from_unwind_exception'] != 'undefined', 'missing Wasm export: __thrown_object_from_unwind_exception');
@@ -5271,6 +5271,7 @@ function assignWasmExports(wasmExports) {
   _free = Module['_free'] = createExportWrapper('free', 1);
   _malloc = Module['_malloc'] = createExportWrapper('malloc', 1);
   _mp_sched_keyboard_interrupt = Module['_mp_sched_keyboard_interrupt'] = createExportWrapper('mp_sched_keyboard_interrupt', 0);
+  _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   _mp_js_init = Module['_mp_js_init'] = createExportWrapper('mp_js_init', 2);
   _mp_js_register_js_module = Module['_mp_js_register_js_module'] = createExportWrapper('mp_js_register_js_module', 2);
   _mp_js_do_import = Module['_mp_js_do_import'] = createExportWrapper('mp_js_do_import', 2);
@@ -5303,7 +5304,6 @@ function assignWasmExports(wasmExports) {
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
-  _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   ___cxa_decrement_exception_refcount = createExportWrapper('__cxa_decrement_exception_refcount', 1);
   ___cxa_increment_exception_refcount = createExportWrapper('__cxa_increment_exception_refcount', 1);
   ___thrown_object_from_unwind_exception = createExportWrapper('__thrown_object_from_unwind_exception', 1);
@@ -5816,6 +5816,14 @@ export async function loadMicroPython(options) {
             const wrap = (r) =>
                 r instanceof PyProxyThenable ? Promise.resolve(r) : r;
             return isThenable(ret) ? ret.then(wrap) : wrap(ret);
+        },
+        // Schedule a KeyboardInterrupt on the running VM. Safe to call while an
+        // mp_js_do_exec* call is suspended (JSPI/Asyncify): it only sets the
+        // pending-exception flag, which the VM raises at its next bytecode check,
+        // unwinding out of the in-flight runPython. Lets a host stop a running
+        // script without tearing down the whole instance.
+        interrupt() {
+            Module.ccall("mp_sched_keyboard_interrupt", "null", [], []);
         },
         replInit() {
             Module.ccall("mp_js_repl_init", "null", ["null"]);

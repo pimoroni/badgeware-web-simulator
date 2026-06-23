@@ -5,6 +5,8 @@ const BadgewareSimulator = async (target) => {
     let simulator = {
         target:        target,
         micropython:   null,
+        program:       null,   // last program requested (re-run on hard reset)
+        files:         [],      // user files accompanying that program
         canvas:        null,
         buttons:       0,
         BUTTON_UP:     0b000010,
@@ -64,34 +66,11 @@ const BadgewareSimulator = async (target) => {
     }
 
     /*
-        Ask the simulator to stop and terminate the web worker running it.
-        This way we get a fully clean slate, and/or can interrupt a stuck process.
+        Spawn the web worker (once) and wire up its message handling. The worker
+        is kept alive across runs so we can restart a script in place rather than
+        rebooting the whole MicroPython instance every time.
     */
-    simulator.stop = async () => {
-        if(simulator.micropython !== null) {
-            // Ask MicroPython to stop
-            debug_log("HOST: Stopping existing process...")
-            await simulator.micropython.postMessage({stop: true})
-
-            // Terminate the web worker
-            // TODO: give it time to shut down cleanly?
-            simulator.micropython.terminate()
-            simulator.micropython = null
-        }
-        await simulator.caselights([0, 0, 0, 0])
-    }
-
-    /*
-        Ask the simulator to run some code.
-    */
-    simulator.run = async (code, userFiles = []) => {
-        // Stop any old workers
-        await simulator.stop()
-
-        // No 2D canvas: the badge screen is rendered by the 3D view (badge3d.js)
-        // from frame buffers the worker pushes via send_frame(), and keyboard
-        // input is handled on the 3D canvas. Nothing to create or transfer here.
-
+    const createWorker = () => {
         // Create an observer for pausing/resuming our simulators as they are
         // scrolled out of and into view.
         simulator.observer = new IntersectionObserver(async (entries) => {
@@ -102,10 +81,10 @@ const BadgewareSimulator = async (target) => {
             }
         }, { threshold: [0] })
 
-        simulator.micropython = new Worker(_simulatorBase + 'micropython.worker.js?v=2', { type: "module" })
+        const worker = new Worker(_simulatorBase + 'micropython.worker.js?v=2', { type: "module" })
+        simulator.micropython = worker
 
-        debug_log("HOST: Running MicroPython code from editor...")
-        simulator.micropython.onmessage = async ({ data: { stdout, ready, running, caselights, frame } }) => {
+        worker.onmessage = async ({ data: { stdout, ready, running, caselights, frame, stuck } }) => {
 
             if (frame !== undefined) {
                 // A fresh framebuffer for the 3D screen texture. Keep this fast —
@@ -114,9 +93,24 @@ const BadgewareSimulator = async (target) => {
                 return
             }
 
+            if (stuck) {
+                // The worker couldn't interrupt the running program (a stuck
+                // native call). Fall back to a hard reset: terminate and respawn,
+                // then re-run whatever program was last requested.
+                debug_log("HOST: Worker stuck; terminating and respawning.")
+                worker.terminate()
+                if (simulator.micropython === worker) simulator.micropython = null
+                if (simulator.program !== null) {
+                    await simulator.run(simulator.program, simulator.files)
+                }
+                return
+            }
+
             if (ready){
-                // Worker is ready — hand it the program to run.
-                await simulator.micropython.postMessage({program: code, debug: simulator.debug, files: userFiles})
+                // Worker is ready — hand it the program to run (if any).
+                if (simulator.program !== null) {
+                    await worker.postMessage({program: simulator.program, debug: simulator.debug, files: simulator.files})
+                }
                 return
             }
 
@@ -142,6 +136,60 @@ const BadgewareSimulator = async (target) => {
             }
 
             debug_log("HOST: Unhandled message.")
+        }
+    }
+
+    /*
+        Ask the running program to stop, in place, leaving the worker alive and
+        idle (interrupt + soft reset). Use simulator.terminate() for a full
+        teardown. If the worker can't stop the program it self-reports {stuck}
+        and we hard-reset it.
+    */
+    simulator.stop = async () => {
+        simulator.program = null
+        if(simulator.micropython !== null) {
+            debug_log("HOST: Stopping running program (in place)...")
+            await simulator.micropython.postMessage({stop: true})
+        }
+        await simulator.caselights([0, 0, 0, 0])
+    }
+
+    /*
+        Tear the worker down completely (new instance next run). Most stops keep
+        the worker alive; this is for a guaranteed clean slate.
+    */
+    simulator.terminate = async () => {
+        simulator.program = null
+        if(simulator.micropython !== null) {
+            simulator.micropython.terminate()
+            simulator.micropython = null
+        }
+        if(simulator.observer) {
+            simulator.observer.disconnect()
+            simulator.observer = null
+        }
+        await simulator.caselights([0, 0, 0, 0])
+    }
+
+    /*
+        Ask the simulator to run some code. Reuses the live worker when one
+        exists (it interrupts the current program, soft-resets and runs the new
+        one in place); otherwise spawns one.
+
+        No 2D canvas: the badge screen is rendered by the 3D view (badge3d.js)
+        from frame buffers the worker pushes via send_frame(), and keyboard input
+        is handled on the 3D canvas. Nothing to create or transfer here.
+    */
+    simulator.run = async (code, userFiles = []) => {
+        simulator.program = code
+        simulator.files = userFiles
+
+        if (simulator.micropython === null) {
+            debug_log("HOST: Spawning worker and running code from editor...")
+            createWorker()   // posts {ready}; onmessage then sends the program
+        } else {
+            debug_log("HOST: Restarting code in the live worker...")
+            await simulator.micropython.postMessage({program: code, debug: simulator.debug, files: userFiles})
         }
     }
 

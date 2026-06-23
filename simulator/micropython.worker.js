@@ -6,7 +6,10 @@ worker.running = false
 worker.paused = true
 worker.input = 0
 worker.debug = false
-worker.main = null
+worker.main = null          // promise for the in-flight program run, or null
+worker.stopping = false     // true while interrupting the run on purpose
+worker.servicing = false    // true while the request serialiser is draining
+worker.pendingRequest = null // latest stop/run request awaiting service
 
 // Simulated `machine` peripheral state, shared with the WASM module.
 // The C `machine` module reads/writes this object via EM_ASM:
@@ -161,6 +164,160 @@ import(new URL(`./${worker.async_backend}/micropython.mjs`, import.meta.url).hre
       worker.send_frame(data, 320, 240);
     }
 
+    // How long to wait for an interrupted program to actually unwind before we
+    // give up and ask the host to hard-reset us. A genuinely stuck *native* call
+    // (a deadlocked fetch, a tight C loop) can't be interrupted from JS; a tight
+    // Python loop always can, because the VM hook yields to us between bytecodes.
+    const STOP_TIMEOUT_MS = 1500
+
+    // Inject host-provided user files into the WASM FS.
+    const injectFiles = (files) => {
+      if (!files || !files.length) return
+      for (const f of files) {
+        try {
+          mkdir_recursive(dirname(f.name))
+          mp.FS.createDataFile(null, f.name, f.content, true, true)
+        } catch (_) {}
+      }
+    }
+
+    // Run a user program to completion in the live instance. Stored in
+    // `worker.main` so a later start/stop can interrupt and await it. Both the
+    // program's own blocking loop and the `_update()` fall-through loop unwind
+    // through here, so either is interruptible.
+    const runProgram = async (program) => {
+      worker.stopping = false
+
+      // Arm execution *before* any user code runs. A program may block in its
+      // own `while True:` here (never returning) or fall through to the
+      // `_update(update)` loop below; in both cases the WASM module's cooperative
+      // pause/stop is gated on `worker.running`, so it must be set now for either
+      // path to be pausable. Posting `running` starts the host's visibility
+      // observer, which drives `worker.paused` via pause/resume. Everything is
+      // inside the try so worker.main never rejects (it is awaited fire-and-
+      // forget; an unhandled rejection would otherwise escape here).
+      worker.running = true
+      worker.paused = false
+      worker.postMessage({ running: true })
+
+      try {
+        await mp.runPython(`import badgeware`)
+        await mp.runPython(program)
+        // The program returned (it didn't block), so drive the frame loop.
+        await mp.runPython(`
+try:
+    while True:
+        _update(update)
+except NameError:
+    pass
+`)
+      } catch (error) {
+        if (worker.stopping) {
+          // Interrupted on purpose (stop / restart): the KeyboardInterrupt that
+          // unwound the run is expected — swallow it silently.
+        } else {
+          const msg = error.message ?? String(error)
+          try {
+            await mp.runPython(`badgeware.fatal_error("Error!", ${JSON.stringify(msg)})`)
+          } catch (_) {
+            worker.postMessage({ stdout: msg })
+          }
+          worker.paused = true
+        }
+      } finally {
+        worker.running = false
+      }
+    }
+
+    // Interrupt the running program (if any) and wait for it to unwind. Returns
+    // true once stopped, false if it didn't within STOP_TIMEOUT_MS (stuck).
+    const stopCurrent = async () => {
+      if (!worker.main) return true
+      worker.stopping = true
+      try { mp.interrupt() } catch (_) {}
+      // Release the C pause loop (mp_js_yield_hook) if we're paused, so the VM
+      // resumes and raises the pending KeyboardInterrupt.
+      worker.running = false
+      worker.paused = false
+      const stopped = await Promise.race([
+        worker.main.then(() => true, () => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), STOP_TIMEOUT_MS)),
+      ])
+      if (stopped) {
+        worker.main = null
+        worker.stopping = false
+      }
+      return stopped
+    }
+
+    // Return the live instance to roughly a fresh-boot state without tearing
+    // down the WASM module: reset simulated hardware state, drop every module
+    // imported since boot (so badgeware + user modules re-import fresh) and clear
+    // the user globals added to __main__. Relies on the boot snapshot taken once
+    // the instance is ready (see below).
+    const softReset = async () => {
+      worker.machine.gpio = {}
+      worker.machine.gpio_in = {}
+      worker.machine.pwm = {}
+      worker.machine.caselights = [0, 0, 0, 0]
+      worker.machine.adc = {}
+      worker._caselights_last = "0,0,0,0"
+      if (worker.update_caselights) worker.update_caselights()
+      try {
+        await mp.runPython(`
+def __soft_reset():
+    import sys
+    g = globals()
+    boot_g = g.get("__boot_globals__", set())
+    boot_m = g.get("__boot_modules__", set())
+    for k in [x for x in list(g) if x not in boot_g and x != "__soft_reset"]:
+        del g[k]
+    # sys.modules holds only frozen/filesystem modules (not builtins), so this
+    # drops badgeware + user modules and they re-import fresh next run.
+    for m in [x for x in list(sys.modules) if x not in boot_m]:
+        del sys.modules[m]
+__soft_reset()
+del __soft_reset
+`)
+      } catch (_) {}
+    }
+
+    // Single serialiser for everything that touches the VM. Asyncify allows only
+    // one suspended VM call in flight at a time, so stop/run requests (which each
+    // interrupt + soft-reset + maybe start a program) must never overlap — under
+    // Asyncify overlapping causes "cannot start an async operation when one is
+    // already in flight", under JSPI an unhandled WebAssembly.Exception. Requests
+    // coalesce: only `worker.pendingRequest` (the latest) is serviced.
+    //   pendingRequest = { kind: "run", program, files } | { kind: "stop" } | null
+    const service = async () => {
+      if (worker.servicing) return
+      worker.servicing = true
+      try {
+        while (worker.pendingRequest) {
+          const req = worker.pendingRequest
+          worker.pendingRequest = null
+          if (!(await stopCurrent())) {
+            // Couldn't interrupt a stuck native call — ask the host to hard-reset.
+            worker.postMessage({ stuck: true })
+            worker.pendingRequest = null
+            break
+          }
+          await softReset()
+          if (req.kind === "run") {
+            injectFiles(req.files)
+            // Fire-and-forget: runProgram loops for the life of the program and a
+            // later request's stopCurrent() interrupts/awaits it. It is fully
+            // guarded so it resolves rather than rejects; the .catch is a belt-
+            // and-braces guard against an unhandled rejection escaping.
+            worker.main = runProgram(req.program)
+            worker.main.catch(() => {})
+          }
+        }
+      } finally {
+        worker.servicing = false
+      }
+    }
+
     worker.onmessage = async ({ data: { program, stop, buttons, pause, file, files, debug } }) => {
       if (typeof buttons !== 'undefined') {
         if (worker.debug) console.log(`WORKER: Got buttons`)
@@ -172,51 +329,13 @@ import(new URL(`./${worker.async_backend}/micropython.mjs`, import.meta.url).hre
         worker.debug = debug
       }
 
-      // Inject user files into the WASM FS before the program runs
-      if (files && files.length) {
-        for (const f of files) {
-          try {
-            mkdir_recursive(dirname(f.name))
-            mp.FS.createDataFile(null, f.name, f.content, true, true)
-          } catch (_) {}
-        }
-      }
-
       if (program) {
         if (worker.debug) console.log(`WORKER: Got program`)
-        await mp.runPython(`import badgeware`)
-
-        // Arm execution *before* running the user program. A program may block
-        // in its own `while True:` here (never returning) or fall through to the
-        // `_update(update)` loop below; in both cases the WASM module's
-        // cooperative pause is gated on `worker.running`, so it must be set now
-        // for either path to be pausable. Posting `running` starts the host's
-        // visibility observer, which drives `worker.paused` via pause/resume.
-        worker.running = true
-        worker.postMessage({ running: true })
-
-        try {
-          await mp.runPython(program)
-        } catch (error) {
-          const msg = error.message ?? String(error)
-          try {
-            await mp.runPython(`badgeware.fatal_error("Error!", ${JSON.stringify(msg)})`)
-          } catch (_) {
-            worker.postMessage({stdout: msg})
-          }
-          worker.paused = true
-          return
-        }
-
-        // The program returned (it didn't block), so drive the frame loop.
-        worker.main = mp.runPython(`
-try:
-    while True:
-        _update(update)
-except NameError:
-    pass
-`)
-        await worker.main
+        // Queue as the latest request and let the serialiser drain it (it may be
+        // mid-service of a previous request; that's fine, it loops).
+        worker.pendingRequest = { kind: "run", program, files }
+        service().catch(() => {})
+        return
       }
 
       // Allow the host to request the worker download a file to MicroPython's
@@ -251,16 +370,21 @@ except NameError:
       }
 
       if (stop) {
-        worker.paused = true
-        worker.running = false
+        // Interrupt and soft-reset in place, leaving the instance idle, through
+        // the same serialiser so it can't overlap a run request.
+        worker.pendingRequest = { kind: "stop" }
+        service().catch(() => {})
       }
     }
 
     // Print a banner matching the hardware REPL, e.g.
-    // "MicroPython 1.28.0; Pimoroni Tufty 2350 with RP2350"
+    // "MicroPython 1.28.0; Pimoroni Tufty 2350 with RP2350", then snapshot the
+    // boot module/global sets so softReset() can tell user state from boot state.
     mp.runPython(`import platform, sys
 __version__ = platform.platform().split("-")[1]
-print(f"MicroPython {__version__}; {sys.implementation._machine}")`)
+print(f"MicroPython {__version__}; {sys.implementation._machine}")
+__boot_modules__ = set(sys.modules)
+__boot_globals__ = set(globals()) | {"__boot_modules__", "__boot_globals__"}`)
     worker.postMessage({ ready: true })
   })
 

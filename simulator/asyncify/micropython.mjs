@@ -4081,6 +4081,101 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
       return false;
     };
 
+  var handleException = (e) => {
+      // Certain exception types we do not treat as errors since they are used for
+      // internal control flow.
+      // 1. ExitStatus, which is thrown by exit()
+      // 2. "unwind", which is thrown by emscripten_unwind_to_js_event_loop() and others
+      //    that wish to return to JS event loop.
+      if (e instanceof ExitStatus || e == 'unwind') {
+        return EXITSTATUS;
+      }
+      checkStackCookie();
+      if (e instanceof WebAssembly.RuntimeError) {
+        if (_emscripten_stack_get_current() <= 0) {
+          err('Stack overflow detected.  You can try increasing -sSTACK_SIZE (currently set to 65536)');
+        }
+      }
+      quit_(1, e);
+    };
+  
+  
+  var runtimeKeepaliveCounter = 0;
+  var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
+  var _proc_exit = (code) => {
+      EXITSTATUS = code;
+      if (!keepRuntimeAlive()) {
+        Module['onExit']?.(code);
+        ABORT = true;
+      }
+      quit_(code, new ExitStatus(code));
+    };
+  
+  
+  /** @param {boolean|number=} implicit */
+  var exitJS = (status, implicit) => {
+      EXITSTATUS = status;
+  
+      checkUnflushedContent();
+  
+      // if exit() was called explicitly, warn the user if the runtime isn't actually being shut down
+      if (keepRuntimeAlive() && !implicit) {
+        var msg = `program exited (with status: ${status}), but keepRuntimeAlive() is set (counter=${runtimeKeepaliveCounter}) due to an async operation, so halting execution but not exiting the runtime or preventing further async execution (you can use emscripten_force_exit, if you want to force a true shutdown)`;
+        readyPromiseReject?.(msg);
+        err(msg);
+      }
+  
+      _proc_exit(status);
+    };
+  var _exit = exitJS;
+  
+  
+  var maybeExit = () => {
+      if (!keepRuntimeAlive()) {
+        try {
+          _exit(EXITSTATUS);
+        } catch (e) {
+          handleException(e);
+        }
+      }
+    };
+  var callUserCallback = (func) => {
+      if (ABORT) {
+        err('user callback triggered after runtime exited or application aborted.  Ignoring.');
+        return;
+      }
+      try {
+        return func();
+      } catch (e) {
+        handleException(e);
+      } finally {
+        maybeExit();
+      }
+    };
+  /** @param {number=} timeout */
+  var safeSetTimeout = (func, timeout) => {
+      
+      return setTimeout(() => {
+        
+        callUserCallback(func);
+      }, timeout);
+    };
+  var _emscripten_scan_registers = (func) => {
+      return Asyncify.handleSleep((wakeUp) => {
+        // We must first unwind, so things are spilled to the stack. Then while
+        // we are pausing we do the actual scan. After that we can resume. Note
+        // how using a timeout here avoids unbounded call stack growth, which
+        // could happen if we tried to scan the stack immediately after unwinding.
+        safeSetTimeout(() => {
+          var stackBegin = Asyncify.currData + 12;
+          var stackEnd = HEAPU32[((Asyncify.currData)>>2)];
+          ((a1, a2) => dynCall_vii(func, a1, a2))(stackBegin, stackEnd);
+          wakeUp();
+        }, 0);
+      });
+    };
+  _emscripten_scan_registers.isAsync = true;
+
   var _emscripten_sleep = function(ms) {
     let innerFunc =  () => new Promise((resolve) => setTimeout(resolve, ms));
     return Asyncify.handleAsync(innerFunc);
@@ -4378,77 +4473,6 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
       }
     };
   
-  var handleException = (e) => {
-      // Certain exception types we do not treat as errors since they are used for
-      // internal control flow.
-      // 1. ExitStatus, which is thrown by exit()
-      // 2. "unwind", which is thrown by emscripten_unwind_to_js_event_loop() and others
-      //    that wish to return to JS event loop.
-      if (e instanceof ExitStatus || e == 'unwind') {
-        return EXITSTATUS;
-      }
-      checkStackCookie();
-      if (e instanceof WebAssembly.RuntimeError) {
-        if (_emscripten_stack_get_current() <= 0) {
-          err('Stack overflow detected.  You can try increasing -sSTACK_SIZE (currently set to 65536)');
-        }
-      }
-      quit_(1, e);
-    };
-  
-  
-  var runtimeKeepaliveCounter = 0;
-  var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
-  var _proc_exit = (code) => {
-      EXITSTATUS = code;
-      if (!keepRuntimeAlive()) {
-        Module['onExit']?.(code);
-        ABORT = true;
-      }
-      quit_(code, new ExitStatus(code));
-    };
-  
-  
-  /** @param {boolean|number=} implicit */
-  var exitJS = (status, implicit) => {
-      EXITSTATUS = status;
-  
-      checkUnflushedContent();
-  
-      // if exit() was called explicitly, warn the user if the runtime isn't actually being shut down
-      if (keepRuntimeAlive() && !implicit) {
-        var msg = `program exited (with status: ${status}), but keepRuntimeAlive() is set (counter=${runtimeKeepaliveCounter}) due to an async operation, so halting execution but not exiting the runtime or preventing further async execution (you can use emscripten_force_exit, if you want to force a true shutdown)`;
-        readyPromiseReject?.(msg);
-        err(msg);
-      }
-  
-      _proc_exit(status);
-    };
-  var _exit = exitJS;
-  
-  
-  var maybeExit = () => {
-      if (!keepRuntimeAlive()) {
-        try {
-          _exit(EXITSTATUS);
-        } catch (e) {
-          handleException(e);
-        }
-      }
-    };
-  var callUserCallback = (func) => {
-      if (ABORT) {
-        err('user callback triggered after runtime exited or application aborted.  Ignoring.');
-        return;
-      }
-      try {
-        return func();
-      } catch (e) {
-        handleException(e);
-      } finally {
-        maybeExit();
-      }
-    };
   
   var createNamedFunction = (name, func) => Object.defineProperty(func, 'name', { value: name });
   
@@ -5013,7 +5037,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'checkWasiClock',
   'wasiRightsToMuslOFlags',
   'wasiOFlagsToMuslOFlags',
-  'safeSetTimeout',
   'setImmediateWrapped',
   'safeRequestAnimationFrame',
   'clearImmediateWrapped',
@@ -5151,6 +5174,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'doWritev',
   'initRandomFill',
   'randomFill',
+  'safeSetTimeout',
   'emSetImmediate',
   'emClearImmediate_deps',
   'emClearImmediate',
@@ -5396,16 +5420,16 @@ var _proxy_c_to_js_get_dict = Module['_proxy_c_to_js_get_dict'] = makeInvalidEar
 var _proxy_c_to_js_get_iter = Module['_proxy_c_to_js_get_iter'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_iter');
 var _proxy_c_to_js_iternext = Module['_proxy_c_to_js_iternext'] = makeInvalidEarlyAccess('_proxy_c_to_js_iternext');
 var _proxy_c_to_js_resume = Module['_proxy_c_to_js_resume'] = makeInvalidEarlyAccess('_proxy_c_to_js_resume');
+var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
+var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _strerror = makeInvalidEarlyAccess('_strerror');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
-var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
 var _setThrew = makeInvalidEarlyAccess('_setThrew');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
-var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
@@ -5460,16 +5484,16 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['proxy_c_to_js_get_iter'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_iter');
   assert(typeof wasmExports['proxy_c_to_js_iternext'] != 'undefined', 'missing Wasm export: proxy_c_to_js_iternext');
   assert(typeof wasmExports['proxy_c_to_js_resume'] != 'undefined', 'missing Wasm export: proxy_c_to_js_resume');
+  assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
+  assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
   assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
   assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
-  assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
   assert(typeof wasmExports['setThrew'] != 'undefined', 'missing Wasm export: setThrew');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
-  assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
@@ -5520,16 +5544,16 @@ function assignWasmExports(wasmExports) {
   _proxy_c_to_js_get_iter = Module['_proxy_c_to_js_get_iter'] = createExportWrapper('proxy_c_to_js_get_iter', 1);
   _proxy_c_to_js_iternext = Module['_proxy_c_to_js_iternext'] = createExportWrapper('proxy_c_to_js_iternext', 2);
   _proxy_c_to_js_resume = Module['_proxy_c_to_js_resume'] = createExportWrapper('proxy_c_to_js_resume', 2);
+  _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
+  _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   _fflush = createExportWrapper('fflush', 1);
   _strerror = createExportWrapper('strerror', 1);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
-  _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
   _setThrew = createExportWrapper('setThrew', 2);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
-  _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', 2);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', 2);
@@ -5609,6 +5633,8 @@ var wasmImports = {
   emscripten_get_now: _emscripten_get_now,
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
+  /** @export */
+  emscripten_scan_registers: _emscripten_scan_registers,
   /** @export */
   emscripten_sleep: _emscripten_sleep,
   /** @export */
@@ -6201,6 +6227,14 @@ export async function loadMicroPython(options) {
             const wrap = (r) =>
                 r instanceof PyProxyThenable ? Promise.resolve(r) : r;
             return isThenable(ret) ? ret.then(wrap) : wrap(ret);
+        },
+        // Schedule a KeyboardInterrupt on the running VM. Safe to call while an
+        // mp_js_do_exec* call is suspended (JSPI/Asyncify): it only sets the
+        // pending-exception flag, which the VM raises at its next bytecode check,
+        // unwinding out of the in-flight runPython. Lets a host stop a running
+        // script without tearing down the whole instance.
+        interrupt() {
+            Module.ccall("mp_sched_keyboard_interrupt", "null", [], []);
         },
         replInit() {
             Module.ccall("mp_js_repl_init", "null", ["null"]);

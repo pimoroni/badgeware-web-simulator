@@ -209,12 +209,15 @@ function initBadge3D(simulator, appendOut) {
         ev.preventDefault();
       });
 
-      /* Lighting */
-      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      /* Lighting. Brightness comes mostly from ambient + fill: the screen's diffuse
+         is black (its picture is emissive), so neither can glare it — only the case
+         and components brighten. The strong directional key is left as-is; bumping it
+         would put a specular hotspot on the screen. */
+      scene.add(new THREE.AmbientLight(0xffffff, 1.05));
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
       keyLight.position.set(0.4, 0.8, 1);
       scene.add(keyLight);
-      const fillLight = new THREE.DirectionalLight(0x8090d0, 0.6);
+      const fillLight = new THREE.DirectionalLight(0x8090d0, 0.85);
       fillLight.position.set(-0.6, 0.2, 0.3);
       scene.add(fillLight);
 
@@ -222,8 +225,14 @@ function initBadge3D(simulator, appendOut) {
       const allHitMeshes = [];
       const raycaster    = new THREE.Raycaster();
       let   heldMask     = 0;
+      // Button anchor markers baked into the GLB ({ mask, node }). A pointer hit is
+      // assigned to the nearest marker within BUTTON_RADIUS — robust to geometry
+      // changes / quantization, unlike the old hardcoded screen-local zones (kept
+      // below as a fallback for GLBs without markers).
+      let   buttonMarkers   = [];
+      const BUTTON_RADIUS   = 0.010;  // 10 mm — buttons are ≥12 mm apart
       let   buttonAnimator  = null;
-      let   ledState        = null;   // { lights: SpotLight[4], coverMesh }
+      let   ledState        = null;   // { refresh(), setLevels(values) } — case-back glow
       let   _ledSimActive   = false;  // true once MicroPython has sent caselights data
       let   sceneReady      = true;   // gate: false while the model's shaders compile
 
@@ -231,11 +240,53 @@ function initBadge3D(simulator, appendOut) {
       simulator.caselights = (values) => {
         _ledSimActive = true;
         renderDirty = true;   // LED levels changed — render this frame
-        if (!ledState) return;
-        const { lights, coverMesh } = ledState;
-        lights.forEach((l, i) => { l.intensity = (values[i] || 0) * 2; });
-        if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...values);
+        if (ledState) ledState.setLevels(values);
       };
+
+      /* Real-world-metre frame from a node's WORLD axes (unit vectors, so the
+         node's own scale is ignored). Button zones and LED centroids below are
+         tuned in metres relative to a mesh's local origin; reading/writing them via
+         the mesh's local space (worldToLocal / localToWorld) breaks the moment the
+         geometry is quantized — meshopt / KHR_mesh_quantization rescales each mesh's
+         local space to normalized int16 and bakes a compensating uniform scale onto
+         the node. Projecting through these helpers stays correct either way. */
+      const _nO = new THREE.Vector3();
+      const _nX = new THREE.Vector3(), _nY = new THREE.Vector3(), _nZ = new THREE.Vector3();
+      function _nodeFrame(node) {
+        node.updateWorldMatrix(true, false);
+        _nO.setFromMatrixPosition(node.matrixWorld);
+        _nX.set(1, 0, 0).transformDirection(node.matrixWorld).normalize();
+        _nY.set(0, 1, 0).transformDirection(node.matrixWorld).normalize();
+        _nZ.set(0, 0, 1).transformDirection(node.matrixWorld).normalize();
+      }
+      // World point → node-local metres { x, y, z } along the node's own axes.
+      function worldToNodeMetres(node, worldPt) {
+        _nodeFrame(node);
+        const d = worldPt.clone().sub(_nO);
+        return { x: d.dot(_nX), y: d.dot(_nY), z: d.dot(_nZ) };
+      }
+      // Node-local metres → world point (replaces scale-dependent localToWorld).
+      function nodeMetresToWorld(node, lp, out = new THREE.Vector3()) {
+        _nodeFrame(node);
+        return out.copy(_nO)
+          .addScaledVector(_nX, lp.x)
+          .addScaledVector(_nY, lp.y)
+          .addScaledVector(_nZ, lp.z);
+      }
+      // As above but anchored at the mesh's WORLD bounding-box centre instead of its
+      // local origin. Quantization re-centres a mesh's local origin onto its bbox
+      // centre, so offsets relative to the *original* origin drift (the LED cluster
+      // landed ~28 mm off). The bbox centre is geometry-derived → identical before
+      // and after quantization, so offsets measured from it stay put either way.
+      const _bbox = new THREE.Box3(), _bc = new THREE.Vector3();
+      function meshCentreMetresToWorld(mesh, lp, out = new THREE.Vector3()) {
+        _nodeFrame(mesh);
+        _bbox.setFromObject(mesh).getCenter(_bc);
+        return out.copy(_bc)
+          .addScaledVector(_nX, lp.x)
+          .addScaledVector(_nY, lp.y)
+          .addScaledVector(_nZ, lp.z);
+      }
 
       function buttonMaskAt(ev) {
         if (!screenMesh) return { mask: 0, worldPt: null };
@@ -248,7 +299,20 @@ function initBadge3D(simulator, appendOut) {
         const hits = raycaster.intersectObjects(allHitMeshes, true);
         if (!hits.length) return { mask: 0, worldPt: null };
         const worldPt = hits[0].point.clone();
-        const lp = screenMesh.worldToLocal(hits[0].point.clone());
+
+        // Preferred path: nearest baked button marker to the hit point.
+        if (buttonMarkers.length) {
+          let best = null, bestD = BUTTON_RADIUS;
+          const wp = new THREE.Vector3();
+          for (const b of buttonMarkers) {
+            const d = b.node.getWorldPosition(wp).distanceTo(worldPt);
+            if (d < bestD) { bestD = d; best = b; }
+          }
+          return best ? { mask: best.mask, worldPt } : { mask: 0, worldPt: null };
+        }
+
+        // Fallback (marker-less GLB): hardcoded screen-local zones.
+        const lp = worldToNodeMetres(screenMesh, hits[0].point);
         // lp.x = left(-)/right(+), lp.z = up(-)/down(+) in screen-local space
         // Screen area x∈[-0.029,+0.029], z∈[-0.022,+0.022]
         // Ignore screen area
@@ -331,7 +395,7 @@ function initBadge3D(simulator, appendOut) {
         // Raycast from in front of each zone inward to find actual hit mesh + world point
         const btnRay = new THREE.Raycaster();
         const hitData = BTN_DEFS.map((b, idx) => {
-          const worldPt = screenMesh.localToWorld(b.slc.clone());
+          const worldPt = nodeMetresToWorld(screenMesh, b.slc);
           const origin  = worldPt.clone().addScaledVector(faceOut, 0.04);
           btnRay.set(origin, faceIn);
           const hits = btnRay.intersectObjects(allHitMeshes, false)
@@ -408,49 +472,95 @@ function initBadge3D(simulator, appendOut) {
         };
       }
 
-      /* ── Case LEDs (4× SpotLights facing out the back + emissive cover) ── */
-      function createLedLights(root) {
+      /* ── Case LEDs ─────────────────────────────────────────────────────────
+         The back-case MATERIAL emits a soft, case-tinted halo plus a tight
+         white-hot core around each LED's world position. Nothing to occlude (the
+         glow is on the outer surface) and only the back mesh emits, so it can't
+         bleed to the front. No lights, no postprocessing — just emissive uniforms,
+         so it stays render-on-demand. `uInt` is driven by caselights(); `uLed`
+         tracks the markers as the badge spins (refresh() before each render).
+         Values tuned in led-shader.html. Applied to the recolored case-back clone
+         (`caseRoot`), not the hidden original. */
+      function createCaseLeds(caseRoot, root, excludeFromLamp) {
+        if (!caseRoot) return null;
         root.updateWorldMatrix(true, true);
-        const faceOut = new THREE.Vector3(0, 1, 0)
-          .transformDirection(screenMesh.matrixWorld).normalize();
 
+        // LED world positions: baked sim_led_* markers, else RM051_4 bbox-relative.
+        const markers = ['sim_led_0', 'sim_led_1', 'sim_led_2', 'sim_led_3'].map(n => root.getObjectByName(n));
+        const haveMarkers = markers.every(Boolean);
         const rm4 = root.getObjectByName('RM051_4');
-        if (!rm4 || !rm4.isMesh) return { lights: [], coverMesh: null };
-
-        rm4.material = rm4.material.clone();
-        rm4.material.emissive.set(1, 0.94, 0.88);
-        rm4.material.emissiveIntensity = 0;
-
-        // Centroids of the 4 LED clusters in RM051_4's own mesh space
-        // (RM051 and tufty_packages both carry non-trivial matrices, so we
-        //  must use rm4.localToWorld() rather than tuftyNode.localToWorld())
-        const LED_MESH_LOCAL = [
-          new THREE.Vector3(-0.02700, 0, -0.04855), // CL0: left-top
-          new THREE.Vector3(-0.02700, 0, -0.00855), // CL1: left-bottom
-          new THREE.Vector3(+0.02700, 0, -0.04855), // CL2: right-top
-          new THREE.Vector3(+0.02683, 0, -0.00855), // CL3: right-bottom
+        const FALLBACK = [
+          new THREE.Vector3(-0.02700, 0, -0.02000), new THREE.Vector3(-0.02700, 0, +0.02000),
+          new THREE.Vector3(+0.02700, 0, -0.02000), new THREE.Vector3(+0.02683, 0, +0.02000),
         ];
-        const lights = LED_MESH_LOCAL.map(lp => {
-          const wp = rm4.localToWorld(lp.clone());
-          wp.addScaledVector(faceOut, -0.004); // 4mm outside back face
-          const light = new THREE.SpotLight(0xfff0e0, 1, 0.02, Math.PI, 0, 2);
-          light.position.copy(wp);
-          scene.add(light);
+        const uLed = { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) };
+        const uInt = { value: [0, 0, 0, 0] };
+        const refresh = () => {
+          if (haveMarkers) markers.forEach((m, i) => m.getWorldPosition(uLed.value[i]));
+          else if (rm4) FALLBACK.forEach((lp, i) => meshCentreMetresToWorld(rm4, lp, uLed.value[i]));
+        };
+        refresh();
 
-          // Aim the cone straight out the back of the case (opposite the screen
-          // normal) by placing the spotlight's target behind the light.
-          light.target.position.copy(wp).addScaledVector(faceOut, -0.05);
-          scene.add(light.target);
+        // Small omni light at each LED, parented to its marker (spins with the badge),
+        // to cast real light on nearby PCB parts — the emissive case is self-lit and
+        // illuminates nothing. On a dedicated layer so it skips the front case, else
+        // back-LED light bleeds around to the front buttons. Tuned in led-shader.html.
+        const LAMP_MAX = 0.064, LAMP_LAYER = 1;   // 80% × 0.08 page scale
+        const backOut = new THREE.Vector3(0, 1, 0).transformDirection(screenMesh.matrixWorld).normalize().negate();
+        const lamps = haveMarkers ? markers.map((m, i) => {
+          const l = new THREE.PointLight(0xfff0e0, 0, 0.05, 2);   // 50 mm range
+          l.position.copy(m.worldToLocal(uLed.value[i].clone().addScaledVector(backOut, 0.003)));
+          l.layers.set(LAMP_LAYER);
+          m.add(l);
+          return l;
+        }) : [];
+        if (lamps.length) {
+          // The camera must share the lamp layer or the renderer culls the
+          // (layer-1-only) lamps; meshes keep layer 0 so rendering is unchanged.
+          camera.layers.enable(LAMP_LAYER);
+          root.traverse(o => { if (o.isMesh) o.layers.enable(LAMP_LAYER); });
+          if (excludeFromLamp) excludeFromLamp.traverse(o => { if (o.isMesh) o.layers.disable(LAMP_LAYER); });
+        }
 
-          // Parent light + target to the badge so they spin with it (attach
-          // preserves the world transforms we just computed). Otherwise they stay
-          // world-fixed and drift out of the model once the badge is rotated.
-          rm4.attach(light);
-          rm4.attach(light.target);
-          return light;
+        caseRoot.traverse((o) => {
+          if (!o.isMesh) return;
+          o.material.roughness = 0.2;      // frostiness
+          o.material.thickness = 0.0015;   // 1.5 mm volume
+          o.material.onBeforeCompile = (shader) => {
+            shader.uniforms.uLed = uLed;
+            shader.uniforms.uInt = uInt;
+            shader.vertexShader = shader.vertexShader
+              .replace('#include <common>', '#include <common>\nvarying vec3 vWP;')
+              .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed,1.0)).xyz;');
+            shader.fragmentShader = shader.fragmentShader
+              .replace('#include <common>',
+                '#include <common>\nvarying vec3 vWP;\nuniform vec3 uLed[4];\nuniform float uInt[4];')
+              .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                const vec3  LED_COL = vec3(1.0, 0.941, 0.878);
+                const float LED_R = 0.012, LED_HR = 0.0024;   // halo 12mm, core 2.4mm
+                float _g = 0.0, _h = 0.0;
+                for (int i = 0; i < 4; i++) {
+                  float d = distance(vWP, uLed[i]);
+                  _g += uInt[i] * exp(-(d*d)/(2.0*LED_R*LED_R));
+                  _h += uInt[i] * exp(-(d*d)/(2.0*LED_HR*LED_HR));
+                }
+                vec3 _vd = normalize(vViewPosition);
+                float _f = pow(1.0 - clamp(dot(normalize(vNormal), _vd), 0.0, 1.0), 2.5);
+                _g *= 0.6 * mix(1.0, _f, 0.7);                 // intensity 60%, edge bias 70%
+                vec3 _emit = LED_COL * diffuseColor.rgb * 2.5; // tint by case colour (100%)
+                totalEmissiveRadiance += _emit * _g + LED_COL * (_h * 1.5); // + hot core 150%
+              `);
+          };
+          o.material.needsUpdate = true;
         });
 
-        return { lights, coverMesh: rm4 };
+        return {
+          refresh,
+          setLevels: (vals) => {
+            for (let i = 0; i < 4; i++) uInt.value[i] = vals[i] || 0;
+            for (let i = 0; i < lamps.length; i++) lamps[i].intensity = (vals[i] || 0) * LAMP_MAX;
+          },
+        };
       }
 
       /* Load the Tufty badge model */
@@ -461,19 +571,23 @@ function initBadge3D(simulator, appendOut) {
         const caseBack  = root.getObjectByName('badger_case_back');
         const caseFront = root.getObjectByName('badger_case_front');
 
-        /* Clone orange case for Tufty before hiding Badger */
+        /* Clone orange case for Tufty before hiding Badger. Kept so the case-LED
+           glow shader can be applied to the visible clone (not the hidden original). */
+        let caseBackClone = null;
         if (caseBack && tuftyNode) {
-          const cb = caseBack.clone(true);
-          cb.traverse(child => {
+          caseBackClone = caseBack.clone(true);
+          caseBackClone.traverse(child => {
             if (child.isMesh) {
               child.material = child.material.clone();
               child.material.color.setRGB(1, 0.42, 0);
             }
           });
-          tuftyNode.add(cb);
+          tuftyNode.add(caseBackClone);
         }
+        let caseFrontClone = null;
         if (caseFront && tuftyNode) {
-          tuftyNode.add(caseFront.clone(true));
+          caseFrontClone = caseFront.clone(true);
+          tuftyNode.add(caseFrontClone);
         }
 
         /* Hide the other two badges */
@@ -484,6 +598,14 @@ function initBadge3D(simulator, appendOut) {
 
         scene.add(root);
         root.updateWorldMatrix(true, true);
+
+        /* Button anchor markers baked into the GLB (see claude/tools/isolate_badge.py).
+           Parented under `tufty`, so they spin with the badge. */
+        buttonMarkers = [
+          ['sim_btn_a', 16], ['sim_btn_b', 8], ['sim_btn_c', 4],
+          ['sim_btn_up', 2], ['sim_btn_down', 1],
+        ].map(([name, mask]) => ({ mask, node: root.getObjectByName(name) }))
+         .filter(b => b.node);
 
         /* Grab the active screen mesh and clone its material */
         screenMesh = root.getObjectByName('tufty_screen_active');
@@ -537,7 +659,7 @@ function initBadge3D(simulator, appendOut) {
         /* Init button animator after meshes are collected and matrices settled */
         if (screenMesh && tuftyNode) {
           buttonAnimator = initButtonAnimator(root, tuftyNode);
-          ledState = createLedLights(root);
+          ledState = createCaseLeds(caseBackClone, root, caseFrontClone);
         }
 
         /* Pre-compile the model's materials off the blocking path (uses
@@ -592,11 +714,9 @@ function initBadge3D(simulator, appendOut) {
         const buttonsBusy = buttonAnimator ? buttonAnimator.update(dt) : false;
         const ledIdle     = ledState && !_ledSimActive;
         if (ledIdle) {
-          const { lights, coverMesh } = ledState;
-          lights.forEach((l, i) => {
-            l.intensity = Math.max(0, Math.cos(t * 0.0025 + i * Math.PI * 0.5)) ** 2 * 2;
-          });
-          if (coverMesh) coverMesh.material.emissiveIntensity = Math.max(...lights.map(l => l.intensity)) / 2;
+          // Gentle breathing chase across the 4 LEDs until MicroPython drives them.
+          ledState.setLevels([0, 1, 2, 3].map(
+            i => Math.max(0, Math.cos(t * 0.0025 + i * Math.PI * 0.5)) ** 2));
         }
         const rotating  = viewNode && viewNode.rotation.y !== viewTargetY;
         const animating = camEasing || rotating || buttonsBusy || ledIdle;
@@ -606,6 +726,7 @@ function initBadge3D(simulator, appendOut) {
         // A stopped/idle badge does no render work. (Held off entirely while the
         // model's shaders are still compiling in the background.)
         if (sceneReady && (renderDirty || newFrame || animating)) {
+          if (ledState) ledState.refresh();   // keep uLed on the markers as the badge spins
           renderer.render(scene, camera);
         }
         renderDirty = false;

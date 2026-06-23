@@ -196,7 +196,7 @@
       object-fit: contain;
       image-rendering: pixelated;
     }
-    .img-meta {
+    #img-preview figcaption {
       display: flex;
       gap: 16px;
       font-size: 0.6875rem;
@@ -297,7 +297,7 @@
       z-index: 6;
     }
 
-    .view-btn {
+    #badge-view-controls button {
       pointer-events: auto;
       width: 28px;
       height: 28px;
@@ -314,15 +314,18 @@
       cursor: pointer;
       transition: color 0.15s, background 0.15s;
     }
-    .view-btn:hover {
+    #badge-view-controls button:hover {
       color: var(--white);
       background: rgba(10, 20, 30, 0.85);
     }
-    .view-btn .material-icons { font-size: 1.375rem; }
+    #badge-view-controls button .material-icons { font-size: 1.375rem; }
 
     /* Simulator host stays composited so the OffscreenCanvas renders and
        CanvasTexture reads succeed. Opacity near-zero keeps it invisible. */
-    .badgeware-simulator {
+    /* No canvas lives here — the screen is a DataTexture in the 3D view. This is
+       just the BadgewareSimulator host / pause-resume observer target, parked
+       off-screen and effectively invisible. */
+    #sim-host {
       position: fixed;
       bottom: 0;
       right: 0;
@@ -330,12 +333,6 @@
       height: 240px;
       opacity: 0.001;
       pointer-events: none;
-    }
-
-    .badgeware-simulator canvas {
-      width: 320px;
-      height: 240px;
-      display: block;
     }
 
     /* ── Output ──────────────────────────────────────────────────── */
@@ -346,18 +343,10 @@
       flex-direction: column;
     }
 
+    /* Shared bar look lives in the "#file-panel h2, #stdout-header" rule below. */
     #stdout-header {
       padding: 5px 12px;
-      font-size: 0.625rem;
-      font-weight: 400;
-      color: var(--dim);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
       justify-content: space-between;
-      flex-shrink: 0;
     }
 
     #clear-btn {
@@ -404,8 +393,9 @@
       overflow: hidden;
     }
 
-    .fp-section-head {
-      padding: 5px 8px 4px;
+    /* Section title bar: file-explorer sections + the output panel share one look. */
+    #file-panel h2,
+    #stdout-header {
       font-size: 0.625rem;
       font-weight: 400;
       color: var(--dim);
@@ -414,13 +404,13 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 2px;
       flex-shrink: 0;
     }
+    #file-panel h2 { padding: 5px 8px 4px; gap: 2px; }
+    #file-panel h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
+    #file-panel h2 .material-icons { font-size: 0.8125rem; }   /* System lock glyph */
 
-    .fp-section-title { flex: 1; }
-
-    .fp-icon-btn {
+    #file-panel h2 button {
       background: none;
       border: none;
       color: var(--dim);
@@ -431,8 +421,8 @@
       border-radius: 3px;
       font-family: inherit;
     }
-    .fp-icon-btn:hover { color: var(--white); background: rgba(235,245,255,0.06); }
-    .fp-icon-btn .material-icons { font-size: 1.125rem; display: block; }
+    #file-panel h2 button:hover { color: var(--white); background: rgba(235,245,255,0.06); }
+    #file-panel h2 button .material-icons { font-size: 1.125rem; display: block; }
 
     /* ── User section (resizable) ────────────────────────────────── */
     #fp-user-wrap {
@@ -505,18 +495,23 @@
       box-shadow: 0 4px 18px rgba(0,0,0,0.55);
     }
 
-    .ctx-item {
+    #file-ctx-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      font-family: inherit;
       padding: 5px 14px;
       font-size: 0.75rem;
       color: var(--faint);
       cursor: pointer;
       user-select: none;
     }
-    .ctx-item:hover { background: rgba(235,245,255,0.06); color: var(--white); }
-    .ctx-item.ctx-danger { color: rgba(240,141,73,0.8); }
-    .ctx-item.ctx-danger:hover { color: rgba(240,141,73,1); background: rgba(240,141,73,0.07); }
-    .ctx-sep { height: 1px; background: var(--border); padding: 0; margin: 3px 0; cursor: default; }
-    .ctx-sep:hover { background: var(--border); }
+    #file-ctx-menu button:hover { background: rgba(235,245,255,0.06); color: var(--white); }
+    #file-ctx-menu button[data-action="delete"] { color: rgba(240,141,73,0.8); }
+    #file-ctx-menu button[data-action="delete"]:hover { color: rgba(240,141,73,1); background: rgba(240,141,73,0.07); }
+    #file-ctx-menu hr { border: none; height: 1px; background: var(--border); margin: 3px 0; }
 
     /* ── Tree rows ───────────────────────────────────────────────── */
     .tree-row {
@@ -560,6 +555,7 @@
       line-height: 1;
     }
     .row-action:hover { opacity: 1; }
+    .row-action[data-action="delete"]:hover { color: rgba(240,141,73,1); }
     .row-action .material-icons { font-size: 0.875rem; display: block; }
 
     /* Lock badge (system files + the "System" header) sized for the Material glyph. */
@@ -682,7 +678,7 @@
         padding-bottom: env(safe-area-inset-bottom, 0px);
       }
 
-      .m-tab {
+      #mobile-nav button {
         flex: 1;
         display: flex;
         align-items: center;
@@ -702,6 +698,6 @@
         transition: color 0.15s;
         user-select: none;
       }
-      .m-tab:hover  { color: var(--faint); }
-      .m-tab.active { color: var(--orange); border-top-color: var(--orange); }
+      #mobile-nav button:hover  { color: var(--faint); }
+      #mobile-nav button.active { color: var(--orange); border-top-color: var(--orange); }
     }

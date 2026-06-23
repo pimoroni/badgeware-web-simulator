@@ -68,7 +68,7 @@ function createFileBrowser(host) {
         const active = full === activePath ? ' active' : '';
         html += `<div class="tree-row${active}" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-actions"><button class="row-action ctx-danger" title="Delete" data-action="delete"><span class="material-icons">close</span></button></span>`
+              +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-icons">close</span></button></span>`
               + `</div>`;
       } else {
         html += `<div class="tree-row" data-path="${esc(full)}" title="${esc(full)}">`
@@ -155,7 +155,7 @@ function createFileBrowser(host) {
   document.addEventListener('contextmenu', e => { if (!e.target.closest('#file-ctx-menu')) hideCtxMenu(); }, true);
 
   menu.addEventListener('click', (e) => {
-    const item = e.target.closest('.ctx-item');
+    const item = e.target.closest('button');   // menu items are the only buttons here
     if (!item || !ctxTarget) return;
     const { path, isDir } = ctxTarget;
     hideCtxMenu();

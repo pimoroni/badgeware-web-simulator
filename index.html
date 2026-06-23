@@ -20,7 +20,7 @@
 </head>
 <body>
 
-<div id="toolbar">
+<div id="toolbar" role="toolbar" aria-label="Run controls">
   <button id="run-btn" title="Run (F5)"><span class="material-icons">play_arrow</span>Run</button>
   <button id="stop-btn" title="Stop" disabled><span class="material-icons">stop</span>Stop</button>
   <select id="example-select" title="Load example">
@@ -33,6 +33,7 @@
     <option value="simulator/examples/menu.py">menu.py &mdash; selection menu</option>
     <option value="simulator/examples/animation.py">animation.py &mdash; badge.ticks motion</option>
     <option value="simulator/examples/easing.py">easing.py &mdash; easing curves</option>
+    <option value="simulator/examples/mandelbrot.py">mandelbrot.py &mdash; fractal + FPS</option>
     <option value="simulator/examples/platformer.py">platformer.py &mdash; movement &amp; gravity</option>
     <option value="simulator/examples/vectors.py">vectors.py &mdash; vec2 maths</option>
     <option value="simulator/examples/transforms.py">transforms.py &mdash; mat3 transforms</option>
@@ -47,86 +48,95 @@
     <option value="simulator/examples/battery.py">battery.py &mdash; hardware status</option>
     <option value="simulator/examples/state.py">state.py &mdash; saved state</option>
   </select>
-  <span id="status"></span>
+  <output id="status"></output>
 </div>
 
 <div id="drag-overlay"></div>
 
 <div id="main">
-  <!-- ── File browser ─────────────────────────────────────────── -->
-  <div id="file-panel">
-    <!-- User files (resizable section) -->
-    <div id="fp-user-wrap">
-      <div class="fp-section-head">
-        <span class="fp-section-title">Files</span>
-        <button class="fp-icon-btn" id="fp-new"    title="New file"><span class="material-icons">note_add</span></button>
-        <button class="fp-icon-btn" id="fp-mkdir"  title="New folder"><span class="material-icons">create_new_folder</span></button>
-        <button class="fp-icon-btn" id="fp-upload" title="Upload file"><span class="material-icons">upload_file</span></button>
-        <input type="file" id="fp-upload-input" multiple style="display:none">
-      </div>
+
+  <!-- ── File explorer ─────────────────────────────────────────── -->
+  <nav id="file-panel" aria-label="Files">
+    <section id="fp-user-wrap" aria-label="User files">
+      <h2>
+        <span>Files</span>
+        <button id="fp-new"    title="New file"    aria-label="New file"><span class="material-icons">note_add</span></button>
+        <button id="fp-mkdir"  title="New folder"  aria-label="New folder"><span class="material-icons">create_new_folder</span></button>
+        <button id="fp-upload" title="Upload file" aria-label="Upload file"><span class="material-icons">upload_file</span></button>
+        <input type="file" id="fp-upload-input" multiple hidden>
+      </h2>
       <div id="fp-user-list"></div>
-    </div>
-    <!-- Vertical resize handle -->
+    </section>
+
     <div id="fp-v-resize"></div>
-    <!-- System files -->
-    <div id="fp-sys-wrap">
-      <div class="fp-section-head">
-        <span class="fp-section-title">System</span>
-        <span class="row-badge material-icons" title="Read-only">lock</span>
-      </div>
+
+    <section id="fp-sys-wrap" aria-label="System files">
+      <h2>
+        <span>System</span>
+        <span class="material-icons" title="Read-only">lock</span>
+      </h2>
       <div id="fp-sys-tree"></div>
-    </div>
-  </div>
-  <!-- Context menu (shared for all file entries) -->
+    </section>
+  </nav>
+
+  <!-- Shared context menu for file entries -->
   <div id="file-ctx-menu">
-    <div class="ctx-item" data-action="open">Open</div>
-    <div class="ctx-item" data-action="rename">Rename</div>
-    <div class="ctx-sep"></div>
-    <div class="ctx-item" data-action="new-here">New file here</div>
-    <div class="ctx-item" data-action="new-dir-here">New folder here</div>
-    <div class="ctx-sep"></div>
-    <div class="ctx-item ctx-danger" data-action="delete">Delete</div>
+    <button data-action="open">Open</button>
+    <button data-action="rename">Rename</button>
+    <hr>
+    <button data-action="new-here">New file here</button>
+    <button data-action="new-dir-here">New folder here</button>
+    <hr>
+    <button data-action="delete">Delete</button>
   </div>
+
   <div id="left-resize-handle"></div>
 
-  <div id="editor-panel">
+  <!-- ── Editor (primary content) ──────────────────────────────── -->
+  <main id="editor-panel">
     <div id="tab-bar"></div>
     <div id="editor"></div>
-    <div id="img-preview">
+    <figure id="img-preview">
       <img id="img-preview-img" alt="">
-      <div class="img-meta">
+      <figcaption>
         <span id="img-preview-name"></span>
         <span id="img-preview-dim"></span>
-      </div>
-    </div>
-  </div>
+      </figcaption>
+    </figure>
+  </main>
+
   <div id="resize-handle" title="Drag to resize"></div>
-  <div id="side-panel">
-    <div id="simulator-wrap">
-      <!-- sim-host is fixed off-screen; canvas stays alive for OffscreenCanvas transfer -->
-      <div id="sim-host" class="badgeware-simulator"></div>
+
+  <!-- ── Badge view + output ───────────────────────────────────── -->
+  <aside id="side-panel" aria-label="Badge and output">
+    <figure id="simulator-wrap">
+      <!-- BadgewareSimulator host: no canvas here (the screen renders as a DataTexture
+           in the 3D view). Kept off-screen; serves as the pause/resume observer target. -->
+      <div id="sim-host"></div>
       <!-- 3D badge view — buttons are interactive hit areas on the model -->
       <div id="badge-3d-wrap"></div>
       <!-- Spin the 3D badge in 180° steps -->
       <div id="badge-view-controls">
-        <button id="view-prev-btn" class="view-btn" title="Spin left"><span class="material-icons">chevron_left</span></button>
-        <button id="view-next-btn" class="view-btn" title="Spin right"><span class="material-icons">chevron_right</span></button>
+        <button id="view-prev-btn" title="Spin left"><span class="material-icons">chevron_left</span></button>
+        <button id="view-next-btn" title="Spin right"><span class="material-icons">chevron_right</span></button>
       </div>
-    </div>
-    <div id="stdout-wrap">
-      <div id="stdout-header">
+    </figure>
+
+    <section id="stdout-wrap">
+      <h2 id="stdout-header">
         Output
         <button id="clear-btn" title="Clear output">&#10005;</button>
-      </div>
+      </h2>
       <div id="stdout"></div>
-    </div>
-  </div>
+    </section>
+  </aside>
+
 </div>
 
 <nav id="mobile-nav" aria-label="View">
-  <button class="m-tab" data-tab="files">Files</button>
-  <button class="m-tab" data-tab="code">Code</button>
-  <button class="m-tab" data-tab="output">Output</button>
+  <button data-tab="files">Files</button>
+  <button data-tab="code">Code</button>
+  <button data-tab="output">Output</button>
 </nav>
 
 <script src="simulator/badgeware.js"></script>

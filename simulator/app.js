@@ -41,24 +41,35 @@ function bootSimulator() {
     /* Incremental MicroPython traceback parsing. The editor attaches marker
        hooks (trace.clear / trace.apply) later; until then they're no-ops. */
     const trace = { frames: [], lastRunKey: null, clear: null, apply: null };
+    // Returns true when `text` is part of a Python traceback (header, a `File …`
+    // frame, or the terminal exception line) so the console can render it red.
     function parseTracebackLine(text) {
       const fileMatch = text.match(/^\s+File "([^"]+)", line (\d+)/);
       if (fileMatch) {
         trace.frames.push({ file: fileMatch[1], line: parseInt(fileMatch[2], 10) });
-        return;
+        return true;
       }
-      if (text.startsWith('Traceback (most recent call last):')) {
+      // Header — the runtime may prefix it (e.g. "- ERROR: Traceback …"), so match
+      // anywhere in the line rather than only at the start.
+      if (text.includes('Traceback (most recent call last):')) {
         trace.frames = [];
-        return;
+        return true;
       }
       // Terminal error line: non-whitespace start, frames already accumulated.
       if (trace.frames.length > 0 && /^\w/.test(text)) {
         if (trace.apply) trace.apply(text, trace.frames, trace.lastRunKey);
         trace.frames = [];
         onSimulatorStopped();   // a fatal exception ends the program
+        return true;
       }
+      // Standalone runtime error line (e.g. "- ERROR: …") with no traceback.
+      if (text.startsWith('- ERROR')) return true;
+      return false;
     }
-    simulator.stdout = async (text) => { parseTracebackLine(text); appendOut(text); };
+    simulator.stdout = async (text) => {
+      const isError = parseTracebackLine(text);
+      appendOut(text, isError ? 'out-error' : undefined);
+    };
 
     /* Shared run/stop, used by both the boot run and the editor's Run button. */
     const runProgram = async (code, { tabKey = null, status = '' } = {}) => {
@@ -89,22 +100,47 @@ function bootSimulator() {
       statusEl.textContent = 'Stopped';
     };
 
-    // The system boot script (launches /system/apps/menu). Fetch and run it now,
-    // in parallel with Monaco loading — don't await the program itself.
-    const defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
-      .then(r => r.ok ? r.text() : null)
-      .catch(() => null)
-      ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
-    runProgram(defaultCode, {});
+    // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
+    // file to run + open in the editor; otherwise the system boot script (which
+    // launches the menu). NAME resolves against the user FS first, then the system
+    // filesystem (so `?file=blink.py` or `?file=/system/apps/clock/main.py`).
+    const qFile = new URLSearchParams(location.search).get('file');
+    const hFile = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
+    const override = (qFile || hFile || '').trim();
 
-    return { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode };
+    let defaultCode = null, startupFile = null, warn = null;
+    if (override) {
+      const path  = override.startsWith('/') ? override : '/' + override;
+      const entry = userFS.get(path);
+      if (entry && !entry.binary && !entry.isDir) {
+        defaultCode = entry.text;
+        startupFile = { path, tabKey: path, system: false };
+      } else if (!entry) {
+        defaultCode = await fetch(APP_BASE + 'filesystem' + path)
+          .then(r => r.ok ? r.text() : null).catch(() => null);
+        if (defaultCode != null) startupFile = { path, tabKey: 'sys:' + path, system: true };
+      }
+      if (defaultCode == null) warn = `⚠ Could not load "${override}" — running the default instead.`;
+    }
+    if (defaultCode == null) {
+      startupFile = null;
+      defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
+        .then(r => r.ok ? r.text() : null)
+        .catch(() => null)
+        ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
+    }
+    // Run it now, in parallel with Monaco loading — don't await the program itself.
+    runProgram(defaultCode, { tabKey: startupFile ? startupFile.tabKey : null });
+    if (warn) appendOut(warn, 'out-dim');
+
+    return { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode, startupFile };
   })();
   return _bootCtx;
 }
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode } = await bootSimulator();
+  const { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode, startupFile } = await bootSimulator();
 
   configureMonaco(monaco);
 
@@ -147,6 +183,12 @@ async function initApp() {
     isTextFile:     (p) => FILE_HANDLERS[p.slice(p.lastIndexOf('.')).toLowerCase()]?.kind === 'text',
     openFile: (path, { transient = false, system = false } = {}) =>
       system ? openSysFile(path, transient) : openUserFile(path, transient),
+    // Quick experiment: an untitled scratch buffer (no FS entry until "Save as").
+    newScratch: () => {
+      let name = 'untitled.py';
+      for (let n = 1; openModels.has('scratch:' + name); n++) name = `untitled-${n}.py`;
+      openScratchTab(name, '');
+    },
     onRenamed: (oldPath, newPath) => {
       if (!openModels.has(oldPath)) return;
       const info = openModels.get(oldPath);
@@ -174,8 +216,9 @@ async function initApp() {
     },
   });
 
-  // Bootstrap the default scratch tab with the boot script (already running)
-  openScratchTab('main.py', defaultCode);
+  // Bootstrap the editor: a URL deep-link file (opened at the end of init, once the
+  // model helpers + FILE_HANDLERS exist) or the default scratch main.py.
+  if (!startupFile) openScratchTab('main.py', defaultCode);
 
   /* ── Runtime error → Monaco markers (wired into the boot's traceback parser) */
   function clearRuntimeMarkers() {
@@ -594,6 +637,13 @@ async function initApp() {
       if (!info.dirty) { info.dirty = true; renderTabs(); }
     }
   });
+
+  // URL deep-link (?file= / #name): open the requested file now that FILE_HANDLERS
+  // and the open helpers exist (calling these at the early bootstrap would TDZ-throw).
+  if (startupFile) {
+    if (startupFile.system) openSysFile(startupFile.path, false);
+    else                    openUserFile(startupFile.path, false);
+  }
 
   /* Initial file tree render */
   fb.refresh();

@@ -245,7 +245,7 @@ function createFileBrowser(host) {
   }
 
   /* ── Toolbar ─────────────────────────────────────────────────────────────*/
-  document.getElementById('fp-new').addEventListener('click',   () => createUserFile('/'));
+  document.getElementById('fp-new').addEventListener('click',   () => host.newScratch());
   document.getElementById('fp-mkdir').addEventListener('click', () => createUserDirAt(''));
   document.getElementById('fp-upload').addEventListener('click', () =>
     document.getElementById('fp-upload-input').click());

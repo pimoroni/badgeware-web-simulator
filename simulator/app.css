@@ -391,7 +391,7 @@
     #stdout::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.15); border-radius: 3px; }
 
     .out-dim   { color: var(--dim); }
-    .out-error { color: rgba(240, 141, 73, 1); }
+    .out-error { color: rgb(244, 94, 84); }
 
     /* ── File panel ──────────────────────────────────────────────── */
     #file-panel {

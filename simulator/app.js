@@ -113,7 +113,7 @@ async function initApp() {
     value:          '# Loading…',
     language:       'python',
     theme:          'badgeware',
-    fontSize:       14,
+    fontSize:       16,
     fontFamily:     'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
     fontLigatures:  true,
     minimap:        { enabled: false },
@@ -314,8 +314,8 @@ async function initApp() {
 
       if (info.readOnly) {
         const ro = document.createElement('span');
-        ro.className = 'tab-readonly';
-        ro.textContent = '🔒';
+        ro.className = 'tab-readonly material-icons';
+        ro.textContent = 'lock';
         tab.appendChild(name);
         tab.appendChild(ro);
       } else {

@@ -14,11 +14,13 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html { font-size: 16pt; }   /* rem base — nudge this to scale the whole UI */
+
     body {
       background: var(--bg);
       color: var(--white);
       font-family: Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 13px;
+      font-size: 0.8125rem;
       font-weight: 300;
       display: flex;
       flex-direction: column;
@@ -41,12 +43,24 @@
       z-index: 1;
     }
 
+    /* Material Icons (Google): inherit the surrounding size by default; sized per use below. */
+    .material-icons {
+      font-size: inherit;
+      line-height: 1;
+      vertical-align: middle;
+      user-select: none;
+    }
+    #run-btn .material-icons, #stop-btn .material-icons { font-size: 1.0625rem; }
+
     #run-btn, #stop-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
       background: var(--orange);
       color: rgb(10, 20, 30);
       border: none;
-      padding: 4px 14px 4px 10px;
-      font-size: 12px;
+      padding: 4px 12px 4px 8px;
+      font-size: 0.75rem;
       font-weight: 700;
       font-family: inherit;
       border-radius: 0.4rem;
@@ -72,7 +86,7 @@
       color: var(--white);
       border: 1px solid var(--border);
       padding: 4px 8px;
-      font-size: 12px;
+      font-size: 0.75rem;
       font-family: inherit;
       font-weight: 300;
       border-radius: 0.4rem;
@@ -82,7 +96,7 @@
 
     #status {
       margin-left: auto;
-      font-size: 11px;
+      font-size: 0.6875rem;
       color: var(--dim);
     }
 
@@ -122,7 +136,7 @@
       align-items: center;
       gap: 5px;
       padding: 0 8px 0 12px;
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--dim);
       cursor: pointer;
       border-right: 1px solid var(--border);
@@ -142,17 +156,17 @@
     }
     /* dot for unsaved scratch tabs */
     .tab.dirty .tab-name::after {
-      content: '●'; font-size: 7px; color: var(--orange);
+      content: '●'; font-size: 0.4375rem; color: var(--orange);
       margin-left: 4px; vertical-align: super;
     }
     .tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
     .tab.transient .tab-name { font-style: italic; }
-    .tab-readonly { font-size: 9px; color: var(--dim); margin-left: 2px; }
+    .tab-readonly { font-size: 0.8125rem; color: var(--dim); margin-left: 2px; }
 
     .tab-close {
       background: none; border: none;
       color: inherit; opacity: 0;
-      cursor: pointer; font-size: 10px;
+      cursor: pointer; font-size: 0.625rem;
       line-height: 1; padding: 2px 3px;
       border-radius: 2px; flex-shrink: 0;
     }
@@ -185,7 +199,7 @@
     .img-meta {
       display: flex;
       gap: 16px;
-      font-size: 11px;
+      font-size: 0.6875rem;
       color: var(--dim);
     }
 
@@ -219,7 +233,7 @@
 
     /* ── Side panel ──────────────────────────────────────────────── */
     #side-panel {
-      width: 342px;
+      width: 547px;
       flex-shrink: 0;
       border-left: 1px solid var(--border);
       display: flex;
@@ -295,7 +309,7 @@
       border-radius: 25%;
       color: var(--faint);
       font-family: inherit;
-      font-size: 16px;
+      font-size: 1rem;
       line-height: 1;
       cursor: pointer;
       transition: color 0.15s, background 0.15s;
@@ -304,6 +318,7 @@
       color: var(--white);
       background: rgba(10, 20, 30, 0.85);
     }
+    .view-btn .material-icons { font-size: 1.375rem; }
 
     /* Simulator host stays composited so the OffscreenCanvas renders and
        CanvasTexture reads succeed. Opacity near-zero keeps it invisible. */
@@ -333,7 +348,7 @@
 
     #stdout-header {
       padding: 5px 12px;
-      font-size: 10px;
+      font-size: 0.625rem;
       font-weight: 400;
       color: var(--dim);
       text-transform: uppercase;
@@ -350,7 +365,7 @@
       border: none;
       color: var(--dim);
       cursor: pointer;
-      font-size: 10px;
+      font-size: 0.625rem;
       font-family: inherit;
       padding: 0 2px;
       line-height: 1;
@@ -363,7 +378,7 @@
       overflow-y: auto;
       padding: 8px 12px;
       font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
-      font-size: 11px;
+      font-size: 0.6875rem;
       line-height: 1.6;
       color: var(--green);
       white-space: pre-wrap;
@@ -391,7 +406,7 @@
 
     .fp-section-head {
       padding: 5px 8px 4px;
-      font-size: 10px;
+      font-size: 0.625rem;
       font-weight: 400;
       color: var(--dim);
       text-transform: uppercase;
@@ -410,13 +425,14 @@
       border: none;
       color: var(--dim);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 0.875rem;
       line-height: 1;
       padding: 1px 3px;
       border-radius: 3px;
       font-family: inherit;
     }
     .fp-icon-btn:hover { color: var(--white); background: rgba(235,245,255,0.06); }
+    .fp-icon-btn .material-icons { font-size: 1.125rem; display: block; }
 
     /* ── User section (resizable) ────────────────────────────────── */
     #fp-user-wrap {
@@ -436,7 +452,7 @@
 
     .fp-empty {
       padding: 8px 10px;
-      font-size: 11px;
+      font-size: 0.6875rem;
       color: var(--dim);
       font-style: italic;
     }
@@ -491,7 +507,7 @@
 
     .ctx-item {
       padding: 5px 14px;
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--faint);
       cursor: pointer;
       user-select: none;
@@ -507,7 +523,7 @@
       display: flex;
       align-items: center;
       padding: 2px 8px;
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--faint);
       cursor: pointer;
       gap: 4px;
@@ -525,7 +541,7 @@
     }
 
     .tree-row .row-badge {
-      font-size: 9px;
+      font-size: 0.5625rem;
       color: var(--dim);
       flex-shrink: 0;
     }
@@ -539,11 +555,15 @@
       color: inherit;
       opacity: 0.6;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 0.6875rem;
       padding: 0 2px;
       line-height: 1;
     }
     .row-action:hover { opacity: 1; }
+    .row-action .material-icons { font-size: 0.875rem; display: block; }
+
+    /* Lock badge (system files + the "System" header) sized for the Material glyph. */
+    .row-badge.material-icons { font-size: 0.8125rem; }
 
     /* ── Collapsible system directories ─────────────────────────── */
     details.tree-dir { }
@@ -554,7 +574,7 @@
       align-items: center;
       gap: 4px;
       padding: 2px 8px;
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--faint);
       cursor: pointer;
       user-select: none;
@@ -564,7 +584,8 @@
     details.tree-dir > summary:hover { background: rgba(235,245,255,0.05); color: var(--white); }
 
     .dir-arrow {
-      font-size: 8px;
+      font-size: 1rem;
+      color: var(--dim);
       flex-shrink: 0;
       transition: transform 0.12s;
       display: inline-block;
@@ -673,7 +694,7 @@
         color: var(--dim);
         cursor: pointer;
         font-family: inherit;
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 400;
         letter-spacing: 0.08em;
         text-transform: uppercase;

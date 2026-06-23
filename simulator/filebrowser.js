@@ -62,19 +62,19 @@ function createFileBrowser(host) {
       if (child && child.__dir) {
         const open = user ? !collapsedDirs.has(full) : false;   // user dirs default open
         html += `<details class="tree-dir" data-path="${esc(full)}"${open ? ' open' : ''}>`
-              +   `<summary><span class="dir-arrow">&#9658;</span><span>${esc(name)}/</span></summary>`
+              +   `<summary><span class="dir-arrow material-icons">chevron_right</span><span>${esc(name)}/</span></summary>`
               +   `<div class="dir-children">${nodeToHtml(child, full, user, activePath)}</div>`
               + `</details>`;
       } else if (user) {
         const active = full === activePath ? ' active' : '';
         html += `<div class="tree-row${active}" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-actions"><button class="row-action ctx-danger" title="Delete" data-action="delete">&#10005;</button></span>`
+              +   `<span class="row-actions"><button class="row-action ctx-danger" title="Delete" data-action="delete"><span class="material-icons">close</span></button></span>`
               + `</div>`;
       } else {
         html += `<div class="tree-row" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-badge" title="System file">&#128274;</span>`
+              +   `<span class="row-badge material-icons" title="System file">lock</span>`
               + `</div>`;
       }
     }

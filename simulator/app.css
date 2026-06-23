@@ -107,6 +107,7 @@
       min-height: 0;
       /* visible so the 3D badge can spill up over the toolbar */
       overflow: visible;
+      background: linear-gradient(45deg, rgba(65, 89, 208, 0.3) 0.000%, rgba(200, 79, 192, 0.3) 50.000%, rgba(255, 205, 112, 0.1) 100.000%)
     }
 
     /* ── Editor panel ────────────────────────────────────────────── */
@@ -203,23 +204,25 @@
       color: var(--dim);
     }
 
-    /* ── Resize handle ───────────────────────────────────────────── */
-    #resize-handle {
-      width: 4px;
+    /* ── Drag handles (panel & section resizers) ─────────────────────────────
+       Shared look + hover/drag feedback. The .dragging class is toggled by
+       resize.js; .vertical / .horizontal set the axis. */
+    .drag-handle {
       flex-shrink: 0;
       background: var(--border);
-      cursor: col-resize;
-      transition: background 0.15s;
       position: relative;
+      transition: background 0.15s;
     }
-    /* Widen the hit area without changing the visual strip */
-    #resize-handle::after {
-      content: '';
-      position: absolute;
-      inset: 0 -4px;
-    }
-    #resize-handle:hover,
-    #resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+    /* Widen the pointer hit area without changing the visible 4px strip. */
+    .drag-handle::after { content: ''; position: absolute; }
+    .drag-handle:hover,
+    .drag-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+
+    .drag-handle.vertical        { width: 4px;  cursor: col-resize; }   /* dragged left/right */
+    .drag-handle.vertical::after { inset: 0 -4px; }
+
+    .drag-handle.horizontal        { height: 4px; cursor: row-resize; } /* dragged up/down */
+    .drag-handle.horizontal::after { inset: -4px 0; }
 
     /* Transparent overlay absorbs pointer events from Monaco + canvas during drag */
     #drag-overlay {
@@ -244,7 +247,7 @@
     }
 
     /* ── Simulator ───────────────────────────────────────────────── */
-    #simulator-wrap {
+    #simulator {
       padding: 0 12px;
       flex-shrink: 0;
       display: flex;
@@ -265,11 +268,11 @@
       /* spill slightly past the container: up over the toolbar, down over OUTPUT */
       margin-top: -8%;
       margin-bottom: -24px;
-      transition: margin 0.45s ease;
+      transition: margin 0.25s ease;
     }
     /* When the screen is zoomed in, pull the badge back inside its container so
        the framed screen never overlaps the toolbar or the OUTPUT box. */
-    #badge-3d-wrap.screen-zoomed {
+    #simulator.screen-zoomed #badge-3d-wrap {
       margin-top: 10px;
       margin-bottom: 5px;
     }
@@ -284,7 +287,7 @@
     /* ── 3D badge spin buttons (180° steps) ──────────────────────── */
     /* Container spans the view but ignores pointer events, so only the two
        edge buttons are clickable and the badge stays raycastable between them. */
-    #badge-view-controls {
+    #simulator nav {
       position: absolute;
       left: 0;
       right: 0;
@@ -295,9 +298,10 @@
       padding: 0 10px;
       pointer-events: none;
       z-index: 6;
+      transition: opacity 0.45s ease;
     }
 
-    #badge-view-controls button {
+    #simulator nav button {
       pointer-events: auto;
       width: 28px;
       height: 28px;
@@ -314,25 +318,14 @@
       cursor: pointer;
       transition: color 0.15s, background 0.15s;
     }
-    #badge-view-controls button:hover {
+    #simulator nav button:hover {
       color: var(--white);
       background: rgba(10, 20, 30, 0.85);
     }
-    #badge-view-controls button .material-icons { font-size: 1.375rem; }
+    #simulator nav button .material-icons { font-size: 1.375rem; }
 
-    /* Simulator host stays composited so the OffscreenCanvas renders and
-       CanvasTexture reads succeed. Opacity near-zero keeps it invisible. */
-    /* No canvas lives here — the screen is a DataTexture in the 3D view. This is
-       just the BadgewareSimulator host / pause-resume observer target, parked
-       off-screen and effectively invisible. */
-    #sim-host {
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      width: 320px;
-      height: 240px;
-      opacity: 0.001;
-      pointer-events: none;
+    #simulator.screen-zoomed nav {
+        opacity: 0;
     }
 
     /* ── Output ──────────────────────────────────────────────────── */
@@ -343,8 +336,8 @@
       flex-direction: column;
     }
 
-    /* Shared bar look lives in the "#file-panel h2, #stdout-header" rule below. */
-    #stdout-header {
+    /* Shared bar look lives in the "#file-panel h2, #stdout-wrap h2" rule below. */
+    #stdout-wrap h2 {
       padding: 5px 12px;
       justify-content: space-between;
     }
@@ -372,7 +365,7 @@
       color: var(--green);
       white-space: pre-wrap;
       word-break: break-all;
-      background: transparent;
+      background: rgba(0, 0, 0, 0.2);
     }
 
     #stdout::-webkit-scrollbar       { width: 6px; }
@@ -395,7 +388,7 @@
 
     /* Section title bar: file-explorer sections + the output panel share one look. */
     #file-panel h2,
-    #stdout-header {
+    #stdout-wrap h2 {
       font-size: 0.625rem;
       font-weight: 400;
       color: var(--dim);
@@ -446,19 +439,6 @@
       color: var(--dim);
       font-style: italic;
     }
-
-    /* ── Vertical resize handle ──────────────────────────────────── */
-    #fp-v-resize {
-      height: 4px;
-      flex-shrink: 0;
-      background: var(--border);
-      cursor: row-resize;
-      transition: background 0.15s;
-      position: relative;
-    }
-    #fp-v-resize::after { content: ''; position: absolute; inset: -4px 0; }
-    #fp-v-resize:hover,
-    #fp-v-resize.dragging { background: rgba(224, 137, 32, 0.5); }
 
     /* ── System section (fills remaining space) ──────────────────── */
     #fp-sys-wrap {
@@ -590,19 +570,6 @@
 
     .dir-children { padding-left: 10px; }
 
-    /* ── Left resize handle ──────────────────────────────────────── */
-    #left-resize-handle {
-      width: 4px;
-      flex-shrink: 0;
-      background: var(--border);
-      cursor: col-resize;
-      transition: background 0.15s;
-      position: relative;
-    }
-    #left-resize-handle::after { content: ''; position: absolute; inset: 0 -4px; }
-    #left-resize-handle:hover,
-    #left-resize-handle.dragging { background: rgba(224, 137, 32, 0.5); }
-
     /* ── Mobile nav (hidden on desktop) ─────────────────────────── */
     #mobile-nav { display: none; }
 
@@ -655,9 +622,8 @@
         min-height: 0;
       }
 
-      /* Hide both resize handles */
-      #resize-handle,
-      #left-resize-handle { display: none; }
+      /* Hide the panel-width resize handles (the vertical bars) */
+      .drag-handle.vertical { display: none; }
 
       /* ── Per-tab visibility ──────────────────────────────────── */
       body[data-mobile-tab="files"]  #file-panel   { display: flex; }

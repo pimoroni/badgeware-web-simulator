@@ -117,6 +117,8 @@ function initBadge3D(simulator, appendOut) {
       // The badge model is meshopt-compressed (EXT_meshopt_compression) — the
       // decoder is a small (~30KB) module from the same three addons CDN.
       const { MeshoptDecoder }  = await import('three/addons/libs/meshopt_decoder.module.js');
+      const { HorizontalBlurShader } = await import('three/addons/shaders/HorizontalBlurShader.js');
+      const { VerticalBlurShader }   = await import('three/addons/shaders/VerticalBlurShader.js');
       three = THREE;
 
       const wrap = document.getElementById('badge-3d-wrap');
@@ -140,11 +142,14 @@ function initBadge3D(simulator, appendOut) {
       const FRONT_Y = -0.2;            // slight tilt that reads as "front"
       let viewNode    = null;          // the tufty node we rotate
       let viewTargetY = FRONT_Y;       // angle we're easing toward
+      let contactShadow = null;        // soft contact-shadow system (built on load)
+      let shadowDirty   = false;       // re-render the shadow next frame (badge silhouette changed)
 
       // Exposed so the host can wire up the spin buttons (dir: -1 or +1).
       rotateView = (dir) => {
         if (zoomed) focusScreen(false);   // spinning drops back to the default view
         viewTargetY += Math.sign(dir || 1) * Math.PI;
+        shadowDirty = true;               // silhouette will change as it spins
       };
 
       /* ── Double-click the screen to zoom in / out ──────────────────────────
@@ -170,7 +175,7 @@ function initBadge3D(simulator, appendOut) {
         const halfTan = Math.tan((camera.fov * Math.PI / 180) / 2);
         const distH = (size.z * ws.z / 2) / halfTan;                   // fit height
         const distW = (size.x * ws.x / 2) / (halfTan * camera.aspect); // fit width
-        const dist  = Math.max(distH, distW) * 1.12;                   // small margin
+        const dist  = Math.max(distH, distW) * 1;                   // > 1 gives a small margin
         return { pos: center.clone().addScaledVector(normal, dist), look: center };
       }
 
@@ -188,7 +193,7 @@ function initBadge3D(simulator, appendOut) {
         camEasing = true;
         // Reel the badge back inside its container (CSS transitions the margins)
         // so the framed screen doesn't spill over the toolbar / OUTPUT box.
-        wrap.classList.toggle('screen-zoomed', on);
+        wrap.parentElement.classList.toggle('screen-zoomed', on);
       }
 
       /* Forward badge key events from the 3D canvas */
@@ -563,6 +568,88 @@ function initBadge3D(simulator, appendOut) {
         };
       }
 
+      /* Soft contact shadow: render the badge's silhouette depth from a camera
+         under it, Gaussian-blur it, and lay it on a transparent ground plane.
+         Grounds the badge without an opaque floor and without a shadow map, so
+         the transparent canvas is preserved. Blur 6.0 / opacity 0.8 / falloff 1.0. */
+      function buildContactShadow(center, size, groundY) {
+        const W = Math.max(size.x, size.z) * 2.6;   // ground footprint + blur margin
+        const CAM_H = size.y * 1.05;                // how far up the silhouette is sampled
+        const RT = 512, BLUR = 6.0, OPACITY = 0.8, DARKNESS = 1.0;
+
+        const group = new THREE.Group();
+        group.position.set(center.x, groundY, center.z);
+
+        const rt     = new THREE.WebGLRenderTarget(RT, RT); rt.texture.generateMipmaps = false;
+        const rtBlur = new THREE.WebGLRenderTarget(RT, RT); rtBlur.texture.generateMipmaps = false;
+
+        const geo = new THREE.PlaneGeometry(W, W).rotateX(Math.PI / 2);
+        const plane = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          map: rt.texture, transparent: true, opacity: OPACITY, depthWrite: false,
+        }));
+        plane.renderOrder = 1;
+        plane.scale.y = -1;            // flip the sampled depth texture
+        group.add(plane);
+
+        const blurPlane = new THREE.Mesh(geo);
+        blurPlane.visible = false;
+        group.add(blurPlane);
+
+        const cam = new THREE.OrthographicCamera(-W / 2, W / 2, W / 2, -W / 2, 0, CAM_H);
+        cam.rotation.x = Math.PI / 2;  // look up from the ground at the badge
+        group.add(cam);
+
+        const depthMat = new THREE.MeshDepthMaterial();
+        depthMat.userData.darkness = { value: DARKNESS };
+        depthMat.onBeforeCompile = (shader) => {
+          shader.uniforms.darkness = depthMat.userData.darkness;
+          shader.fragmentShader = `uniform float darkness;\n${shader.fragmentShader.replace(
+            'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );',
+            'gl_FragColor = vec4( vec3( 0.0 ), ( 1.0 - fragCoordZ ) * darkness );'
+          )}`;
+        };
+        depthMat.depthTest = depthMat.depthWrite = false;
+
+        const hBlur = new THREE.ShaderMaterial(HorizontalBlurShader); hBlur.depthTest = false;
+        const vBlur = new THREE.ShaderMaterial(VerticalBlurShader);   vBlur.depthTest = false;
+
+        function blur(amount) {
+          blurPlane.visible = true;
+          blurPlane.material = hBlur;
+          hBlur.uniforms.tDiffuse.value = rt.texture;
+          hBlur.uniforms.h.value = amount / RT;
+          renderer.setRenderTarget(rtBlur);
+          renderer.render(blurPlane, cam);
+
+          blurPlane.material = vBlur;
+          vBlur.uniforms.tDiffuse.value = rtBlur.texture;
+          vBlur.uniforms.v.value = amount / RT;
+          renderer.setRenderTarget(rt);
+          renderer.render(blurPlane, cam);
+
+          blurPlane.visible = false;
+        }
+
+        // Re-render the shadow texture. Restores all renderer/scene state it touches.
+        function render() {
+          const bg = scene.background, a = renderer.getClearAlpha();
+          scene.background = null;
+          scene.overrideMaterial = depthMat;
+          renderer.setClearAlpha(0);
+          renderer.setRenderTarget(rt);
+          renderer.clear();
+          renderer.render(scene, cam);
+          scene.overrideMaterial = null;
+          blur(BLUR);          // wide soft blur
+          blur(BLUR * 0.4);    // second pass irons out banding
+          renderer.setRenderTarget(null);
+          renderer.setClearAlpha(a);
+          scene.background = bg;
+        }
+
+        return { group, render };
+      }
+
       /* Load the Tufty badge model */
       const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
       gltfLoader.load(new URL('../static/models/badgeware.glb', _badge3dBase).href, (gltf) => {
@@ -647,6 +734,11 @@ function initBadge3D(simulator, appendOut) {
           camLookGoal.copy(center);
           camLookNow.copy(center);
           screenFocusReady = true;
+
+          // Ground the badge with a soft contact shadow at its lowest point.
+          contactShadow = buildContactShadow(center, size, tuftyBox.min.y);
+          scene.add(contactShadow.group);
+          shadowDirty = true;
         }
 
         /* Collect all tufty meshes for raycasting — button detection uses hit position */
@@ -726,6 +818,12 @@ function initBadge3D(simulator, appendOut) {
         // A stopped/idle badge does no render work. (Held off entirely while the
         // model's shaders are still compiling in the background.)
         if (sceneReady && (renderDirty || newFrame || animating)) {
+          // Refresh the contact shadow only when the badge's silhouette moves
+          // (spin / button press), not on mere screen-content or LED updates.
+          if (contactShadow && (shadowDirty || rotating || buttonsBusy)) {
+            contactShadow.render();
+            shadowDirty = false;
+          }
           if (ledState) ledState.refresh();   // keep uLed on the markers as the badge spins
           renderer.render(scene, camera);
         }

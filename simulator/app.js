@@ -17,7 +17,6 @@ function bootSimulator() {
     const stdoutEl = document.getElementById('stdout');
     const statusEl = document.getElementById('status');
     const stopBtn  = document.getElementById('stop-btn');
-    const simHost  = document.getElementById('sim-host');
 
     const appendOut = (text, cls) => {
       const span = document.createElement('span');
@@ -27,7 +26,7 @@ function bootSimulator() {
       stdoutEl.scrollTop = stdoutEl.scrollHeight;
     };
 
-    const simulator = await BadgewareSimulator(simHost);
+    const simulator = await BadgewareSimulator();
     const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
 
     /* Run / Stop state (the Stop button is meaningful only while running). */

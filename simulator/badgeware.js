@@ -1,7 +1,10 @@
 
 const _simulatorBase = new URL('.', document.currentScript.src).href;
 
-const BadgewareSimulator = async (target) => {
+// `target` is optional: embeds pass their <figure> (for debug/stdout attributes
+// and scroll pause/resume); the main app drives the simulator headlessly and
+// passes nothing.
+const BadgewareSimulator = async (target = null) => {
     let simulator = {
         target:        target,
         micropython:   null,
@@ -15,7 +18,7 @@ const BadgewareSimulator = async (target) => {
         BUTTON_RIGHT:  0b000100,
         BUTTON_SELECT: 0b001000,
         BUTTON_HOME:   0b100000,
-        debug:         target.getAttribute("debug") && target.getAttribute("debug").toLowerCase() == "true",
+        debug:         target?.getAttribute("debug")?.toLowerCase() === "true",
         dom_stdout:    null
     }
 
@@ -24,15 +27,8 @@ const BadgewareSimulator = async (target) => {
         console.log(`DEBUG: ${message}`)
     }
 
-    // Append a stdout textarea (for debugging)
-    if(target.classList.contains("stdout")) {
-        simulator.dom_stdout = document.createElement("textarea")
-        simulator.dom_stdout.readOnly = true
-        target.appendChild(simulator.dom_stdout)
-    }
-
-    // Keyboard input is handled by the 3D badge canvas (badge3d.js), which posts
-    // { buttons } to the worker directly — no key handling is needed here.
+    // Keyboard input is handled by the host: the 3D badge canvas (badge3d.js) or
+    // an embed's 2D canvas (attachBadgeKeys below) posts { buttons } to the worker.
 
     simulator.resume = async () => {
         if(simulator.micropython) {
@@ -115,8 +111,10 @@ const BadgewareSimulator = async (target) => {
             }
 
             if (running) {
-                // Run when the worker is running our code
-                simulator.observer.observe(simulator.target)
+                // Run when the worker is running our code. Without a target
+                // element there's nothing to observe (the main app has no
+                // scroll-to-pause behaviour).
+                if (simulator.target) simulator.observer.observe(simulator.target)
 
                 return
             }
@@ -221,3 +219,107 @@ const BadgewareSimulator = async (target) => {
 
     return simulator
 }
+
+/* ── Embedded simulators (scroll-into-view canvas demos) ───────────────────────
+   Render the badge framebuffer straight into a plain 2D <canvas> — no 3D view —
+   and run each embed's code only while it's scrolled into view. This lets a demo
+   or docs page show many examples at once, all backed by the same badgeware.js +
+   wasm build: at most the on-screen few are actually executing at any moment.
+
+   Markup (no CSS classes needed — we target the `code` attribute):
+     <figure code="examples/mandelbrot.py" stdout="true" debug="true"></figure> */
+
+// Paint one worker frame into a canvas. The canvas's internal resolution tracks
+// the frame size (160x120 LORES or 320x240 HIRES); the page's CSS scales the
+// element up, so set `image-rendering: pixelated` there for crisp pixels.
+function badgewareCanvasPainter(canvas) {
+    const ctx = canvas.getContext("2d")
+    return ({ buffer, width, height }) => {
+        if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width
+            canvas.height = height
+        }
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(buffer), width, height), 0, 0)
+    }
+}
+
+// Route keyboard input from a focused element to a simulator as badge button
+// presses: arrows = D-pad, space = select, escape = home. The element is made
+// focusable; give it a visible :focus outline in CSS so users know to click it
+// before typing. (badge3d.js wires the 3D canvas the same way for the main app.)
+function attachBadgeKeys(simulator, element) {
+    const keyMap = {
+        ArrowUp:    simulator.BUTTON_UP,
+        ArrowDown:  simulator.BUTTON_DOWN,
+        ArrowLeft:  simulator.BUTTON_LEFT,
+        ArrowRight: simulator.BUTTON_RIGHT,
+        " ":        simulator.BUTTON_SELECT,
+        Escape:     simulator.BUTTON_HOME,
+    }
+    element.tabIndex = 0
+    const send = (key, down) => {
+        const btn = keyMap[key]
+        if (!btn || !simulator.micropython) return false
+        if (down) simulator.buttons |= btn
+        else      simulator.buttons &= ~btn
+        simulator.micropython.postMessage({ buttons: simulator.buttons })
+        return true
+    }
+    element.addEventListener("keydown", (ev) => { if (send(ev.key, true))  ev.preventDefault() })
+    element.addEventListener("keyup",   (ev) => { if (send(ev.key, false)) ev.preventDefault() })
+}
+
+// Wire a single <figure code="…"> embed: build its canvas (+ optional stdout
+// log), fetch its code, and lazily run it the first time it scrolls into view.
+// After that first run, the per-worker IntersectionObserver inside
+// BadgewareSimulator takes over pause/resume as the figure leaves and re-enters
+// the viewport, so off-screen embeds stop consuming CPU.
+const initBadgewareEmbed = async (figure) => {
+    const codeURL = figure.getAttribute("code")
+    if (!codeURL) return null
+
+    const canvas = document.createElement("canvas")
+    canvas.width = 320
+    canvas.height = 240
+    figure.prepend(canvas)
+
+    const simulator = await BadgewareSimulator(figure)
+    simulator.onframe = badgewareCanvasPainter(canvas)
+    attachBadgeKeys(simulator, canvas)   // click the canvas to focus, then arrows/space/escape
+
+    // stdout="true" → append a read-only log that the default stdout writer feeds.
+    if ((figure.getAttribute("stdout") || "").toLowerCase() === "true") {
+        const log = document.createElement("textarea")
+        log.readOnly = true
+        figure.appendChild(log)
+        simulator.dom_stdout = log
+    }
+
+    let code
+    try {
+        const response = await fetch(codeURL)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        code = await response.text()
+    } catch (err) {
+        console.error(`badgeware embed: could not load ${codeURL}:`, err)
+        return simulator
+    }
+
+    // Run on first reveal; BadgewareSimulator's own observer handles later scrolls.
+    let started = false
+    const reveal = new IntersectionObserver((entries) => {
+        if (!started && entries.some((e) => e.isIntersecting)) {
+            started = true
+            reveal.disconnect()
+            simulator.run(code)
+        }
+    }, { threshold: [0] })
+    reveal.observe(figure)
+
+    return simulator
+}
+
+// Scan a root (default: the whole document) for <figure code="…"> embeds and wire
+// each one. Returns a promise resolving to the array of created simulators.
+const initBadgewareEmbeds = (root = document) =>
+    Promise.all([...root.querySelectorAll("figure[code]")].map(initBadgewareEmbed))

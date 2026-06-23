@@ -13,6 +13,7 @@ let _bootCtx = null;
 function bootSimulator() {
   if (_bootCtx) return _bootCtx;
   _bootCtx = (async () => {
+    await userFS.ready;   // populate the in-memory FS cache before any read below
     const stdoutEl = document.getElementById('stdout');
     const statusEl = document.getElementById('status');
     const stopBtn  = document.getElementById('stop-btn');
@@ -190,6 +191,8 @@ async function initApp() {
       openScratchTab(name, '');
     },
     onRenamed: (oldPath, newPath) => {
+      // Re-point a queued write so unsaved edits follow the file to its new path.
+      if (pendingSave && pendingSave.path === oldPath) pendingSave.path = newPath;
       if (!openModels.has(oldPath)) return;
       const info = openModels.get(oldPath);
       openModels.delete(oldPath);
@@ -199,6 +202,7 @@ async function initApp() {
       renderTabs();
     },
     onDeleted: (path) => {
+      dropPendingSave(path);
       for (const tabKey of [path, 'img:' + path]) {
         if (!openModels.has(tabKey)) continue;
         if (currentTabKey === tabKey) {
@@ -261,7 +265,42 @@ async function initApp() {
   const runBtn  = document.getElementById('run-btn');
   const stopBtn = document.getElementById('stop-btn');
 
+  /* ── Auto-save debounce ───────────────────────────────────────────────────
+     Coalesce rapid keystrokes into one IndexedDB write per idle gap instead of
+     one write per character. Tune AUTOSAVE_DEBOUNCE_MS: higher = fewer writes,
+     but more unsaved text at risk if the tab dies mid-edit. */
+  const AUTOSAVE_DEBOUNCE_MS = 400;
+  let pendingSave = null;     // { path, text } awaiting its timer, or null
+  let saveTimer   = null;
+
+  function flushPendingSave() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (pendingSave) {
+      userFS.set(pendingSave.path, { text: pendingSave.text, binary: false });
+      pendingSave = null;
+    }
+  }
+  // Discard a queued write for `path` (e.g. the file was just deleted) so the
+  // timer can't recreate it after the fact.
+  function dropPendingSave(path) {
+    if (pendingSave && pendingSave.path === path) {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      pendingSave = null;
+    }
+  }
+  function scheduleSave(path, text) {
+    // Switching files mid-debounce: persist the previous file now so a queued
+    // write can never land on the wrong path.
+    if (pendingSave && pendingSave.path !== path) flushPendingSave();
+    pendingSave = { path, text };
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushPendingSave, AUTOSAVE_DEBOUNCE_MS);
+  }
+  // Don't lose the last debounce window's worth of edits on tab close/reload.
+  window.addEventListener('beforeunload', flushPendingSave);
+
   const runCode = async () => {
+    flushPendingSave();   // cancel any queued write; we persist the latest below
     const code = editor.getValue();
     // Auto-save to user FS if a named file is open
     if (currentFilePath && !currentReadOnly) {
@@ -472,7 +511,8 @@ async function initApp() {
     if (currentReadOnly) return;
 
     if (!currentTabKey.includes(':')) {
-      // User file — already auto-saved; just flash confirmation
+      // User file — flush any debounced edit, then flash confirmation
+      flushPendingSave();
       const prev = statusEl.textContent;
       statusEl.textContent = '✓ Saved ' + tabLabel(currentTabKey);
       setTimeout(() => { statusEl.textContent = prev; }, 1400);
@@ -597,7 +637,7 @@ async function initApp() {
     if (!handler) return;
 
     if (handler.kind !== 'text') {
-      const bytes = entry.binary ? b64ToBytes(entry.data) : new TextEncoder().encode(entry.text);
+      const bytes = entry.binary ? entry.data : new TextEncoder().encode(entry.text);
       openBinaryTab((handler.keyPrefix ?? 'img') + ':' + path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), handler, transient, entry.mimeType);
       return;
     }
@@ -629,8 +669,8 @@ async function initApp() {
       renderTabs();
     }
     if (currentFilePath && !currentReadOnly) {
-      // User file — auto-save silently
-      userFS.set(currentFilePath, { text: editor.getValue(), binary: false });
+      // User file — auto-save silently (debounced)
+      scheduleSave(currentFilePath, editor.getValue());
       info.dirty = false;
     } else if (!currentReadOnly) {
       // Scratch tab — mark dirty so the user knows to save

@@ -4,7 +4,7 @@
    mutations. It knows nothing about Monaco models or tabs — those stay in app.js,
    reached through the injected `host`:
 
-     host.userFS            — the localStorage-backed FS (see fs.js)
+     host.userFS            — the IndexedDB-backed FS (see fs.js)
      host.getSystemPaths()  — current system file list (populated after fetch)
      host.openFile(path, { transient, system })  — host opens it (model/tab/preview)
      host.onRenamed(old, new)  — host re-keys any open tab for that path
@@ -16,8 +16,7 @@
    { rebuildSystem: true } to rebuild the (otherwise build-once) system tree.
 
    Rendering is template-string + event delegation: each tree is one innerHTML
-   build, and one delegated listener per container reads data-path / data-action.
-   `bytesToB64` is a global from fs.js. */
+   build, and one delegated listener per container reads data-path / data-action. */
 function createFileBrowser(host) {
   const userList = document.getElementById('fp-user-list');
   const sysTree  = document.getElementById('fp-sys-tree');
@@ -257,7 +256,7 @@ function createFileBrowser(host) {
         host.userFS.set(path, { text: await file.text(), binary: false });
       } else {
         const buf = await file.arrayBuffer();
-        host.userFS.set(path, { data: bytesToB64(new Uint8Array(buf)), binary: true, mimeType: file.type });
+        host.userFS.set(path, { data: new Uint8Array(buf), binary: true, mimeType: file.type });
       }
     }
     refresh();

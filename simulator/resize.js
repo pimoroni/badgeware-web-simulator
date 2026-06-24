@@ -30,32 +30,10 @@ function dragResolveSize(spec, axis, parent) {
   return n;   // plain px
 }
 
-// Tiny IndexedDB key/value store for panel sizes (keyed by target id). Kept in
-// its own DB so it never collides with the userFS over schema/version bumps.
-// All ops degrade to no-ops if IndexedDB is unavailable, so dragging still works.
-const panelSizes = (() => {
-  const DB = 'badgeware.prefs', STORE = 'panel-sizes';
-  let dbp;
-  const db = () => (dbp ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
-  }));
-  return {
-    get: (key) => db().then(d => new Promise((resolve, reject) => {
-      const req = d.transaction(STORE, 'readonly').objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror   = () => reject(req.error);
-    })).catch(() => undefined),
-    set: (key, value) => db().then(d => new Promise((resolve, reject) => {
-      const tx = d.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror    = () => reject(tx.error);
-    })).catch(() => {}),
-  };
-})();
+// Panel sizes (keyed by target id) live in their own IndexedDB store so a schema
+// bump can't collide with userFS. The KV degrades to no-ops if IndexedDB is
+// unavailable, so dragging still works. See simulator/idb.js.
+const panelSizes = idbKv('badgeware.prefs', 'panel-sizes');
 
 // Per-handle geometry derived from its attributes.
 function dragConfig(handle) {

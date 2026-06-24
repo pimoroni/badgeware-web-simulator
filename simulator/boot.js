@@ -34,12 +34,19 @@ function bootSimulator() {
     const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
 
     /* Run / Stop state (the Stop button is meaningful only while running). */
-    let isRunning = false;
+    let isRunning  = false;
+    let runningKey = null;   // tabKey of the running program (null = OS / no tab)
+    let runTarget  = null;   // tabKey the Run button would launch now; app keeps it current
+    // Run shows a reload glyph only when it would re-launch what's already running.
+    // Switch the active tab to something else and it falls back to a fresh play.
+    const syncRunIcon = () => {
+      const reload = isRunning && runTarget === runningKey;
+      runIcons.forEach((i) => { i.textContent = reload ? 'refresh' : 'play_arrow'; });
+    };
     const setRunning = (running) => {
       isRunning = running;
       stopBtns.forEach((b) => { b.disabled = !running; });
-      // While running, Run re-launches the program — show a reload glyph to say so.
-      runIcons.forEach((i) => { i.textContent = running ? 'refresh' : 'play_arrow'; });
+      syncRunIcon();
     };
     const onSimulatorStopped = () => {
       if (!isRunning) return;
@@ -85,6 +92,7 @@ function bootSimulator() {
       if (trace.clear) trace.clear();
       trace.frames = [];
       trace.lastRunKey = tabKey;
+      runningKey = tabKey;   // what's now running, for the Run-vs-Reload icon
       stdoutEl.innerHTML = '';
       appendOut('▶ Running…', 'out-dim');
       statusEl.textContent = 'Running…';
@@ -192,6 +200,9 @@ function bootSimulator() {
       run,
       runProgram,   // run arbitrary code (the gallery uses this to run an example)
       setRunProvider: (fn) => { runProvider = fn; },
+      // The editor tells us which tab Run would target now (null = gallery/OS), so
+      // the Run icon can show reload-vs-play. Side-effect-free, unlike runProvider.
+      notifyRunTarget: (key) => { runTarget = key ?? null; syncRunIcon(); },
       // Let the editor half register extra data-action commands (e.g. "gallery").
       addActions: (extra) => Object.assign(actions, extra),
     };

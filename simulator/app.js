@@ -4,37 +4,17 @@
    that in-flight boot and wires the editor, tabs and file browser to it. */
 const APP_BASE = new URL('.', document.currentScript.src).href;
 
-// Tiny IndexedDB key/value store for the editor session (which tabs are open +
-// which is active), so a reload restores the workspace. Its own DB, isolated
-// from userFS and the panel-size prefs (mirrors resize.js's panelSizes). All ops
-// degrade to no-ops if IndexedDB is unavailable.
+// The editor session (which tabs are open + which is active) persists in its own
+// IndexedDB store, isolated from userFS and the panel-size prefs. One fixed key
+// holds the whole snapshot. See simulator/idb.js.
 const sessionStore = (() => {
-  const DB = 'badgeware.session', STORE = 'state', KEY = 'editor';
-  let dbp;
-  const db = () => (dbp ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
-  }));
-  return {
-    load: () => db().then(d => new Promise((resolve, reject) => {
-      const req = d.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror   = () => reject(req.error);
-    })).catch(() => undefined),
-    save: (value) => db().then(d => new Promise((resolve, reject) => {
-      const tx = d.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(value, KEY);
-      tx.oncomplete = () => resolve();
-      tx.onerror    = () => reject(tx.error);
-    })).catch(() => {}),
-  };
+  const kv = idbKv('badgeware.session', 'state');
+  return { load: () => kv.get('editor'), save: (value) => kv.set('editor', value) };
 })();
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, addActions } = await bootSimulator();
+  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, notifyRunTarget, addActions } = await bootSimulator();
   const statusEl   = document.getElementById('status');    // save / read-only messages
   const galleryEl  = document.getElementById('gallery');   // example gallery (home view)
   const tabBarEl   = document.getElementById('tab-bar');   // hidden while the gallery is up
@@ -328,6 +308,7 @@ async function initApp() {
     currentTabKey = null;
     renderTabs();      // clear the active-tab highlight
     fb.markActive();
+    notifyRunTarget(null);   // Run would launch the OS now (no active tab)
     selectMobilePanel('gallery');
   }
   addActions({ gallery: showGallery });   // wire the toolbar "Examples" button
@@ -468,6 +449,7 @@ async function initApp() {
 
     fb.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
     renderTabs();
+    notifyRunTarget(key);        // Run targets this tab now → reload-vs-play icon
     selectMobilePanel('code');   // on mobile, focusing a tab jumps to the Code view
   }
 

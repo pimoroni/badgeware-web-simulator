@@ -20,13 +20,6 @@ const userFS = (() => {
   let data = {};
   let db   = null;
 
-  const openDB = () => new Promise((resolve, reject) => {
-    const req = indexedDB.open(USER_FS_DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(USER_FS_STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
-  });
-
   // Read every record into the in-memory cache in one cursor pass.
   const loadAll = () => new Promise((resolve, reject) => {
     const out = {};
@@ -54,7 +47,7 @@ const userFS = (() => {
   }));
 
   const ready = (async () => {
-    db   = await openDB();
+    db   = await idbOpen(USER_FS_DB, USER_FS_STORE);   // shared opener (simulator/idb.js)
     data = await loadAll();
   })();
 

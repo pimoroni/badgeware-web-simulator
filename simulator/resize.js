@@ -1,3 +1,5 @@
+import { idbKv } from './util.js';
+
 /* -- Resize handles ----------------------------------------------------------
    One code path for every panel/section resizer. A handle is fully declarative
    via data-attributes — no per-handle JavaScript:
@@ -32,7 +34,7 @@ function dragResolveSize(spec, axis, parent) {
 
 // Panel sizes (keyed by target id) live in their own IndexedDB store so a schema
 // bump can't collide with userFS. The KV degrades to no-ops if IndexedDB is
-// unavailable, so dragging still works. See simulator/idb.js.
+// unavailable, so dragging still works. See simulator/util.js.
 const panelSizes = idbKv('badgeware.prefs', 'panel-sizes');
 
 // Per-handle geometry derived from its attributes.
@@ -66,7 +68,7 @@ async function restorePanelSizes() {
   }
 }
 
-function initResizeHandlers() {
+export function initResizeHandlers() {
   for (const handle of document.querySelectorAll('[data-drag-target]')) {
     const cfg = dragConfig(handle);
     if (!cfg) continue;

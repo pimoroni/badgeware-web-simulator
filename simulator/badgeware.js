@@ -1,10 +1,10 @@
 
-const _simulatorBase = new URL('.', document.currentScript.src).href;
+const _simulatorBase = new URL('.', import.meta.url).href;
 
 // `target` is optional: embeds pass their <figure> (for debug/stdout attributes
 // and scroll pause/resume); the main app drives the simulator headlessly and
 // passes nothing.
-const BadgewareSimulator = async (target = null) => {
+export const BadgewareSimulator = async (target = null) => {
     let simulator = {
         target:        target,
         micropython:   null,
@@ -321,5 +321,5 @@ const initBadgewareEmbed = async (figure) => {
 
 // Scan a root (default: the whole document) for <figure code="…"> embeds and wire
 // each one. Returns a promise resolving to the array of created simulators.
-const initBadgewareEmbeds = (root = document) =>
+export const initBadgewareEmbeds = (root = document) =>
     Promise.all([...root.querySelectorAll("figure[code]")].map(initBadgewareEmbed))

@@ -17,7 +17,9 @@
 
    Rendering is template-string + event delegation: each tree is one innerHTML
    build, and one delegated listener per container reads data-path / data-action. */
-function createFileBrowser(host) {
+import { delegate } from './util.js';
+
+export function createFileBrowser(host) {
   const userList = document.getElementById('fp-user-list');
   const sysTree  = document.getElementById('fp-sys-tree');
   const menu     = document.getElementById('file-ctx-menu');

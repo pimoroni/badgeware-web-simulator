@@ -1,5 +1,39 @@
 /* -- Monaco editor configuration: completions + theme --------------------- */
-function configureMonaco(monaco) {
+import { BADGEWARE_GLOBALS, MEMBERS } from './completions.js';
+import { userFS, getSystemPaths } from './fs.js';
+
+// Convert a declarative completion stub (see completions.js) → a Monaco
+// CompletionItem. Lives here, with its only consumer, so completions.js stays
+// pure data.
+function toCompletionItem(entry, range, monaco) {
+  const K = monaco.languages.CompletionItemKind;
+  const kindMap = {
+    Constant: K.Constant,
+    Variable: K.Variable,
+    Module:   K.Module,
+    Class:    K.Class,
+    Function: K.Function,
+    Method:   K.Method,
+    Property: K.Property,
+  };
+
+  const insertText = entry.insertText ?? entry.label;
+  const isSnippet  = insertText.includes('${');
+
+  return {
+    label:           entry.label,
+    kind:            kindMap[entry.kind] ?? K.Variable,
+    detail:          entry.detail,
+    documentation:   entry.doc,
+    insertText,
+    insertTextRules: isSnippet
+      ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+      : undefined,
+    range,
+  };
+}
+
+export function configureMonaco(monaco) {
 
   /* -- Type inference: scan document for ident = TypeName(...) patterns --
      Returns the MEMBERS array for the inferred type, or null.             */
@@ -51,7 +85,7 @@ function configureMonaco(monaco) {
         const dir       = partial.slice(0, lastSlash + 1);   // "/rom/"
         const prefix    = partial.slice(lastSlash + 1);       // "fon"
 
-        const allPaths = [...systemPaths, ...userFS.paths()];
+        const allPaths = [...getSystemPaths(), ...userFS.paths()];
         const seen = new Set();
         const suggestions = [];
 

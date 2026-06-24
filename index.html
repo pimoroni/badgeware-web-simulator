@@ -25,6 +25,20 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;700&display=swap" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" crossorigin>
   <link rel="stylesheet" href="simulator/app.css">
+
+  <!-- Preload the internal module graph so imports don't fetch in a waterfall.
+       app.js is the entry (loaded at the body bottom); these are its deps. -->
+  <link rel="modulepreload" href="simulator/util.js">
+  <link rel="modulepreload" href="simulator/fs.js">
+  <link rel="modulepreload" href="simulator/badgeware.js">
+  <link rel="modulepreload" href="simulator/badge3d.js">
+  <link rel="modulepreload" href="simulator/completions.js">
+  <link rel="modulepreload" href="simulator/editor-config.js">
+  <link rel="modulepreload" href="simulator/ppf.js">
+  <link rel="modulepreload" href="simulator/af.js">
+  <link rel="modulepreload" href="simulator/resize.js">
+  <link rel="modulepreload" href="simulator/filebrowser.js">
+  <link rel="modulepreload" href="simulator/boot.js">
 </head>
 <body>
 
@@ -120,31 +134,18 @@
   <button data-tab="output"  title="Output"   aria-label="Output"><span class="material-icons">terminal</span></button>
 </nav>
 
-<script src="simulator/idb.js"></script>
-<script src="simulator/dom.js"></script>
-<script src="simulator/badgeware.js"></script>
-<script src="simulator/fs.js"></script>
-<script src="simulator/completions.js"></script>
-<script src="simulator/ppf.js"></script>
-<script src="simulator/af.js"></script>
-<script src="simulator/editor-config.js"></script>
-<script src="simulator/badge3d.js"></script>
-<script src="simulator/resize.js"></script>
-<script src="simulator/filebrowser.js"></script>
-<script src="simulator/boot.js"></script>
-<script src="simulator/app.js"></script>
-
+<!-- Monaco ships an AMD bundle. Load its loader.js classic (so it fetches in
+     parallel with the module graph), then expose a readiness promise that the app
+     module awaits before building the editor — no bundler needed. -->
 <script crossorigin="anonymous"
         src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-
 <script>
-require.config({
-  paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' },
-});
-
-require(['vs/editor/editor.main'], async function () {
-  await initApp();
-});
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+  window.monacoReady = new Promise((resolve) => require(['vs/editor/editor.main'], resolve));
 </script>
+
+<!-- App entry. boot.js starts the simulator on import (OS runs while Monaco
+     downloads); app.js awaits window.monacoReady, then builds the editor. -->
+<script type="module" src="simulator/app.js"></script>
 </body>
 </html>

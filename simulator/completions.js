@@ -1,10 +1,11 @@
 /* -------------------------------------------------------------------------
-   completions.js — Monaco completion data for the Badgeware Python editor.
+   completions.js — declarative Monaco completion DATA for the Badgeware editor.
+   Pure data (no logic): the toCompletionItem() mapper lives in editor-config.js,
+   its only consumer.
 
-   Exports (as plain globals, loaded before the Monaco require() block):
+   Exports:
      BADGEWARE_GLOBALS  — top-level identifiers: Badgeware API + MicroPython
      MEMBERS            — member completions, keyed by the identifier before "."
-     toCompletionItem() — converts a stub entry to a Monaco CompletionItem
 
    Sources:
      simulator/filesystem/badgeware/__init__.py
@@ -12,7 +13,7 @@
      MicroPython 1.x built-in functions / types / exceptions / modules
    ------------------------------------------------------------------------- */
 
-const BADGEWARE_GLOBALS = [
+export const BADGEWARE_GLOBALS = [
 
   // -- Display mode flags ----------------------------------------------------
   { label: 'LORES',         kind: 'Constant', detail: '0b00',     doc: 'Low-resolution mode: 160×120 pixels.' },
@@ -286,7 +287,7 @@ const BADGEWARE_GLOBALS = [
 
 /* -- Member completions, keyed by the identifier before the dot --------------
    Add entries here whenever "X." should show a completion list.              */
-const MEMBERS = {
+export const MEMBERS = {
 
   // -- Badgeware: screen / image ----------------------------------------------
   screen: [
@@ -1059,32 +1060,3 @@ const MEMBERS = {
       doc: 'Open a URL (fetch-backed). urlopen(url, data=None, method="GET"). Returns a stream with .read()/.readline()/.close() and .status.' },
   ],
 };
-
-/* -- Helper: convert a stub entry → Monaco CompletionItem ------------------ */
-function toCompletionItem(entry, range, monaco) {
-  const K = monaco.languages.CompletionItemKind;
-  const kindMap = {
-    Constant: K.Constant,
-    Variable: K.Variable,
-    Module:   K.Module,
-    Class:    K.Class,
-    Function: K.Function,
-    Method:   K.Method,
-    Property: K.Property,
-  };
-
-  const insertText = entry.insertText ?? entry.label;
-  const isSnippet  = insertText.includes('${');
-
-  return {
-    label:           entry.label,
-    kind:            kindMap[entry.kind] ?? K.Variable,
-    detail:          entry.detail,
-    documentation:   entry.doc,
-    insertText,
-    insertTextRules: isSnippet
-      ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-      : undefined,
-    range,
-  };
-}

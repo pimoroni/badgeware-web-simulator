@@ -9,11 +9,16 @@
    and hands back a single seam, setRunProvider(): a callback describing how to
    fetch the current editor content to run. Everything else here is self-
    contained. */
-const BOOT_BASE = new URL('.', document.currentScript.src).href;
+import { BadgewareSimulator } from './badgeware.js';
+import { initBadge3D } from './badge3d.js';
+import { userFS } from './fs.js';
+import { delegate } from './util.js';
+
+const BOOT_BASE = new URL('.', import.meta.url).href;
 
 /* Resolves to a shared context the editor wires itself into. Idempotent. */
 let _bootCtx = null;
-function bootSimulator() {
+export function bootSimulator() {
   if (_bootCtx) return _bootCtx;
   _bootCtx = (async () => {
     await userFS.ready;   // populate the in-memory FS cache before any read below
@@ -153,7 +158,7 @@ function bootSimulator() {
       'spin-next': () => rotateView(+1),
       clear:       () => { stdoutEl.innerHTML = ''; },
     };
-    delegate(document, actions);   // shared dispatcher — see simulator/dom.js
+    delegate(document, actions);   // shared dispatcher — see simulator/util.js
 
     // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
     // file to run + open in the editor; otherwise the system boot script (which

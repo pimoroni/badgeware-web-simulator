@@ -1,12 +1,23 @@
 /* -- badgeware-web editor entry point ---------------------------------------
-   The Monaco-dependent half of the app. The simulator + 3D badge are booted
-   separately in boot.js (kicked off before this bundle loads); initApp() adopts
-   that in-flight boot and wires the editor, tabs and file browser to it. */
-const APP_BASE = new URL('.', document.currentScript.src).href;
+   The Monaco-dependent half of the app, and the module graph's entry point. The
+   simulator + 3D badge are booted separately in boot.js (which starts on import,
+   before Monaco finishes loading); initApp() adopts that in-flight boot and wires
+   the editor, tabs and file browser to it. The bottom of this file awaits Monaco
+   (loaded in parallel via the AMD shim in index.html) and then runs initApp(). */
+import { idbKv } from './util.js';
+import { userFS, getSystemPaths, setSystemPaths } from './fs.js';
+import { bootSimulator } from './boot.js';
+import { createFileBrowser } from './filebrowser.js';
+import { configureMonaco } from './editor-config.js';
+import { ppfParse, ppfPreview } from './ppf.js';
+import { afParse, afPreview } from './af.js';
+import { initResizeHandlers } from './resize.js';
+
+const APP_BASE = new URL('.', import.meta.url).href;
 
 // The editor session (which tabs are open + which is active) persists in its own
 // IndexedDB store, isolated from userFS and the panel-size prefs. One fixed key
-// holds the whole snapshot. See simulator/idb.js.
+// holds the whole snapshot. See simulator/util.js.
 const sessionStore = (() => {
   const kv = idbKv('badgeware.session', 'state');
   return { load: () => kv.get('editor'), save: (value) => kv.set('editor', value) };
@@ -154,7 +165,7 @@ async function initApp() {
      tabs/Monaco models and hand it this host so it never touches them directly. */
   const fb = createFileBrowser({
     userFS,
-    getSystemPaths: () => systemPaths,
+    getSystemPaths,   // imported accessor (fs.js) → current system file list
     activePath:     () => { const t = activeTab(); return t && t.source === 'user' && t.view === 'editor' ? t.path : null; },
     isTextFile:     (p) => FILE_HANDLERS[p.slice(p.lastIndexOf('.')).toLowerCase()]?.kind === 'text',
     openFile: (path, { transient = false, system = false } = {}) =>
@@ -176,6 +187,7 @@ async function initApp() {
       openModels.set(newPath, t);
       if (currentTabKey === oldPath) currentTabKey = newPath;
       renderTabs();
+      saveSession();   // tab path/name changed
     },
     onDeleted: (path) => {
       dropPendingSave(path);
@@ -195,6 +207,7 @@ async function initApp() {
         }
       }
       renderTabs();
+      saveSession();   // tab(s) removed
     },
   });
 
@@ -307,6 +320,7 @@ async function initApp() {
     applyView('gallery');
     currentTabKey = null;
     renderTabs();      // clear the active-tab highlight
+    saveSession();     // active view changed (→ gallery)
     fb.markActive();
     notifyRunTarget(null);   // Run would launch the OS now (no active tab)
     selectMobilePanel('gallery');
@@ -358,7 +372,7 @@ async function initApp() {
   try {
     const fsData = await fetch(APP_BASE + 'filesystem.json').then(r => r.json());
     // Manifest shape: { files: { "/path": byteSize } } — we only need the paths here.
-    systemPaths = Object.keys(fsData.files || {});
+    setSystemPaths(Object.keys(fsData.files || {}));
     // Real system paths just arrived — (re)build the system tree.
     fb.refresh({ rebuildSystem: true });
   } catch (_) {}
@@ -419,8 +433,10 @@ async function initApp() {
       list.appendChild(tab);
     }
     bar.replaceChildren(list);
-    saveSession();   // tabs/active changed — persist (debounced, no-op while restoring)
   }
+  // renderTabs() is now pure (no persistence). saveSession() lives at the tab-state
+  // mutation sites below — focusTab/showGallery/close/promote/rename/delete/etc. —
+  // so it's tied to changes, not to re-renders.
 
   function focusTab(key) {
     const t = openModels.get(key);
@@ -449,6 +465,7 @@ async function initApp() {
 
     fb.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
     renderTabs();
+    saveSession();               // active tab changed (also covers every open*, which ends here)
     notifyRunTarget(key);        // Run targets this tab now → reload-vs-play icon
     selectMobilePanel('code');   // on mobile, focusing a tab jumps to the Code view
   }
@@ -471,6 +488,7 @@ async function initApp() {
       }
     }
     renderTabs();
+    saveSession();   // tab removed (the active-tab paths above also save via focusTab)
   }
 
   function evictTransient(incomingKey) {
@@ -490,6 +508,7 @@ async function initApp() {
     info.transient = false;
     if (transientTabKey === key) transientTabKey = null;
     renderTabs();
+    saveSession();   // transient flag is persisted
   }
 
   function openScratchTab(name, content, { transient = false } = {}) {
@@ -552,6 +571,7 @@ async function initApp() {
 
     fb.refresh();
     renderTabs();
+    saveSession();   // scratch tab replaced by a user-file tab
     statusEl.textContent = '✓ Saved ' + path;
     setTimeout(() => { statusEl.textContent = path; }, 1500);
   }
@@ -687,6 +707,7 @@ async function initApp() {
       t.transient = false;
       if (transientTabKey === currentTabKey) transientTabKey = null;
       renderTabs();
+      saveSession();   // transient flag is persisted
     }
     if (t.source === 'user' && t.view === 'editor') {
       // User file — auto-save silently (debounced)
@@ -725,3 +746,10 @@ async function initApp() {
   // No auto-run here: bootSimulator() already started main.py in parallel with
   // Monaco loading. The editor is now wired to that running simulator.
 }
+
+/* -- Entry point ------------------------------------------------------------
+   Wait for Monaco's AMD bundle — index.html loads its loader.js classic (so it
+   fetches in parallel with this module graph) and exposes window.monacoReady. The
+   simulator already booted on boot.js's import, so the OS runs while Monaco loads. */
+await window.monacoReady;
+await initApp();

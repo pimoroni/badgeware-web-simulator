@@ -1,12 +1,22 @@
-/* -- IndexedDB helpers ------------------------------------------------------
-   One home for the open/transaction boilerplate the app's small stores share
-   (panel sizes, editor session, user FS). Each store is a single object store of
-   string-key → structured-clone value, opened at version 1 and created on first
-   run. Loaded before fs.js so userFS can borrow the opener. */
+/* -- Generic, zero-dependency primitives ------------------------------------
+   Two unrelated-but-tiny helpers the rest of the app builds on: a delegated
+   click dispatcher and an IndexedDB key/value store. Kept together because both
+   are app-agnostic utilities with no deps of their own. */
+
+// Delegated click dispatch: one listener on `root` routes a click on any
+// [data-action] descendant to map[action](el, event). The map is read live at
+// click time, so entries added later (e.g. via Object.assign) are picked up.
+// Clicks with no data-action — or an action absent from the map — are ignored.
+export function delegate(root, map) {
+  root.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (el && root.contains(el)) map[el.dataset.action]?.(el, e);
+  });
+}
 
 // Open (creating on first run) a one-object-store database. Rejects if
 // IndexedDB is unavailable or the open fails, so callers can degrade gracefully.
-function idbOpen(dbName, storeName) {
+export function idbOpen(dbName, storeName) {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(dbName, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(storeName);
@@ -18,7 +28,7 @@ function idbOpen(dbName, storeName) {
 // A promise-based key/value view over one object store. The connection opens
 // lazily and is cached. Reads resolve to undefined and writes to a no-op if
 // IndexedDB is unavailable, so callers never have to guard.
-function idbKv(dbName, storeName) {
+export function idbKv(dbName, storeName) {
   let dbp;
   const db  = () => (dbp ??= idbOpen(dbName, storeName));
   const run = (mode, fn) => db().then((d) => new Promise((resolve, reject) => {

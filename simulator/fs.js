@@ -13,10 +13,12 @@
 
    Binary payloads are stored as native Uint8Array — IndexedDB structured-clones
    them directly, so there's no base64 round-trip on read or write. */
+import { idbOpen } from './util.js';
+
 const USER_FS_DB    = 'badgeware.userfs';
 const USER_FS_STORE = 'files';
 
-const userFS = (() => {
+export const userFS = (() => {
   let data = {};
   let db   = null;
 
@@ -47,7 +49,7 @@ const userFS = (() => {
   }));
 
   const ready = (async () => {
-    db   = await idbOpen(USER_FS_DB, USER_FS_STORE);   // shared opener (simulator/idb.js)
+    db   = await idbOpen(USER_FS_DB, USER_FS_STORE);   // shared opener (simulator/util.js)
     data = await loadAll();
   })();
 
@@ -65,5 +67,9 @@ const userFS = (() => {
   };
 })();
 
-/* -- System file list — populated after fetch('/simulator/filesystem.json') */
-let systemPaths = [];
+/* -- System file list — populated after fetch('/simulator/filesystem.json') via
+   setSystemPaths(). An accessor pair rather than a bare export, since ESM import
+   bindings are read-only (the old code reassigned the shared `let` from app.js). */
+let _systemPaths = [];
+export const getSystemPaths = () => _systemPaths;
+export const setSystemPaths = (paths) => { _systemPaths = paths; };

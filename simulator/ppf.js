@@ -16,7 +16,7 @@
  * Parse a .ppf ArrayBuffer.
  * Returns a font object suitable for passing to ppfMeasure / ppfRender / ppfPreview.
  */
-function ppfParse(arrayBuffer) {
+export function ppfParse(arrayBuffer) {
   const dv = new DataView(arrayBuffer);
   const u8 = new Uint8Array(arrayBuffer);
   let off  = 0;
@@ -119,7 +119,7 @@ function ppfRender(font, ctx, text, x, y, color = '#ffffff') {
  *   lineGap  (default 4)  — gap between lines in font-pixels
  *   lines    — array of sample strings (defaults to a-z/A-Z/0-9/symbols)
  */
-function ppfPreview(font, options = {}) {
+export function ppfPreview(font, options = {}) {
   const scale   = options.scale   ?? 4;
   const bg      = options.bg      ?? '#16161e';
   const fg      = options.fg      ?? '#f0e8d8';

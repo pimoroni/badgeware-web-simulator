@@ -33,7 +33,7 @@
  * Parse an .af ArrayBuffer.
  * Returns a font object suitable for afMeasure / afRender / afPreview.
  */
-function afParse(arrayBuffer) {
+export function afParse(arrayBuffer) {
   const dv = new DataView(arrayBuffer);
   let off   = 0;
 
@@ -146,7 +146,7 @@ function afRender(font, ctx, text, x, y, size, color = '#ffffff') {
  *   lineGap  (default 8)  — extra gap between lines
  *   lines    — array of sample strings
  */
-function afPreview(font, options = {}) {
+export function afPreview(font, options = {}) {
   const size    = options.size    ?? 36;
   const bg      = options.bg      ?? '#16161e';
   const fg      = options.fg      ?? '#f0e8d8';

@@ -1,7 +1,7 @@
 /* -- 3D badge display ------------------------------------------------------ */
-const _badge3dBase = new URL('.', document.currentScript.src).href;
+const _badge3dBase = new URL('.', import.meta.url).href;
 
-function initBadge3D(simulator, appendOut) {
+export function initBadge3D(simulator, appendOut) {
   let three = null, screenMesh = null, screenTex = null;
   let screenLive = false;   // true while the live simulator is driving the screen
   let rotateView = () => {};  // assigned once the scene is ready (spin in 180° steps)

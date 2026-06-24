@@ -205,21 +205,16 @@ function createFileBrowser(host) {
   document.addEventListener('click',       e => { if (!e.target.closest('#file-ctx-menu')) hideCtxMenu(); }, true);
   document.addEventListener('contextmenu', e => { if (!e.target.closest('#file-ctx-menu')) hideCtxMenu(); }, true);
 
-  menu.addEventListener('click', (e) => {
-    const item = e.target.closest('[data-action]');
-    if (!item || !ctxTarget) return;
-    const { path, isDir } = ctxTarget;
-    const here = isDir ? path : path.slice(0, path.lastIndexOf('/'));   // dir to create into
-    hideCtxMenu();
-
-    const actions = {
-      open:           () => host.openFile(path, { transient: false }),
-      rename:         () => renamePath(path, isDir),
-      delete:         () => deleteUserPath(path, isDir),
-      'new-here':     () => createUserFile(here + '/'),
-      'new-dir-here': () => createUserDirAt(here),
-    };
-    actions[item.dataset.action]?.();
+  // Each action runs against the target captured when the menu opened, then
+  // dismisses it. hideCtxMenu() clears ctxTarget, so snapshot it first.
+  const dirOf = (t) => (t.isDir ? t.path : t.path.slice(0, t.path.lastIndexOf('/')));   // dir to create into
+  const onTarget = (fn) => () => { if (!ctxTarget) return; const t = ctxTarget; hideCtxMenu(); fn(t); };
+  delegate(menu, {
+    open:           onTarget((t) => host.openFile(t.path, { transient: false })),
+    rename:         onTarget((t) => renamePath(t.path, t.isDir)),
+    delete:         onTarget((t) => deleteUserPath(t.path, t.isDir)),
+    'new-here':     onTarget((t) => createUserFile(dirOf(t) + '/')),
+    'new-dir-here': onTarget((t) => createUserDirAt(dirOf(t))),
   });
 
   /* -- FS operations (mutate userFS, then tell the host about open tabs) ----*/
@@ -285,14 +280,10 @@ function createFileBrowser(host) {
   /* -- Toolbar -------------------------------------------------------------
      New file / folder / upload — same data-action dispatch, scoped to the user
      section's header (the tree below has its own delete data-action). */
-  const toolbarActions = {
+  delegate(document.querySelector('#fp-user h2'), {
     'new-file': () => host.newScratch(),
     'new-dir':  () => createUserDirAt(''),
     'upload':   () => document.getElementById('fp-upload-input').click(),
-  };
-  document.querySelector('#fp-user h2').addEventListener('click', (e) => {
-    const action = e.target.closest('[data-action]')?.dataset.action;
-    if (action && toolbarActions[action]) toolbarActions[action]();
   });
 
   document.getElementById('fp-upload-input').addEventListener('change', async (e) => {

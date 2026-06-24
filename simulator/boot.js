@@ -139,12 +139,12 @@ function bootSimulator() {
     };
 
     /* -- Command dispatch ------------------------------------------------------
-       Buttons carry data-action; one delegated handler routes them via this map.
-       Document-level is safe: these action names are disjoint from the file
-       browser's (open/rename/delete/…), and the handler ignores any it doesn't
-       own — so file-browser clicks fall through untouched. Going broad lets the
-       run/stop controls live wherever they need to (toolbar, side panel, the
-       floating mobile bar). Spins are 180° steps. */
+       Buttons carry data-action; delegate() routes them via this map. Document-
+       level is safe: these action names are disjoint from the file browser's
+       (open/rename/delete/…), and unknown actions are ignored — so file-browser
+       clicks fall through untouched. Going broad lets the run/stop controls live
+       wherever they need to (toolbar, side panel, the floating mobile bar). Spins
+       are 180° steps. app.js extends this map via addActions() (e.g. "gallery"). */
     const actions = {
       run,
       stop:        stopProgram,
@@ -153,10 +153,7 @@ function bootSimulator() {
       'spin-next': () => rotateView(+1),
       clear:       () => { stdoutEl.innerHTML = ''; },
     };
-    document.addEventListener('click', (e) => {
-      const action = e.target.closest('[data-action]')?.dataset.action;
-      if (action && actions[action]) actions[action]();
-    });
+    delegate(document, actions);   // shared dispatcher — see simulator/dom.js
 
     // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
     // file to run + open in the editor; otherwise the system boot script (which

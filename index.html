@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Badgeware">
+  <meta name="theme-color" content="#0a141e">
   <title>Badgeware Simulator</title>
   <script type="importmap">
   {
@@ -24,6 +29,7 @@
   <button data-action="run" title="Run (F5)"><span class="material-icons">play_arrow</span>Run</button>
   <button data-action="stop" title="Stop" disabled><span class="material-icons">stop</span>Stop</button>
   <button data-action="gallery" title="Example gallery"><span class="material-icons">grid_view</span>Examples</button>
+  <button data-action="run-os" title="Run badgeOS"><span class="material-icons">memory</span>badgeOS</button>
   <output id="status"></output>
 </div>
 
@@ -63,7 +69,7 @@
     <button data-action="delete">Delete</button>
   </div>
 
-  <div data-drag-target="file-panel" data-drag-orientation="vertical" data-drag-min="100" data-drag-max="450"></div>
+  <div data-drag-target="file-panel" data-drag-orientation="vertical" data-drag-min="160" data-drag-max="450"></div>
 
   <main id="editor-panel">
     <nav id="tab-bar" aria-label="Open files"></nav>
@@ -88,6 +94,11 @@
         <button data-action="spin-prev" title="Spin left"><span class="material-icons">chevron_left</span></button>
         <button data-action="spin-next" title="Spin right"><span class="material-icons">chevron_right</span></button>
       </nav>
+      <!-- Floating run/stop, mobile only (the toolbar is dropped there) -->
+      <div id="mobile-run">
+        <button data-action="run" title="Run" aria-label="Run"><span class="material-icons">play_arrow</span></button>
+        <button data-action="stop" title="Stop" aria-label="Stop" disabled><span class="material-icons">stop</span></button>
+      </div>
     </figure>
 
     <section id="stdout">
@@ -102,9 +113,10 @@
 </div>
 
 <nav id="mobile-nav" aria-label="View">
-  <button data-tab="files">Files</button>
-  <button data-tab="code">Code</button>
-  <button data-tab="output">Output</button>
+  <button data-tab="gallery" title="Examples" aria-label="Examples"><span class="material-icons">grid_view</span></button>
+  <button data-tab="files"   title="Files"    aria-label="Files"><span class="material-icons">folder</span></button>
+  <button data-tab="code"    title="Code"     aria-label="Code"><span class="material-icons">code</span></button>
+  <button data-tab="output"  title="Output"   aria-label="Output"><span class="material-icons">terminal</span></button>
 </nav>
 
 <script src="simulator/badgeware.js"></script>

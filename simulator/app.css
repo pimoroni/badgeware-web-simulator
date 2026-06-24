@@ -24,8 +24,12 @@
       font-weight: 300;
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      height: 100dvh;        /* live viewport — resizes with the soft keyboard / Safari chrome */
       overflow: hidden;
+      /* Keep content out of the notch / status bar / home indicator. dvh handles
+         the keyboard resize; these handle the unsafe edges (needs viewport-fit=cover). */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
 
     /* -- Toolbar --------------------------------------------------- */
@@ -81,8 +85,9 @@
       filter: none;
     }
 
-    /* "Examples" is a navigation button, not a primary action — secondary look. */
-    #toolbar button[data-action="gallery"] {
+    /* "Examples" / "badgeOS" are navigation, not the primary action — secondary look. */
+    #toolbar button[data-action="gallery"],
+    #toolbar button[data-action="run-os"] {
       background: var(--panel);
       color: var(--white);
       font-weight: 400;
@@ -459,7 +464,7 @@
       align-items: center;
       flex-shrink: 0;
     }
-    #file-panel h2 { padding: 5px 8px 4px; gap: 2px; }
+    #file-panel h2 { padding: 5px 8px 4px; gap: 2px; min-height: 37px; } /* min-height lines up the user/system files headings in mobile view */
     #file-panel h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
     #file-panel h2 .material-icons { font-size: 0.8125rem; }   /* System lock glyph */
 
@@ -638,97 +643,110 @@
     #fp-user-list ul, #fp-sys-tree ul { list-style: none; }   /* tree = nested lists */
     .dir-children { padding-left: 10px; }                     /* indent each level */
 
-    /* -- Mobile nav (hidden on desktop) --------------------------- */
-    #mobile-nav { display: none; }
+    /* -- Mobile-only chrome (hidden on desktop) ------------------- */
+    #mobile-nav, #mobile-run { display: none; }
 
     /* -- Mobile layout --------------------------------------------- */
     @media (max-width: 767px) {
 
-      /* Main: stack vertically */
-      #main {
-        flex-direction: column;
-        overflow: hidden;
+      /* No way to turn this off in monaco editor and I have to press and hold to keep the keyboard open!? */
+      .monaco-editor .iPadShowKeyboard {
+          display: none !important;
       }
 
-      /* Side panel: badge-only strip at the top */
+      /* Drop the desktop toolbar; run/stop float on the badge instead. */
+      #toolbar { display: none; }
+
+      /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
+      #mobile-nav { order: -2; }
+
+      /* Main: stack vertically */
+      #main { flex-direction: column; overflow: hidden; }
+
+      /* Badge strip: always visible at the top of the content. */
       #side-panel {
         order: -1;
-        width: 100%;
+        width: 100% !important;
         flex-shrink: 0;
         border-left: none;
-        border-bottom: 1px solid var(--border);
         overflow: visible;  /* keep 3D canvas visible */
       }
-
-      /* Reset the desktop spill margins so badge stays inside its strip */
-      #badge-3d-wrap {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-        transition: none;
+      /* This border wrangling is a hack for the fact stdout is *in* the side panel */
+      #side-panel, #gallery, #editor-panel, #file-panel {
+        border-bottom: 1px solid var(--border);
       }
+      #stdout {
+        border-top: 1px solid var(--border);
+      }
+      #badge-3d-wrap { margin-top: 0 !important; margin-bottom: 0 !important; transition: none; }
 
-      /* stdout hidden unless Output tab active */
+      /* Floating run/stop in the badge's top-right (#simulator is positioned). */
+      #mobile-run {
+        display: flex;
+        gap: 6px;
+        position: absolute;
+        top: 6px; right: 6px;
+        z-index: 8;
+      }
+      #mobile-run button {
+        width: 2.2rem; height: 2.2rem;
+        display: flex; align-items: center; justify-content: center;
+        border: none; border-radius: 0.5rem; cursor: pointer;
+        background: var(--orange); color: rgb(10, 20, 30);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      }
+      #mobile-run button .material-icons { font-size: 1.375rem; }
+      #mobile-run button[data-action="stop"] { background: rgb(220, 70, 60); color: rgb(250, 240, 240); }
+      #mobile-run button:disabled { background: var(--panel); color: rgb(120, 124, 132); box-shadow: none; }
+
+      /* stdout hidden unless Output tab; the tab is its title, so drop the header. */
       #stdout { display: none; }
+      #stdout h2 { display: none; }
 
-      /* File panel: full-width, hidden until Files tab */
+      /* File panel: full-width, User + System side by side. */
       #file-panel {
         display: none;
-        width: 100%;
+        flex-direction: row;
+        width: 100% !important;
         flex: 1;
         min-height: 0;
         border-right: none;
       }
+      #fp-user, #fp-sys { flex: 1; height: auto !important; min-height: 0; }
+      #fp-user { border-right: 1px solid var(--border); }
 
-      /* Editor panel: full-width, hidden until Code tab */
-      #editor-panel {
-        display: none;
-        width: 100%;
-        flex: 1;
-        min-height: 0;
-      }
+      /* Editor panel (also hosts the gallery): full-width */
+      #editor-panel { display: none; width: 100%; flex: 1; min-height: 0; }
 
-      /* Hide the panel-width resize handles (the vertical bars) */
-      [data-drag-orientation="vertical"] { display: none; }
+      /* Hide every resize handle (panel widths + the user/system split). */
+      [data-drag-target] { display: none; }
 
       /* -- Per-tab visibility ------------------------------------ */
-      body[data-mobile-tab="files"]  #file-panel   { display: flex; }
-      body[data-mobile-tab="code"]   #editor-panel { display: flex; }
+      body[data-mobile-tab="files"]   #file-panel   { display: flex; }
+      body[data-mobile-tab="gallery"] #editor-panel,
+      body[data-mobile-tab="code"]    #editor-panel { display: flex; }
+      body[data-mobile-tab="output"]  #side-panel   { flex: 1; overflow: hidden; }
+      body[data-mobile-tab="output"]  #stdout       { display: flex; }
 
-      /* Output tab: side-panel grows to fill, stdout revealed */
-      body[data-mobile-tab="output"] #side-panel   { flex: 1; overflow: hidden; }
-      body[data-mobile-tab="output"] #stdout  { display: flex; }
-
-      /* -- Mobile nav -------------------------------------------- */
+      /* -- Mobile nav (icon tabs, at the top) -------------------- */
       #mobile-nav {
         display: flex;
         flex-shrink: 0;
         background: rgba(6, 14, 22, 0.95);
-        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
         backdrop-filter: blur(1rem);
-        /* Safe area for iOS home bar */
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        /* The notch/status-bar inset is handled once on <body> (padding-top:
+           env(safe-area-inset-top)), which pushes this whole column — nav
+           included — clear of the unsafe area. No per-nav inset needed. */
       }
-
       #mobile-nav button {
         flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 10px 0;
-        background: none;
-        border: none;
-        border-top: 2px solid transparent;
-        color: var(--dim);
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 0.6875rem;
-        font-weight: 400;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        touch-action: manipulation;
-        transition: color 0.15s;
-        user-select: none;
+        display: flex; align-items: center; justify-content: center;
+        padding: 9px 0;
+        background: none; border: none; border-bottom: 2px solid transparent;
+        color: var(--dim); cursor: pointer;
+        touch-action: manipulation; transition: color 0.15s; user-select: none;
       }
-      #mobile-nav button:hover  { color: var(--faint); }
-      #mobile-nav button.active { color: var(--orange); border-top-color: var(--orange); }
+      #mobile-nav button .material-icons { font-size: 1.375rem; }
+      #mobile-nav button.active { color: var(--orange); border-bottom-color: var(--orange); }
     }

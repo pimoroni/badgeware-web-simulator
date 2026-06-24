@@ -9,6 +9,35 @@ async function initApp() {
   const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, addActions } = await bootSimulator();
   const statusEl   = document.getElementById('status');    // save / read-only messages
   const galleryEl  = document.getElementById('gallery');   // example gallery (home view)
+  const tabBarEl   = document.getElementById('tab-bar');   // hidden while the gallery is up
+
+  /* -- Mobile tabs ----------------------------------------------------------
+     On mobile the panels stack and a top icon bar switches between Gallery /
+     Files / Code / Output. selectMobilePanel() flips the visible panel + nav
+     highlight; setMobileTab() (a nav click) also flips the editor's sub-view.
+     focusTab() and showGallery() call selectMobilePanel(), so opening a file or
+     example automatically jumps to the Code view. No-ops harmlessly on desktop. */
+  const mobileNav = document.getElementById('mobile-nav');
+  const isMobile  = () => matchMedia('(max-width: 767px)').matches;
+  function selectMobilePanel(tab) {
+    document.body.dataset.mobileTab = tab;
+    mobileNav.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    if (tab === 'code' && isMobile()) requestAnimationFrame(() => editor.layout());
+  }
+  function setMobileTab(tab) {
+    if (tab === 'gallery') return showGallery();
+    if (tab === 'code') {
+      if (currentTabKey)         focusTab(currentTabKey);
+      else if (openOrder.length) focusTab(openOrder[openOrder.length - 1]);   // last open file
+      else                       newUntitled();   // nothing open → a fresh transient buffer
+      return;
+    }
+    selectMobilePanel(tab);   // files / output
+  }
+  mobileNav.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-tab]');
+    if (btn) setMobileTab(btn.dataset.tab);
+  });
 
   configureMonaco(monaco);
 
@@ -199,10 +228,12 @@ async function initApp() {
   function showGallery() {
     document.getElementById('editor').style.display = 'none';
     document.getElementById('img-preview').style.display = 'none';
+    tabBarEl.style.display = 'none';     // no open-file tabs while browsing examples
     galleryEl.style.display = 'block';   // '' would fall back to the CSS display:none
     currentTabKey = null; currentFilePath = null; currentReadOnly = false;
     renderTabs();      // clear the active-tab highlight
     fb.markActive();
+    selectMobilePanel('gallery');
   }
   addActions({ gallery: showGallery });   // wire the toolbar "Examples" button
 
@@ -339,6 +370,7 @@ async function initApp() {
     const editorEl  = document.getElementById('editor');
     const imgEl     = document.getElementById('img-preview');
     galleryEl.style.display = 'none';   // focusing a tab leaves the gallery
+    tabBarEl.style.display  = '';       // restore the tab bar
 
     if (info.imgUrl) {
       editorEl.style.display  = 'none';
@@ -364,6 +396,7 @@ async function initApp() {
 
     fb.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
     renderTabs();
+    selectMobilePanel('code');   // on mobile, focusing a tab jumps to the Code view
   }
 
   function closeTab(key) {
@@ -416,6 +449,14 @@ async function initApp() {
     if (transient) transientTabKey = key;
     focusTab(key);   // sets editor/model/currentTabKey, hides the gallery, renders
     return key;
+  }
+
+  // A fresh transient "untitled.py" scratch (name de-duped against open scratches).
+  // The default when the Code tab is opened with nothing else to show.
+  function newUntitled() {
+    let name = 'untitled.py';
+    for (let n = 1; openModels.has('scratch:' + name); n++) name = `untitled-${n}.py`;
+    openScratchTab(name, '', { transient: true });
   }
 
   function saveCurrentFile() {
@@ -614,23 +655,6 @@ async function initApp() {
   fb.refresh();
 
   initResizeHandlers();
-
-  /* -- Mobile tab switching ---------------------------------------- */
-  {
-    const mobileNav = document.getElementById('mobile-nav');
-    const setMobileTab = (tab) => {
-      document.body.dataset.mobileTab = tab;
-      mobileNav.querySelectorAll('[data-tab]').forEach(b =>
-        b.classList.toggle('active', b.dataset.tab === tab)
-      );
-      if (tab === 'code') requestAnimationFrame(() => editor.layout());
-    };
-    setMobileTab('code');
-    mobileNav.addEventListener('click', e => {
-      const btn = e.target.closest('[data-tab]');
-      if (btn) setMobileTab(btn.dataset.tab);
-    });
-  }
 
   // No auto-run here: bootSimulator() already started main.py in parallel with
   // Monaco loading. The editor is now wired to that running simulator.

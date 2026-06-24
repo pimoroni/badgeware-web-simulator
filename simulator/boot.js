@@ -19,7 +19,7 @@ function bootSimulator() {
     await userFS.ready;   // populate the in-memory FS cache before any read below
     const stdoutEl = document.querySelector('#stdout > div');   // the scrolling log inside the view
     const statusEl = document.getElementById('status');
-    const stopBtn  = document.querySelector('[data-action="stop"]');
+    const stopBtns = document.querySelectorAll('[data-action="stop"]');   // toolbar + floating mobile
 
     const appendOut = (text, cls) => {
       const span = document.createElement('span');
@@ -34,7 +34,7 @@ function bootSimulator() {
 
     /* Run / Stop state (the Stop button is meaningful only while running). */
     let isRunning = false;
-    const setRunning = (running) => { isRunning = running; stopBtn.disabled = !running; };
+    const setRunning = (running) => { isRunning = running; stopBtns.forEach((b) => { b.disabled = !running; }); };
     const onSimulatorStopped = () => {
       if (!isRunning) return;
       setRunning(false);
@@ -113,23 +113,31 @@ function bootSimulator() {
     };
 
     /* -- Command dispatch ------------------------------------------------------
-       Buttons carry data-action; a delegated handler routes them via this map
-       (same pattern as the file browser's context menu and toolbar). Scoped to
-       the simulator's own surfaces — the toolbar and the side panel — so it never
-       clashes with the file browser's data-action items. Spins are 180° steps. */
+       Buttons carry data-action; one delegated handler routes them via this map.
+       Document-level is safe: these action names are disjoint from the file
+       browser's (open/rename/delete/…), and the handler ignores any it doesn't
+       own — so file-browser clicks fall through untouched. Going broad lets the
+       run/stop controls live wherever they need to (toolbar, side panel, the
+       floating mobile bar). Spins are 180° steps. */
     const actions = {
       run,
       stop:        stopProgram,
+      // Relaunch the badge OS (the menu). Fetched fresh rather than reusing
+      // defaultCode, which may be a deep-linked file when ?file= is set.
+      'run-os':    async () => {
+        const code = await fetch(BOOT_BASE + 'filesystem/system/main.py')
+          .then(r => r.ok ? r.text() : null).catch(() => null);
+        if (code != null) runProgram(code, { status: 'badgeOS' });
+        else appendOut('✕ Could not load badgeOS', 'out-error');
+      },
       'spin-prev': () => rotateView(-1),
       'spin-next': () => rotateView(+1),
       clear:       () => { stdoutEl.innerHTML = ''; },
     };
-    const dispatch = (e) => {
+    document.addEventListener('click', (e) => {
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (action && actions[action]) actions[action]();
-    };
-    document.getElementById('toolbar').addEventListener('click', dispatch);
-    document.getElementById('side-panel').addEventListener('click', dispatch);
+    });
 
     // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
     // file to run + open in the editor; otherwise the system boot script (which

@@ -30,14 +30,14 @@ const sessionStore = (() => {
   return { load: () => kv.get('editor'), save: (value) => kv.set('editor', value) };
 })();
 
-/* deps: { editor, runProgram, notifyRunTarget, selectMobilePanel } — things tabs
-   can't import or query itself. The file browser is wired in later via connect(),
-   since tabs and the browser are mutually dependent. */
-export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePanel }) {
+/* deps: { editor, notifyRunTarget, selectMobilePanel } — things tabs can't import
+   or query itself. The file browser is wired in later via connect(), since tabs
+   and the browser are mutually dependent. */
+export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
   const statusEl  = document.getElementById('status');    // save / read-only messages
   const galleryEl = document.getElementById('gallery');   // example gallery (home view)
   const tabBarEl  = document.getElementById('tab-bar');   // hidden while the gallery is up
-  let fb = null;   // file browser, late-bound (markActive / refresh); see connect()
+  let fb = null;   // file browser, late-bound (syncRows / refresh); see connect()
 
   let currentTabKey   = null;   // id of the active tab, or null when the gallery is up
   let transientTabKey = null;   // id of the one transient (preview) tab, if any
@@ -47,6 +47,10 @@ export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePa
   /* -- Tab helpers ----------------------------------------------------------- */
   const baseName   = (p) => p.slice(p.lastIndexOf('/') + 1);
   const activeTab  = () => (currentTabKey ? openModels.get(currentTabKey) ?? null : null);
+  // File-tree decoration sources (the file browser pulls these in syncRows). Only
+  // file-backed tabs have a path; scratch buffers don't and aren't represented.
+  const openPaths     = () => new Set([...openModels.values()].filter((t) => t.path).map((t) => t.path));
+  const transientPath = () => (transientTabKey ? openModels.get(transientTabKey)?.path ?? null : null);
   // Read-only = system files and image previews; editable = user text files + scratch.
   const isReadOnly = (t) => t.source === 'sys' || t.view === 'image';
   // The opaque id for a record. The string scheme is unchanged (so Monaco URIs and
@@ -243,6 +247,7 @@ export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePa
       list.appendChild(tab);
     }
     bar.replaceChildren(list);
+    fb?.syncRows();   // project active/open/transient onto the file tree (cheap toggles)
   }
 
   function focusTab(key) {
@@ -270,8 +275,7 @@ export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePa
       editor.updateOptions({ readOnly: isReadOnly(t) });
     }
 
-    fb?.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
-    renderTabs();
+    renderTabs();                // also syncs the file-tree row decorations (fb.syncRows)
     saveSession();               // active tab changed (also covers every open*, which ends here)
     notifyRunTarget(key);        // Run targets this tab now → reload-vs-play icon
     selectMobilePanel('code');   // on mobile, focusing a tab jumps to the Code view
@@ -485,9 +489,8 @@ export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePa
   function showGallery() {
     applyView('gallery');
     currentTabKey = null;
-    renderTabs();      // clear the active-tab highlight
+    renderTabs();      // clears the active highlight + syncs row decorations (fb.syncRows)
     saveSession();     // active view changed (→ gallery)
-    fb?.markActive();
     notifyRunTarget(null);   // Run would launch the OS now (no active tab)
     selectMobilePanel('gallery');
   }
@@ -591,11 +594,14 @@ export function createTabs({ editor, runProgram, notifyRunTarget, selectMobilePa
 
   return {
     // File-browser host callbacks (app.js passes these to createFileBrowser):
-    activePath: () => { const t = activeTab(); return t && t.source === 'user' && t.view === 'editor' ? t.path : null; },
+    // The active file's path (any source/view), or null for scratch/gallery — so the
+    // highlight composes with open/transient on whichever tree the file lives in.
+    activePath: () => activeTab()?.path ?? null,
+    openPaths, transientPath,
     isTextFile: (p) => FILE_HANDLERS[p.slice(p.lastIndexOf('.')).toLowerCase()]?.kind === 'text',
     openFile:   (path, { transient = false, system = false } = {}) => (system ? openSysFile(path, transient) : openUserFile(path, transient)),
     newScratch, onRenamed, onDeleted,
-    // Late-bind the file browser (markActive / refresh) once it exists.
+    // Late-bind the file browser (syncRows / refresh) once it exists.
     connect: (filebrowser) => { fb = filebrowser; },
     // App-facing operations:
     showGallery, openScratchTab, saveCurrentFile, focusCodeOrNew, bootstrap,

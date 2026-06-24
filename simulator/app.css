@@ -585,6 +585,10 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* A file with an open tab reads bolder; a transient (preview) tab is italic.
+       These compose with .active's highlight — an active open file is both. */
+    .tree-row.open .row-name      { font-weight: 400; }
+    .tree-row.transient .row-name { font-style: italic; }
 
     .tree-row .row-badge {
       font-size: 0.5625rem;

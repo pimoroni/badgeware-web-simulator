@@ -9,11 +9,14 @@
      host.openFile(path, { transient, system })  — host opens it (model/tab/preview)
      host.onRenamed(old, new)  — host re-keys any open tab for that path
      host.onDeleted(path)      — host closes any open tab for that path
-     host.activePath()         — path of the focused user file (for row highlight)
+     host.activePath()         — path of the focused user file (highlight)
+     host.openPaths()          — Set of paths with an open tab (bolder row)
+     host.transientPath()      — path of the transient/preview tab, or null (italic)
      host.isTextFile(path)     — bool, used to pick text vs binary on upload
 
-   Returns { refresh(opts) } — call after anything changes the file set; pass
-   { rebuildSystem: true } to rebuild the (otherwise build-once) system tree.
+   Returns { refresh(opts), syncRows() } — refresh after the file SET changes
+   (pass { rebuildSystem: true } to rebuild the build-once system tree); syncRows
+   after a TAB change to re-decorate rows without a rebuild.
 
    Rendering is template-string + event delegation: each tree is one innerHTML
    build, and one delegated listener per container reads data-path / data-action. */
@@ -113,18 +116,24 @@ export function createFileBrowser(host) {
       sysBuilt = true;
       sysTree.innerHTML = `<ul class="tree">${nodeToHtml(buildDirTree(host.getSystemPaths()), '', false)}</ul>`;
     }
-    markActive();
+    syncRows();   // re-apply active/open/transient decorations after the rebuild
   }
 
-  // Sync the active-row highlight on both trees without a rebuild. focusTab uses
-  // this instead of refresh() so a click doesn't replace the row mid-double-click
-  // (which would swallow the dblclick) and keyboard focus is preserved.
-  function markActive() {
-    const active = host.activePath();
-    for (const el of userList.querySelectorAll('.tree-row'))
-      el.classList.toggle('active', el.dataset.path === active);
-    for (const el of sysTree.querySelectorAll('.tree-row'))
-      el.classList.toggle('active', el.dataset.path === active);
+  // Project tab state onto the row decorations — active (highlight), open (bolder)
+  // and transient (italic preview) — on both trees, via class toggles only (no
+  // rebuild). tabs.js calls this on every tab change instead of refresh() so a
+  // click can't replace a row mid-double-click (which would swallow the dblclick)
+  // and keyboard focus is preserved.
+  function syncRows() {
+    const active    = host.activePath();
+    const open      = host.openPaths();
+    const transient = host.transientPath();
+    for (const el of [...userList.querySelectorAll('.tree-row'), ...sysTree.querySelectorAll('.tree-row')]) {
+      const p = el.dataset.path;
+      el.classList.toggle('active',    p === active);
+      el.classList.toggle('open',      open.has(p));
+      el.classList.toggle('transient', p === transient);
+    }
   }
 
   /* -- Tree interaction (delegated) ----------------------------------------
@@ -302,5 +311,5 @@ export function createFileBrowser(host) {
     e.target.value = '';
   });
 
-  return { refresh, markActive };
+  return { refresh, syncRows };
 }

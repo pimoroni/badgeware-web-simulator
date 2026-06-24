@@ -36,7 +36,7 @@ async function initApp() {
   }
 
   // The tab/model system owns all tab state; we hand it the editor + boot seams.
-  const tabs = createTabs({ editor, runProgram, notifyRunTarget, selectMobilePanel });
+  const tabs = createTabs({ editor, notifyRunTarget, selectMobilePanel });
 
   function setMobileTab(tab) {
     if (tab === 'gallery') return tabs.showGallery();
@@ -51,11 +51,13 @@ async function initApp() {
   /* -- File browser (left panel) ---------------------------------------------
      The panel (trees, context menu, FS ops) lives in filebrowser.js; tabs.js owns
      the Monaco models/tabs. Both are handed seams so neither touches the other's
-     internals; tabs.connect(fb) closes the loop (it needs fb.markActive/refresh). */
+     internals; tabs.connect(fb) closes the loop (it needs fb.syncRows/refresh). */
   const fb = createFileBrowser({
     userFS,
     getSystemPaths,            // imported accessor (fs.js) → current system file list
     activePath: tabs.activePath,
+    openPaths:  tabs.openPaths,
+    transientPath: tabs.transientPath,
     isTextFile: tabs.isTextFile,
     openFile:   tabs.openFile,
     newScratch: tabs.newScratch,

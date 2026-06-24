@@ -47,6 +47,18 @@
       z-index: 1;
     }
 
+    /* badgewa.re wordmark (inlined, so it inherits a fill from CSS rather than
+       baking a colour). Links to the brand site in a new tab so the editor session
+       isn't lost. A touch of right margin sets it apart from the run controls. */
+    #toolbar .brand {
+      display: flex;
+      align-items: center;
+      margin-right: 4px;
+      transition: opacity 0.15s;
+    }
+    #toolbar .brand:hover { opacity: 0.75; }
+    #toolbar .brand svg { height: 1.15rem; width: auto; display: block; fill: var(--white); }
+
     /* Material Symbols Outlined (Google): the family + ligature setup come from
        Google's served rule; here we inherit the surrounding size (sized per use
        below) and set the variable axes. FILL 0 = outlined (the default look);

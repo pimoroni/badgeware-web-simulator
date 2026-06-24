@@ -90,13 +90,42 @@ async function initApp() {
     parameterHints: { enabled: true },
   });
 
-  /* -- File / model state (needed early so model functions can reference them) */
-  let currentFilePath = null;   // FS path when a user file is active, otherwise null
-  let currentReadOnly = false;
-  let currentTabKey   = null;   // key into openModels for the active tab
-  let transientTabKey = null;   // key of the one transient (preview) tab, if any
-  const openModels    = new Map();  // tabKey → { model, dirty, readOnly, transient, label? }
-  const openOrder     = [];         // ordered list of open tabKeys
+  /* -- File / model state (needed early so model functions can reference them) --
+     Each open tab is a record in openModels, keyed by an opaque string id:
+       { source: 'user'|'sys'|'scratch',   // where its content lives
+         view:   'editor'|'image',         // which pane renders it
+         path,                             // FS path (null for scratch)
+         name,                             // display label
+         model,                            // Monaco model (null for image tabs)
+         imgUrl, dimText,                  // image tabs only
+         dirty, transient }
+     `source` and `view` are orthogonal (binary-vs-text is a rendering concern;
+     user/sys/scratch is a source concern). Read-only-ness is derived, not stored. */
+  let currentTabKey   = null;   // id of the active tab, or null when the gallery is up
+  let transientTabKey = null;   // id of the one transient (preview) tab, if any
+  const openModels    = new Map();  // id → tab record (see above)
+  const openOrder     = [];         // ordered list of ids
+
+  /* -- Tab helpers ----------------------------------------------------------- */
+  const baseName   = (p) => p.slice(p.lastIndexOf('/') + 1);
+  const activeTab  = () => (currentTabKey ? openModels.get(currentTabKey) ?? null : null);
+  // Read-only = system files and image previews; editable = user text files + scratch.
+  const isReadOnly = (t) => t.source === 'sys' || t.view === 'image';
+  // The opaque id for a record. The string scheme is unchanged (so Monaco URIs and
+  // traceback-marker matching keep working) — it just lives in ONE place now.
+  const binPrefix  = (path) => FILE_HANDLERS[path.slice(path.lastIndexOf('.')).toLowerCase()]?.keyPrefix ?? 'img';
+  function tabKey({ source, view, path, name }) {
+    if (source === 'scratch') return 'scratch:' + name;
+    const sys = source === 'sys' ? 'sys:' : '';
+    return view === 'image' ? binPrefix(path) + ':' + sys + path : sys + path;
+  }
+  // Single owner of the editor-area view switch: 'gallery' | 'editor' | 'image'.
+  function applyView(view) {
+    document.getElementById('editor').style.display      = view === 'editor' ? '' : 'none';
+    document.getElementById('img-preview').style.display = view === 'image'  ? 'flex' : 'none';
+    galleryEl.style.display = view === 'gallery' ? 'block' : 'none';
+    tabBarEl.style.display  = view === 'gallery' ? 'none'  : '';
+  }
 
   /* -- Session persistence (open tabs + active tab → IndexedDB) ---------------
      Reopens the workspace on reload. User/system files are recorded by path —
@@ -108,24 +137,15 @@ async function initApp() {
   let restoring    = true;       // stays true through bootstrap (see end of initApp)
   let sessionTimer = null;
 
+  // A tab record → its restorable form. Scratch carries its text (model-only);
+  // user/sys reopen from their path. No key parsing — the record already has it all.
   function serializeTab(key) {
-    const info = openModels.get(key);
-    if (!info) return null;
-    if (key.startsWith('scratch:')) {
-      return { kind: 'scratch', name: key.slice('scratch:'.length),
-               content: info.model ? info.model.getValue() : '', transient: !!info.transient };
+    const t = openModels.get(key);
+    if (!t) return null;
+    if (t.source === 'scratch') {
+      return { source: 'scratch', name: t.name, content: t.model ? t.model.getValue() : '', transient: !!t.transient };
     }
-    // Everything else reopens from its FS path; record path + system flag.
-    // Keys: '/path' (user text) · 'sys:/path' (system text) · 'PREFIX:[sys:]/path' (binary/preview).
-    let system = false, path;
-    if      (key.startsWith('/'))    { path = key; }
-    else if (key.startsWith('sys:')) { system = true; path = key.slice(4); }
-    else {
-      let rest = key.slice(key.indexOf(':') + 1);
-      if (rest.startsWith('sys:')) { system = true; rest = rest.slice(4); }
-      path = rest;
-    }
-    return { kind: 'file', path, system, transient: !!info.transient };
+    return { source: t.source, path: t.path, transient: !!t.transient };
   }
 
   const snapshotSession = () => ({ tabs: openOrder.map(serializeTab).filter(Boolean), active: currentTabKey });
@@ -142,9 +162,9 @@ async function initApp() {
     const saved = await sessionStore.load();
     if (!saved || !Array.isArray(saved.tabs) || saved.tabs.length === 0) return null;
     for (const t of saved.tabs) {
-      if      (t.kind === 'scratch') openScratchTab(t.name, t.content || '', { transient: t.transient });
-      else if (t.system)             await openSysFile(t.path, t.transient);
-      else                           openUserFile(t.path, t.transient);   // skips silently if the file is gone
+      if      (t.source === 'scratch') openScratchTab(t.name, t.content || '', { transient: t.transient });
+      else if (t.source === 'sys')     await openSysFile(t.path, t.transient);
+      else                             openUserFile(t.path, t.transient);   // skips silently if the file is gone
     }
     return saved;   // { tabs, active } — the caller restores the active view
   }
@@ -155,7 +175,7 @@ async function initApp() {
   const fb = createFileBrowser({
     userFS,
     getSystemPaths: () => systemPaths,
-    activePath:     () => currentFilePath,
+    activePath:     () => { const t = activeTab(); return t && t.source === 'user' && t.view === 'editor' ? t.path : null; },
     isTextFile:     (p) => FILE_HANDLERS[p.slice(p.lastIndexOf('.')).toLowerCase()]?.kind === 'text',
     openFile: (path, { transient = false, system = false } = {}) =>
       system ? openSysFile(path, transient) : openUserFile(path, transient),
@@ -168,27 +188,30 @@ async function initApp() {
     onRenamed: (oldPath, newPath) => {
       // Re-point a queued write so unsaved edits follow the file to its new path.
       if (pendingSave && pendingSave.path === oldPath) pendingSave.path = newPath;
-      if (!openModels.has(oldPath)) return;
-      const info = openModels.get(oldPath);
+      if (!openModels.has(oldPath)) return;   // only user text tabs are keyed by bare path
+      const t = openModels.get(oldPath);
       openModels.delete(oldPath);
       openOrder.splice(openOrder.indexOf(oldPath), 1, newPath);
-      openModels.set(newPath, info);
-      if (currentTabKey === oldPath) { currentTabKey = newPath; currentFilePath = newPath; }
+      t.path = newPath; t.name = baseName(newPath);   // keep the record in step with its new path
+      openModels.set(newPath, t);
+      if (currentTabKey === oldPath) currentTabKey = newPath;
       renderTabs();
     },
     onDeleted: (path) => {
       dropPendingSave(path);
-      for (const tabKey of [path, 'img:' + path]) {
-        if (!openModels.has(tabKey)) continue;
-        if (currentTabKey === tabKey) {
-          openModels.get(tabKey).dirty = false;
-          closeTab(tabKey);
+      // A deleted file may be open as a text tab and/or an image/preview tab.
+      for (const k of [tabKey({ source: 'user', view: 'editor', path }),
+                       tabKey({ source: 'user', view: 'image',  path })]) {
+        if (!openModels.has(k)) continue;
+        if (currentTabKey === k) {
+          openModels.get(k).dirty = false;
+          closeTab(k);
         } else {
-          const m = openModels.get(tabKey);
+          const m = openModels.get(k);
           if (m.imgUrl) URL.revokeObjectURL(m.imgUrl);
           else if (m.model) m.model.dispose();
-          openModels.delete(tabKey);
-          openOrder.splice(openOrder.indexOf(tabKey), 1);
+          openModels.delete(k);
+          openOrder.splice(openOrder.indexOf(k), 1);
         }
       }
       renderTabs();
@@ -274,17 +297,13 @@ async function initApp() {
   // autosave, persist the active file, and hand back code + tab + status. The
   // boot.js command dispatch (Run button) and the F5 action below both use it.
   setRunProvider(() => {
-    if (!currentTabKey) return null;   // gallery / no active tab — nothing to run
-    flushPendingSave();   // cancel any queued write; we persist the latest below
+    const t = activeTab();
+    if (!t) return null;   // gallery / no active tab — nothing to run
+    flushPendingSave();    // cancel any queued write; we persist the latest below
     const code = editor.getValue();
-    if (currentFilePath && !currentReadOnly) {
-      userFS.set(currentFilePath, { text: code, binary: false });
-    }
-    return {
-      code,
-      tabKey: currentTabKey,
-      status: currentFilePath && !currentReadOnly ? currentFilePath : '',
-    };
+    const isUserText = t.source === 'user' && t.view === 'editor';
+    if (isUserText) userFS.set(t.path, { text: code, binary: false });
+    return { code, tabKey: currentTabKey, status: isUserText ? t.path : '' };
   });
 
   // F5 keybinding inside the editor — runs the current editor content.
@@ -305,11 +324,8 @@ async function initApp() {
      transient, editable tab AND runs it; Edit / Run do one or the other. The
      toolbar "Examples" button returns here. */
   function showGallery() {
-    document.getElementById('editor').style.display = 'none';
-    document.getElementById('img-preview').style.display = 'none';
-    tabBarEl.style.display = 'none';     // no open-file tabs while browsing examples
-    galleryEl.style.display = 'block';   // '' would fall back to the CSS display:none
-    currentTabKey = null; currentFilePath = null; currentReadOnly = false;
+    applyView('gallery');
+    currentTabKey = null;
     renderTabs();      // clear the active-tab highlight
     fb.markActive();
     selectMobilePanel('gallery');
@@ -366,17 +382,6 @@ async function initApp() {
     fb.refresh({ rebuildSystem: true });
   } catch (_) {}
 
-  /* -- File browser state ------------------------------------------ */
-  function setCurrentFile(tabKey, readOnly = false) {
-    currentTabKey   = tabKey;
-    // User-file keys are bare FS paths starting with '/'; others have a scheme prefix
-    currentFilePath = (tabKey && !tabKey.includes(':')) ? tabKey : null;
-    currentReadOnly = readOnly;
-    editor.updateOptions({ readOnly });
-    renderTabs();
-    fb.refresh();
-  }
-
   /* -- Tab / model management -------------------------------------- */
   function langForPath(p) {
     return p.endsWith('.py') ? 'python' : p.endsWith('.json') ? 'json' : 'plaintext';
@@ -390,11 +395,7 @@ async function initApp() {
     catch { return text; }
   }
 
-  function tabLabel(key) {
-    const info = openModels.get(key);
-    if (info?.label) return info.label;
-    return key.includes(':') ? key.split(':').pop().split('/').pop() : key.split('/').pop();
-  }
+  const tabLabel = (key) => openModels.get(key)?.name ?? key;
 
   function renderTabs() {
     const bar = document.getElementById('tab-bar');
@@ -403,23 +404,23 @@ async function initApp() {
     // first <span> = name, .material-icons <span> = read-only lock, <button> = close.
     const list = document.createElement('ul');
     for (const key of openOrder) {
-      const info = openModels.get(key);
-      if (!info) continue;
+      const t = openModels.get(key);
+      if (!t) continue;
 
       const tab = document.createElement('li');
       // Dynamic state only — structure is tag-based (see app.css).
       const state = [];
       if (key === currentTabKey) state.push('active');
-      if (info.dirty)            state.push('dirty');
-      if (info.transient)        state.push('transient');
+      if (t.dirty)               state.push('dirty');
+      if (t.transient)           state.push('transient');
       tab.className = state.join(' ');
       tab.title = key;
 
       const name = document.createElement('span');
-      name.textContent = tabLabel(key);
+      name.textContent = t.name;
       tab.appendChild(name);
 
-      if (info.readOnly) {
+      if (isReadOnly(t)) {
         const ro = document.createElement('span');
         ro.className = 'material-icons';   // icon font; identifies the lock glyph
         ro.textContent = 'lock';
@@ -441,26 +442,19 @@ async function initApp() {
   }
 
   function focusTab(key) {
-    const info = openModels.get(key);
-    if (!info) return;
-    currentTabKey   = key;
-    currentFilePath = key.includes(':') ? null : key;
-    currentReadOnly = info.readOnly;
+    const t = openModels.get(key);
+    if (!t) return;
+    currentTabKey = key;
+    applyView(t.view);   // 'editor' or 'image' — owns the gallery/tab-bar/pane toggles
 
-    const editorEl  = document.getElementById('editor');
-    const imgEl     = document.getElementById('img-preview');
-    galleryEl.style.display = 'none';   // focusing a tab leaves the gallery
-    tabBarEl.style.display  = '';       // restore the tab bar
-
-    if (info.imgUrl) {
-      editorEl.style.display  = 'none';
-      imgEl.style.display     = 'flex';
+    if (t.view === 'image') {
+      const imgEl  = document.getElementById('img-preview');
       const imgTag = imgEl.querySelector('img');
-      imgTag.src = info.imgUrl;
-      imgEl.querySelector('span').textContent = tabLabel(key);
-      dimsEl = imgEl.querySelector('small');
-      if (info.dimText) {
-        dimsEl.textContent = info.dimText;
+      imgTag.src = t.imgUrl;
+      imgEl.querySelector('span').textContent = t.name;
+      const dimsEl = imgEl.querySelector('small');
+      if (t.dimText) {
+        dimsEl.textContent = t.dimText;
       } else {
         dimsEl.textContent = '';
         imgTag.onload = () => {
@@ -468,10 +462,8 @@ async function initApp() {
         };
       }
     } else {
-      editorEl.style.display  = '';
-      imgEl.style.display     = 'none';
-      editor.setModel(info.model);
-      editor.updateOptions({ readOnly: info.readOnly });
+      editor.setModel(t.model);
+      editor.updateOptions({ readOnly: isReadOnly(t) });
     }
 
     fb.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
@@ -519,12 +511,12 @@ async function initApp() {
   }
 
   function openScratchTab(name, content, { transient = false } = {}) {
-    const key = 'scratch:' + name;
+    const key = tabKey({ source: 'scratch', name });
     if (openModels.has(key)) { focusTab(key); return key; }
     if (transient) evictTransient(key);
     const uri   = monaco.Uri.parse('badgeware:///scratch/' + encodeURIComponent(name));
     const model = monaco.editor.createModel(content, langForPath(name), uri);
-    openModels.set(key, { model, dirty: false, readOnly: false, transient, label: name });
+    openModels.set(key, { source: 'scratch', view: 'editor', path: null, name, model, dirty: false, transient });
     openOrder.push(key);
     if (transient) transientTabKey = key;
     focusTab(key);   // sets editor/model/currentTabKey, hides the gallery, renders
@@ -540,20 +532,20 @@ async function initApp() {
   }
 
   function saveCurrentFile() {
-    if (!currentTabKey) return;
-    if (currentReadOnly) return;
+    const active = activeTab();
+    if (!active || isReadOnly(active)) return;
 
-    if (!currentTabKey.includes(':')) {
+    if (active.source === 'user') {
       // User file — flush any debounced edit, then flash confirmation
       flushPendingSave();
       const prev = statusEl.textContent;
-      statusEl.textContent = '✓ Saved ' + tabLabel(currentTabKey);
+      statusEl.textContent = '✓ Saved ' + active.name;
       setTimeout(() => { statusEl.textContent = prev; }, 1400);
       return;
     }
 
     // Scratch tab — prompt for name to save as user file
-    const suggested = tabLabel(currentTabKey);
+    const suggested = active.name;
     const input = prompt('Save as:', suggested.endsWith('.py') ? suggested : suggested + '.py');
     if (!input) return;
     const path = normalisePath(input);
@@ -613,7 +605,8 @@ async function initApp() {
     return p.startsWith('/') ? p : '/' + p;
   }
 
-  function openBinaryTab(key, buf, handler, transient, mimeOverride) {
+  function openBinaryTab({ source, path }, buf, handler, transient, mimeOverride) {
+    const key = tabKey({ source, view: 'image', path });
     if (openModels.has(key)) {
       if (openModels.get(key).transient && (!transient || currentTabKey === key)) promoteTab(key);
       focusTab(key);
@@ -627,7 +620,7 @@ async function initApp() {
       } else {
         imgUrl = URL.createObjectURL(new Blob([buf], { type: mimeOverride || handler.mime }));
       }
-      openModels.set(key, { model: null, dirty: false, readOnly: true, imgUrl, dimText, label: key.slice(key.lastIndexOf('/') + 1), transient });
+      openModels.set(key, { source, view: 'image', path, name: baseName(path), model: null, imgUrl, dimText, dirty: false, transient });
       openOrder.push(key);
       if (transient) transientTabKey = key;
     } catch (_) { return; }
@@ -640,7 +633,7 @@ async function initApp() {
     if (!handler) return;
 
     if (handler.kind === 'text') {
-      const key = 'sys:' + path;
+      const key = tabKey({ source: 'sys', view: 'editor', path });
       if (openModels.has(key)) {
         if (openModels.get(key).transient && (!transient || currentTabKey === key)) promoteTab(key);
         focusTab(key);
@@ -652,16 +645,15 @@ async function initApp() {
         const text  = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
         const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
         const model = monaco.editor.createModel(formatForPreview(path, text), langForPath(path), uri);
-        openModels.set(key, { model, dirty: false, readOnly: true, transient });
+        openModels.set(key, { source: 'sys', view: 'editor', path, name: baseName(path), model, dirty: false, transient });
         openOrder.push(key);
         if (transient) transientTabKey = key;
       } catch (_) { return; }
       focusTab(key);
     } else {
-      const key = (handler.keyPrefix ?? 'img') + ':sys:' + path;
       try {
         const buf = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-        openBinaryTab(key, buf, handler, transient);
+        openBinaryTab({ source: 'sys', path }, buf, handler, transient);
       } catch (_) {}
     }
     statusEl.textContent = path + ' — read-only';
@@ -676,7 +668,7 @@ async function initApp() {
 
     if (handler.kind !== 'text') {
       const bytes = entry.binary ? entry.data : new TextEncoder().encode(entry.text);
-      openBinaryTab((handler.keyPrefix ?? 'img') + ':' + path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), handler, transient, entry.mimeType);
+      openBinaryTab({ source: 'user', path }, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), handler, transient, entry.mimeType);
       return;
     }
 
@@ -697,7 +689,8 @@ async function initApp() {
     if (transient) evictTransient(path);
     const uri   = monaco.Uri.parse('badgeware:///user' + encodeURIComponent(path));
     const model = monaco.editor.createModel(formatForPreview(path, entry.text), langForPath(path), uri);
-    openModels.set(path, { model, dirty: false, readOnly: false, transient });
+    // A user text file is keyed by its bare path (=== tabKey for this record).
+    openModels.set(path, { source: 'user', view: 'editor', path, name: baseName(path), model, dirty: false, transient });
     openOrder.push(path);
     if (transient) transientTabKey = path;
     focusTab(path);
@@ -705,22 +698,21 @@ async function initApp() {
 
   /* -- Auto-save / dirty tracking --------------------------------- */
   editor.onDidChangeModelContent(() => {
-    if (!currentTabKey) return;
-    const info = openModels.get(currentTabKey);
-    if (!info) return;
+    const t = activeTab();
+    if (!t) return;
     // Editing a transient tab promotes it permanently
-    if (info.transient) {
-      info.transient = false;
+    if (t.transient) {
+      t.transient = false;
       if (transientTabKey === currentTabKey) transientTabKey = null;
       renderTabs();
     }
-    if (currentFilePath && !currentReadOnly) {
+    if (t.source === 'user' && t.view === 'editor') {
       // User file — auto-save silently (debounced)
-      scheduleSave(currentFilePath, editor.getValue());
-      info.dirty = false;
-    } else if (!currentReadOnly) {
+      scheduleSave(t.path, editor.getValue());
+      t.dirty = false;
+    } else if (t.source === 'scratch') {
       // Scratch tab — mark dirty so the user knows to save
-      if (!info.dirty) { info.dirty = true; renderTabs(); }
+      if (!t.dirty) { t.dirty = true; renderTabs(); }
       saveSession();   // scratch text lives only in the model — persist each edit
     }
   });

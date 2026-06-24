@@ -4,6 +4,34 @@
    that in-flight boot and wires the editor, tabs and file browser to it. */
 const APP_BASE = new URL('.', document.currentScript.src).href;
 
+// Tiny IndexedDB key/value store for the editor session (which tabs are open +
+// which is active), so a reload restores the workspace. Its own DB, isolated
+// from userFS and the panel-size prefs (mirrors resize.js's panelSizes). All ops
+// degrade to no-ops if IndexedDB is unavailable.
+const sessionStore = (() => {
+  const DB = 'badgeware.session', STORE = 'state', KEY = 'editor';
+  let dbp;
+  const db = () => (dbp ??= new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  }));
+  return {
+    load: () => db().then(d => new Promise((resolve, reject) => {
+      const req = d.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    })).catch(() => undefined),
+    save: (value) => db().then(d => new Promise((resolve, reject) => {
+      const tx = d.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(value, KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    })).catch(() => {}),
+  };
+})();
+
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
   const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, addActions } = await bootSimulator();
@@ -69,6 +97,57 @@ async function initApp() {
   let transientTabKey = null;   // key of the one transient (preview) tab, if any
   const openModels    = new Map();  // tabKey → { model, dirty, readOnly, transient, label? }
   const openOrder     = [];         // ordered list of open tabKeys
+
+  /* -- Session persistence (open tabs + active tab → IndexedDB) ---------------
+     Reopens the workspace on reload. User/system files are recorded by path —
+     their content is reproducible from userFS / the server; only scratch buffers
+     carry their text, since that lives solely in the Monaco model. Writes are
+     debounced and suppressed while restoring so the restore can't overwrite the
+     very state it's reading. */
+  const SESSION_SAVE_MS = 400;   // debounce before persisting a tab change — tune here
+  let restoring    = true;       // stays true through bootstrap (see end of initApp)
+  let sessionTimer = null;
+
+  function serializeTab(key) {
+    const info = openModels.get(key);
+    if (!info) return null;
+    if (key.startsWith('scratch:')) {
+      return { kind: 'scratch', name: key.slice('scratch:'.length),
+               content: info.model ? info.model.getValue() : '', transient: !!info.transient };
+    }
+    // Everything else reopens from its FS path; record path + system flag.
+    // Keys: '/path' (user text) · 'sys:/path' (system text) · 'PREFIX:[sys:]/path' (binary/preview).
+    let system = false, path;
+    if      (key.startsWith('/'))    { path = key; }
+    else if (key.startsWith('sys:')) { system = true; path = key.slice(4); }
+    else {
+      let rest = key.slice(key.indexOf(':') + 1);
+      if (rest.startsWith('sys:')) { system = true; rest = rest.slice(4); }
+      path = rest;
+    }
+    return { kind: 'file', path, system, transient: !!info.transient };
+  }
+
+  const snapshotSession = () => ({ tabs: openOrder.map(serializeTab).filter(Boolean), active: currentTabKey });
+
+  function saveSession() {
+    if (restoring) return;
+    clearTimeout(sessionTimer);
+    sessionTimer = setTimeout(() => sessionStore.save(snapshotSession()), SESSION_SAVE_MS);
+  }
+  // Best-effort flush when the tab is hidden/closed, since the debounce may be pending.
+  addEventListener('pagehide', () => { clearTimeout(sessionTimer); if (!restoring) sessionStore.save(snapshotSession()); });
+
+  async function restoreSession() {
+    const saved = await sessionStore.load();
+    if (!saved || !Array.isArray(saved.tabs) || saved.tabs.length === 0) return null;
+    for (const t of saved.tabs) {
+      if      (t.kind === 'scratch') openScratchTab(t.name, t.content || '', { transient: t.transient });
+      else if (t.system)             await openSysFile(t.path, t.transient);
+      else                           openUserFile(t.path, t.transient);   // skips silently if the file is gone
+    }
+    return saved;   // { tabs, active } — the caller restores the active view
+  }
 
   /* -- File browser (left panel) ---------------------------------------------
      The panel (trees, context menu, FS ops) lives in filebrowser.js; we own the
@@ -358,6 +437,7 @@ async function initApp() {
       list.appendChild(tab);
     }
     bar.replaceChildren(list);
+    saveSession();   // tabs/active changed — persist (debounced, no-op while restoring)
   }
 
   function focusTab(key) {
@@ -641,15 +721,27 @@ async function initApp() {
     } else if (!currentReadOnly) {
       // Scratch tab — mark dirty so the user knows to save
       if (!info.dirty) { info.dirty = true; renderTabs(); }
+      saveSession();   // scratch text lives only in the model — persist each edit
     }
   });
 
-  // URL deep-link (?file= / #name): open the requested file now that FILE_HANDLERS
-  // and the open helpers exist (calling these at the early bootstrap would TDZ-throw).
+  // Reopen the saved workspace, then honour any URL deep-link on top of it. Done
+  // here (not at the early bootstrap) because the open helpers reference
+  // FILE_HANDLERS, a const defined above — calling them earlier would TDZ-throw.
+  const restored = await restoreSession();
   if (startupFile) {
-    if (startupFile.system) openSysFile(startupFile.path, false);
+    // Explicit ?file= / #name wins the active view, layered over the restored tabs.
+    if (startupFile.system) await openSysFile(startupFile.path, false);
     else                    openUserFile(startupFile.path, false);
+  } else if (restored && restored.active && openModels.has(restored.active)) {
+    focusTab(restored.active);   // restore the previously-active tab
+  } else {
+    // Nothing saved, or the gallery was the active view, or the saved active tab
+    // is gone. (Reopening tabs above focuses the last one, so reassert the gallery.)
+    showGallery();
   }
+  restoring = false;             // bootstrap done — interactions persist from here
+  saveSession();                 // capture the initial state (e.g. a fresh deep-link tab)
 
   /* Initial file tree render */
   fb.refresh();

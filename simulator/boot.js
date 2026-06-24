@@ -20,6 +20,7 @@ function bootSimulator() {
     const stdoutEl = document.querySelector('#stdout > div');   // the scrolling log inside the view
     const statusEl = document.getElementById('status');
     const stopBtns = document.querySelectorAll('[data-action="stop"]');   // toolbar + floating mobile
+    const runIcons = document.querySelectorAll('[data-action="run"] .material-icons');   // play ↔ reload glyph
 
     const appendOut = (text, cls) => {
       const span = document.createElement('span');
@@ -34,7 +35,12 @@ function bootSimulator() {
 
     /* Run / Stop state (the Stop button is meaningful only while running). */
     let isRunning = false;
-    const setRunning = (running) => { isRunning = running; stopBtns.forEach((b) => { b.disabled = !running; }); };
+    const setRunning = (running) => {
+      isRunning = running;
+      stopBtns.forEach((b) => { b.disabled = !running; });
+      // While running, Run re-launches the program — show a reload glyph to say so.
+      runIcons.forEach((i) => { i.textContent = running ? 'refresh' : 'play_arrow'; });
+    };
     const onSimulatorStopped = () => {
       if (!isRunning) return;
       setRunning(false);
@@ -103,13 +109,25 @@ function bootSimulator() {
       statusEl.textContent = 'Stopped';
     };
 
+    /* (Re)launch the badge OS (the menu). Fetched fresh rather than reusing
+       defaultCode, which may be a deep-linked file when ?file= is set. */
+    const runOS = async () => {
+      const code = await fetch(BOOT_BASE + 'filesystem/system/main.py')
+        .then(r => r.ok ? r.text() : null).catch(() => null);
+      if (code != null) await runProgram(code, { status: 'badgeOS' });
+      else appendOut('✕ Could not load badgeOS', 'out-error');
+    };
+
     /* The editor supplies how to fetch the current code to run (flush + save +
-       return { code, tabKey, status }); null until it registers one, so Run is a
-       no-op before Monaco is ready. */
+       return { code, tabKey, status }); null when there's nothing to run (gallery
+       view, or before Monaco is ready). In that case Run (re)launches the OS — so
+       the button is never a dead no-op, and a crashed OS is always recoverable
+       (notably on mobile, where there's no separate badgeOS button). */
     let runProvider = null;
     const run = async () => {
       const req = runProvider && runProvider();
       if (req) await runProgram(req.code, { tabKey: req.tabKey, status: req.status });
+      else     await runOS();
     };
 
     /* -- Command dispatch ------------------------------------------------------
@@ -122,14 +140,7 @@ function bootSimulator() {
     const actions = {
       run,
       stop:        stopProgram,
-      // Relaunch the badge OS (the menu). Fetched fresh rather than reusing
-      // defaultCode, which may be a deep-linked file when ?file= is set.
-      'run-os':    async () => {
-        const code = await fetch(BOOT_BASE + 'filesystem/system/main.py')
-          .then(r => r.ok ? r.text() : null).catch(() => null);
-        if (code != null) runProgram(code, { status: 'badgeOS' });
-        else appendOut('✕ Could not load badgeOS', 'out-error');
-      },
+      'run-os':    runOS,
       'spin-prev': () => rotateView(-1),
       'spin-next': () => rotateView(+1),
       clear:       () => { stdoutEl.innerHTML = ''; },

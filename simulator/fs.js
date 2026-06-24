@@ -1,4 +1,4 @@
-/* ── User filesystem (IndexedDB-backed, synchronous in-memory cache) ─────────
+/* -- User filesystem (IndexedDB-backed, synchronous in-memory cache) ---------
    The cache `data` (path → entry) is the source of truth for every read, so the
    public API stays synchronous and existing callers are unchanged. IndexedDB is
    an async durable mirror: each set/del updates the cache immediately and
@@ -72,5 +72,5 @@ const userFS = (() => {
   };
 })();
 
-/* ── System file list — populated after fetch('/simulator/filesystem.json') */
+/* -- System file list — populated after fetch('/simulator/filesystem.json') */
 let systemPaths = [];

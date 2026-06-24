@@ -42,7 +42,7 @@ frame_times = []
 last = time.ticks_ms()
 
 while True:
-    # ── Frame timing: keep a 60-sample rolling average ──
+    # -- Frame timing: keep a 60-sample rolling average --
     now = time.ticks_ms()
     frame_times.append(time.ticks_diff(now, last))
     last = now
@@ -51,7 +51,7 @@ while True:
     avg = sum(frame_times) / len(frame_times)
     fps = 1000.0 / avg if avg > 0 else 0.0
 
-    # ── Map each pixel to a point on the complex plane ──
+    # -- Map each pixel to a point on the complex plane --
     scale = zoom / BW
     x0 = cx - BW * 0.5 * scale
     y0 = cy - BH * 0.5 * scale
@@ -84,7 +84,7 @@ while True:
     # Scale the low-res buffer up to fill the screen.
     screen.blit(buf, rect(0, 0, W, H))
 
-    # ── FPS overlay ──
+    # -- FPS overlay --
     screen.pen = color.black
     screen.rectangle(0, 0, 58, 12)
     screen.pen = color.white

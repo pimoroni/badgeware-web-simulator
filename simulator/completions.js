@@ -1,4 +1,4 @@
-/* ─────────────────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------
    completions.js — Monaco completion data for the Badgeware Python editor.
 
    Exports (as plain globals, loaded before the Monaco require() block):
@@ -10,11 +10,11 @@
      simulator/filesystem/badgeware/__init__.py
      simulator/filesystem/badgeware/badge.py    (+ text, sprite, math, state, rtc)
      MicroPython 1.x built-in functions / types / exceptions / modules
-   ───────────────────────────────────────────────────────────────────────── */
+   ------------------------------------------------------------------------- */
 
 const BADGEWARE_GLOBALS = [
 
-  // ── Display mode flags ────────────────────────────────────────────────────
+  // -- Display mode flags ----------------------------------------------------
   { label: 'LORES',         kind: 'Constant', detail: '0b00',     doc: 'Low-resolution mode: 160×120 pixels.' },
   { label: 'HIRES',         kind: 'Constant', detail: '0b01',     doc: 'High-resolution mode: 320×240 pixels.' },
   { label: 'VSYNC',         kind: 'Constant', detail: '0b10',     doc: 'Enable vertical sync.' },
@@ -23,7 +23,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'MEDIUM_UPDATE', kind: 'Constant', detail: '2 << 4',   doc: 'Medium e-ink update speed (Badger).' },
   { label: 'DITHER',        kind: 'Constant', detail: '1 << 8',   doc: 'Enable dithering.' },
 
-  // ── Button constants ───────────────────────────────────────────────────────
+  // -- Button constants -------------------------------------------------------
   { label: 'BUTTON_A',      kind: 'Constant', detail: '0b010000', doc: 'Button A (left side button).' },
   { label: 'BUTTON_B',      kind: 'Constant', detail: '0b001000', doc: 'Button B (select / middle).' },
   { label: 'BUTTON_C',      kind: 'Constant', detail: '0b000100', doc: 'Button C (right side button).' },
@@ -31,12 +31,12 @@ const BADGEWARE_GLOBALS = [
   { label: 'BUTTON_DOWN',   kind: 'Constant', detail: '0b000001', doc: 'D-pad Down.' },
   { label: 'BUTTON_HOME',   kind: 'Constant', detail: '0b100000', doc: 'Home / Boot button.' },
 
-  // ── Anti-aliasing constants ────────────────────────────────────────────────
+  // -- Anti-aliasing constants ------------------------------------------------
   { label: 'OFF', kind: 'Constant', detail: 'image.OFF', doc: 'Anti-aliasing disabled.' },
   { label: 'X2',  kind: 'Constant', detail: 'image.X2',  doc: 'Anti-aliasing: 2× supersample.' },
   { label: 'X4',  kind: 'Constant', detail: 'image.X4',  doc: 'Anti-aliasing: 4× supersample.' },
 
-  // ── Global instances ───────────────────────────────────────────────────────
+  // -- Global instances -------------------------------------------------------
   { label: 'screen',   kind: 'Variable', detail: 'image',      doc: 'The active display canvas. 160×120 in LORES, 320×240 in HIRES. Set screen.pen and call screen.clear(), screen.text(), screen.shape().' },
   { label: 'badge',    kind: 'Variable', detail: 'Badge',      doc: 'Badge hardware interface: buttons, battery, display mode, LEDs.' },
   { label: 'shape',    kind: 'Module',   detail: 'module',     doc: 'Shape factory (picovector): shape.rectangle(), shape.circle(), shape.custom(), …' },
@@ -46,7 +46,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'rtc',      kind: 'Variable', detail: 'RTC',        doc: 'Real-time clock: get/set datetime, alarms, countdown timers.' },
   { label: 'loop',     kind: 'Variable', detail: '_run | None', doc: 'Current animation loop context (None outside a loop). Provides loop.ticks and loop.progress.' },
 
-  // ── Types / constructors ───────────────────────────────────────────────────
+  // -- Types / constructors ---------------------------------------------------
   { label: 'vec2',         kind: 'Class', insertText: 'vec2(${1:x}, ${2:y})',
     doc: '2D vector / point. Fields: .x, .y\nUsage: pos = vec2(80, 60)' },
   { label: 'rect',         kind: 'Class', insertText: 'rect(${1:x}, ${2:y}, ${3:w}, ${4:h})',
@@ -72,7 +72,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'algorithm',    kind: 'Module',
     doc: 'Geometry algorithms.\nalgorithm.clip_line(p1, p2, rect) — clip a line to a rect.\nalgorithm.dda(point, angle, depth) — ray march on a grid.\nalgorithm.raycast(…) — 2D raycaster.' },
 
-  // ── Global functions (Badgeware) ───────────────────────────────────────────
+  // -- Global functions (Badgeware) -------------------------------------------
   { label: 'clamp',         kind: 'Function', insertText: 'clamp(${1:v}, ${2:vmin}, ${3:vmax})',
     doc: 'Clamp v between vmin and vmax. Returns a number.' },
   { label: 'rnd',           kind: 'Function', insertText: 'rnd(${1:v1})',
@@ -98,7 +98,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'free',          kind: 'Function', insertText: 'free()',
     doc: 'Print free heap memory in KB (with delta). Calls gc.collect() first.' },
 
-  // ── MicroPython built-in functions ────────────────────────────────────────
+  // -- MicroPython built-in functions ----------------------------------------
   { label: 'print',       kind: 'Function', insertText: 'print(${1:value})',
     doc: 'Print objects to stdout. Optional: sep, end, file.' },
   { label: 'len',         kind: 'Function', insertText: 'len(${1:obj})',
@@ -190,7 +190,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'super',       kind: 'Function', insertText: 'super()',
     doc: 'Return a proxy object that delegates method calls to a parent class.' },
 
-  // ── MicroPython built-in types ─────────────────────────────────────────────
+  // -- MicroPython built-in types ---------------------------------------------
   { label: 'int',         kind: 'Class', insertText: 'int(${1:x})',
     doc: 'Convert to integer. int(x, base=10) for strings.' },
   { label: 'float',       kind: 'Class', insertText: 'float(${1:x})',
@@ -232,7 +232,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'Ellipsis',    kind: 'Constant',
     doc: 'The Ellipsis singleton (same as the literal …). Used as a placeholder.' },
 
-  // ── MicroPython exceptions ─────────────────────────────────────────────────
+  // -- MicroPython exceptions -------------------------------------------------
   { label: 'Exception',         kind: 'Class', doc: 'Base class for all non-system-exiting exceptions.' },
   { label: 'BaseException',     kind: 'Class', doc: 'Base class for all built-in exceptions.' },
   { label: 'ArithmeticError',   kind: 'Class', doc: 'Base class for arithmetic exceptions (OverflowError, ZeroDivisionError).' },
@@ -259,7 +259,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'GeneratorExit',     kind: 'Class', doc: 'Raised inside a generator when .close() is called.' },
   { label: 'UnicodeError',      kind: 'Class', doc: 'Raised for Unicode-related encoding/decoding errors.' },
 
-  // ── Importable modules ─────────────────────────────────────────────────────
+  // -- Importable modules -----------------------------------------------------
   { label: 'math',    kind: 'Module', doc: 'Mathematical functions. Import: import math\nOr: from math import sin, cos, pi' },
   { label: 'time',    kind: 'Module', doc: 'Time and delays. Import: import time\nKey: time.ticks_ms(), time.sleep_ms()' },
   { label: 'random',  kind: 'Module', doc: 'Random numbers. Import: import random\nKey: random.random(), random.randint(a, b)' },
@@ -274,7 +274,7 @@ const BADGEWARE_GLOBALS = [
   { label: 'network', kind: 'Module', doc: 'WiFi/network interface. Import: import network\nKey: network.WLAN(network.STA_IF)' },
   { label: 'uasyncio', kind: 'Module', doc: 'Asynchronous I/O. Import: import uasyncio\nKey: uasyncio.run(), uasyncio.sleep_ms()' },
 
-  // ── Badge bundled modules (simulator/modules) ──────────────────────────────
+  // -- Badge bundled modules (simulator/modules) ------------------------------
   { label: 'easing',   kind: 'Module', doc: 'Easing / tweening functions (Robert Penner set). Import: import easing\nEach takes x in 0.0–1.0 and returns the eased value. e.g. easing.easeOutBounce(0.5)' },
   { label: 'wifi',     kind: 'Module', doc: 'WiFi connection helper. Import: import wifi\nKey: wifi.connect(ssid, psk), wifi.is_connected(), wifi.ip(). (Simulator always reports connected.)' },
   { label: 'requests', kind: 'Module', doc: 'HTTP requests (fetch-backed). Import: import requests\nKey: requests.get(url), requests.post(url, json=…). Returns a Response with .status_code, .text, .json().' },
@@ -284,11 +284,11 @@ const BADGEWARE_GLOBALS = [
   { label: 'urllib',   kind: 'Module', doc: 'URL handling. Import: import urllib.urequest\nKey: urllib.urequest.urlopen(url).read().' },
 ];
 
-/* ── Member completions, keyed by the identifier before the dot ──────────────
+/* -- Member completions, keyed by the identifier before the dot --------------
    Add entries here whenever "X." should show a completion list.              */
 const MEMBERS = {
 
-  // ── Badgeware: screen / image ──────────────────────────────────────────────
+  // -- Badgeware: screen / image ----------------------------------------------
   screen: [
     { label: 'width',        kind: 'Property', doc: 'Display width in pixels (160 in LORES, 320 in HIRES).' },
     { label: 'height',       kind: 'Property', doc: 'Display height in pixels (120 in LORES, 240 in HIRES).' },
@@ -339,7 +339,7 @@ const MEMBERS = {
     { label: 'fill_rule',   kind: 'Property', doc: 'Winding fill rule: image.EVEN_ODD or image.NON_ZERO (default).' },
   ],
 
-  // ── Badgeware: badge ───────────────────────────────────────────────────────
+  // -- Badgeware: badge -------------------------------------------------------
   badge: [
     { label: 'mode',          kind: 'Method', insertText: 'mode(${1:LORES | VSYNC})',
       doc: 'Get or set the display mode. Combine flags with |:\n  LORES (160×120), HIRES (320×240), VSYNC\n  FAST_UPDATE, FULL_UPDATE, MEDIUM_UPDATE, DITHER' },
@@ -390,9 +390,9 @@ const MEMBERS = {
       doc: 'True if woken by hardware reset (bool).' },
   ],
 
-  // ── Badgeware: shape module ────────────────────────────────────────────────
+  // -- Badgeware: shape module ------------------------------------------------
   shape: [
-    // ── Shape factories (static) ──────────────────────────────────────────────
+    // -- Shape factories (static) ----------------------------------------------
     { label: 'rectangle',        kind: 'Function', insertText: 'rectangle(${1:x}, ${2:y}, ${3:w}, ${4:h})',
       doc: 'Filled rectangle. Args: x, y, w, h — or a single rect object.' },
     { label: 'rounded_rectangle', kind: 'Function',
@@ -418,12 +418,12 @@ const MEMBERS = {
       doc: 'Custom polygon from a list of vec2 points. Pass additional lists for holes.' },
     { label: 'path',             kind: 'Function', insertText: 'path()',
       doc: 'Create an empty path builder for constructing custom shapes.' },
-    // ── Shape instance methods ────────────────────────────────────────────────
+    // -- Shape instance methods ------------------------------------------------
     { label: 'stroke',           kind: 'Method', insertText: 'stroke(${1:width})',
       doc: 'Return the stroked outline of this shape.\nArgs: width (float). Optional: join_type (shape.JOIN_MITER etc.), miter_limit.' },
     { label: 'bounds',           kind: 'Method', insertText: 'bounds()',
       doc: 'Return the bounding rect of this shape.' },
-    // ── Shape/path constants ──────────────────────────────────────────────────
+    // -- Shape/path constants --------------------------------------------------
     { label: 'ALIGN_OUTER',      kind: 'Constant', doc: 'Stroke alignment: outside the path.' },
     { label: 'ALIGN_INNER',      kind: 'Constant', doc: 'Stroke alignment: inside the path.' },
     { label: 'ALIGN_CENTER',     kind: 'Constant', doc: 'Stroke alignment: centered on the path.' },
@@ -437,7 +437,7 @@ const MEMBERS = {
     { label: 'CAP_SQUARE',       kind: 'Constant', doc: 'Stroke cap: square, extends past the endpoint.' },
   ],
 
-  // ── Badgeware: color module ────────────────────────────────────────────────
+  // -- Badgeware: color module ------------------------------------------------
   color: [
     { label: 'rgb',         kind: 'Function', insertText: 'rgb(${1:r}, ${2:g}, ${3:b})',
       doc: 'Create a color from RGB values (0–255 each). Optional 4th arg: alpha (0–255).' },
@@ -464,7 +464,7 @@ const MEMBERS = {
     { label: 'transparent', kind: 'Property', doc: 'Fully transparent (alpha 0).' },
   ],
 
-  // ── Badgeware: text module ─────────────────────────────────────────────────
+  // -- Badgeware: text module -------------------------------------------------
   text: [
     { label: 'draw',     kind: 'Method', insertText: 'draw(${1:image}, ${2:text})',
       doc: 'Draw word-wrapped text into an image.\nArgs: image, text (str), bounds=None (rect), line_spacing=1, word_spacing=1, size=24.\nReturns the bounding rect of drawn text.' },
@@ -474,7 +474,7 @@ const MEMBERS = {
       doc: 'Tokenise text into a list for manual layout. Returns a token list compatible with text.draw().' },
   ],
 
-  // ── Badgeware: rom_font ────────────────────────────────────────────────────
+  // -- Badgeware: rom_font ----------------------------------------------------
   rom_font: [
     { label: 'sins',     kind: 'Property', doc: 'ROM pixel font: sins (default system font).' },
     { label: 'absolute', kind: 'Property', doc: 'ROM pixel font: absolute.' },
@@ -487,7 +487,7 @@ const MEMBERS = {
     { label: 'fear',     kind: 'Property', doc: 'ROM pixel font: fear.' },
   ],
 
-  // ── Badgeware: rtc ─────────────────────────────────────────────────────────
+  // -- Badgeware: rtc ---------------------------------------------------------
   rtc: [
     { label: 'datetime',         kind: 'Method', insertText: 'datetime()',
       doc: 'Get or set datetime. Returns (year, month, day, hour, minute, second, weekday).\nPass a tuple to set: rtc.datetime((2025, 1, 1, 12, 0, 0, 2)).' },
@@ -509,7 +509,7 @@ const MEMBERS = {
       doc: 'True if the alarm has fired (bool).' },
   ],
 
-  // ── Badgeware: image type ──────────────────────────────────────────────────
+  // -- Badgeware: image type --------------------------------------------------
   image: [
     { label: 'load',      kind: 'Method',   insertText: 'load(${1:file})',
       doc: 'Load an image from a file path. Returns an image.' },
@@ -570,7 +570,7 @@ const MEMBERS = {
     { label: 'BICUBIC',    kind: 'Constant', doc: 'Texture filter: bicubic interpolation (highest quality, slowest).' },
   ],
 
-  // ── Badgeware: loop ────────────────────────────────────────────────────────
+  // -- Badgeware: loop --------------------------------------------------------
   loop: [
     { label: 'ticks',    kind: 'Property', doc: 'Milliseconds elapsed since this loop started.' },
     { label: 'progress', kind: 'Property', doc: 'Loop progress 0.0–1.0 (only meaningful when duration was set).' },
@@ -578,7 +578,7 @@ const MEMBERS = {
     { label: 'duration', kind: 'Property', doc: 'Total loop duration in ms (or None for infinite).' },
   ],
 
-  // ── Badgeware: State ───────────────────────────────────────────────────────
+  // -- Badgeware: State -------------------------------------------------------
   State: [
     { label: 'save',   kind: 'Method', insertText: 'save(${1:app}, ${2:data})',
       doc: 'Save a dict to /state/{app}.json.' },
@@ -590,7 +590,7 @@ const MEMBERS = {
       doc: 'Delete /state/{app}.json.' },
   ],
 
-  // ── Badgeware: SpriteSheet / AnimatedSprite ────────────────────────────────
+  // -- Badgeware: SpriteSheet / AnimatedSprite --------------------------------
   SpriteSheet: [
     { label: 'sprite',    kind: 'Method', insertText: 'sprite(${1:x}, ${2:y})',
       doc: 'Get the image for a single sprite at grid position (column, row).' },
@@ -605,7 +605,7 @@ const MEMBERS = {
       doc: 'Total number of animation frames.' },
   ],
 
-  // ── PicoVector: rect ───────────────────────────────────────────────────────
+  // -- PicoVector: rect -------------------------------------------------------
   rect: [
     { label: 'x',            kind: 'Property', doc: 'Left edge (float).' },
     { label: 'y',            kind: 'Property', doc: 'Top edge (float).' },
@@ -627,7 +627,7 @@ const MEMBERS = {
       doc: 'Return a copy shifted by (x, y). Also accepts a single vec2.' },
   ],
 
-  // ── PicoVector: vec2 ───────────────────────────────────────────────────────
+  // -- PicoVector: vec2 -------------------------------------------------------
   vec2: [
     { label: 'x',               kind: 'Property', doc: 'X component (float).' },
     { label: 'y',               kind: 'Property', doc: 'Y component (float).' },
@@ -665,7 +665,7 @@ const MEMBERS = {
       doc: 'Apply a mat3 transformation to this vector.' },
   ],
 
-  // ── PicoVector: brush ──────────────────────────────────────────────────────
+  // -- PicoVector: brush ------------------------------------------------------
   brush: [
     { label: 'gradient',  kind: 'Function',
       insertText: 'gradient(${1:brush.LINEAR}, ${2:x1}, ${3:y1}, ${4:x2}, ${5:y2}, ${6:stops})',
@@ -686,7 +686,7 @@ const MEMBERS = {
     { label: 'RADIAL',    kind: 'Constant', doc: 'Gradient type: radial (circular gradient from a center point).' },
   ],
 
-  // ── PicoVector: mat3 ───────────────────────────────────────────────────────
+  // -- PicoVector: mat3 -------------------------------------------------------
   mat3: [
     { label: 'rotate',          kind: 'Method', insertText: 'rotate(${1:degrees})',
       doc: 'Rotate by degrees. Returns self for chaining.' },
@@ -702,7 +702,7 @@ const MEMBERS = {
       doc: 'Return the inverse of this matrix.' },
   ],
 
-  // ── PicoVector: algorithm ─────────────────────────────────────────────────
+  // -- PicoVector: algorithm -------------------------------------------------
   algorithm: [
     { label: 'clip_line', kind: 'Function', insertText: 'clip_line(${1:p1}, ${2:p2}, ${3:bounds})',
       doc: 'Clip a line segment to a rect. Args: p1 (vec2), p2 (vec2), bounds (rect).\nReturns a clipped (p1, p2) tuple, or None if entirely outside.' },
@@ -712,7 +712,7 @@ const MEMBERS = {
       doc: 'Full 2D raycaster. Args: origin (vec2), angle (radians), fov (radians), rays (int), max_dist, map (bytearray), width, height, screen_width.\nReturns ray hit data.' },
   ],
 
-  // ── MicroPython: math module ───────────────────────────────────────────────
+  // -- MicroPython: math module -----------------------------------------------
   math: [
     { label: 'pi',       kind: 'Constant', doc: 'π ≈ 3.14159265' },
     { label: 'e',        kind: 'Constant', doc: 'e ≈ 2.71828182' },
@@ -748,7 +748,7 @@ const MEMBERS = {
     { label: 'radians',  kind: 'Function', insertText: 'radians(${1:x})', doc: 'Convert degrees to radians.' },
   ],
 
-  // ── MicroPython: time module ───────────────────────────────────────────────
+  // -- MicroPython: time module -----------------------------------------------
   time: [
     { label: 'sleep',      kind: 'Function', insertText: 'sleep(${1:secs})',
       doc: 'Sleep for the given number of seconds (float supported).' },
@@ -778,7 +778,7 @@ const MEMBERS = {
       doc: 'Convert a time tuple (as returned by localtime) to seconds since epoch.' },
   ],
 
-  // ── MicroPython: random module ─────────────────────────────────────────────
+  // -- MicroPython: random module ---------------------------------------------
   random: [
     { label: 'random',      kind: 'Function', insertText: 'random()',
       doc: 'Random float in [0.0, 1.0).' },
@@ -798,7 +798,7 @@ const MEMBERS = {
       doc: 'Return a non-negative integer with k random bits.' },
   ],
 
-  // ── MicroPython: os module ─────────────────────────────────────────────────
+  // -- MicroPython: os module -------------------------------------------------
   os: [
     { label: 'listdir',  kind: 'Function', insertText: 'listdir(${1:"/"})',
       doc: 'Return a list of names in the directory. Default: current directory.' },
@@ -831,7 +831,7 @@ const MEMBERS = {
     { label: 'sep',      kind: 'Constant', doc: 'Path separator: "/".' },
   ],
 
-  // ── MicroPython: gc module ─────────────────────────────────────────────────
+  // -- MicroPython: gc module -------------------------------------------------
   gc: [
     { label: 'collect',   kind: 'Function', insertText: 'collect()',
       doc: 'Run a garbage collection pass.' },
@@ -849,7 +849,7 @@ const MEMBERS = {
       doc: 'Return True if automatic GC is enabled.' },
   ],
 
-  // ── MicroPython: json module ───────────────────────────────────────────────
+  // -- MicroPython: json module -----------------------------------------------
   json: [
     { label: 'dumps', kind: 'Function', insertText: 'dumps(${1:obj})',
       doc: 'Serialize obj to a JSON-formatted string.' },
@@ -861,7 +861,7 @@ const MEMBERS = {
       doc: 'Deserialize JSON from a file-like stream.' },
   ],
 
-  // ── MicroPython: machine module ────────────────────────────────────────────
+  // -- MicroPython: machine module --------------------------------------------
   machine: [
     { label: 'Pin',        kind: 'Class',    insertText: 'Pin(${1:id})',
       doc: 'GPIO pin. Modes: Pin.IN, Pin.OUT, Pin.OPEN_DRAIN.\nOptional: pull=Pin.PULL_UP / Pin.PULL_DOWN.\nExample: p = machine.Pin(0, machine.Pin.OUT)' },
@@ -913,7 +913,7 @@ const MEMBERS = {
     { label: 'DEEPSLEEP_RESET', kind: 'Constant', doc: 'Reset cause: woke from deep sleep.' },
   ],
 
-  // ── MicroPython: sys module ────────────────────────────────────────────────
+  // -- MicroPython: sys module ------------------------------------------------
   sys: [
     { label: 'path',        kind: 'Variable', doc: 'List of directories searched for modules.' },
     { label: 'argv',        kind: 'Variable', doc: 'Command-line argument list.' },
@@ -931,7 +931,7 @@ const MEMBERS = {
       doc: 'Print an exception with its traceback.' },
   ],
 
-  // ── Badge: easing module ───────────────────────────────────────────────────
+  // -- Badge: easing module ---------------------------------------------------
   // Every function takes x in 0.0–1.0 and returns the eased position.
   easing: [
     { label: 'linear',            kind: 'Function', insertText: 'linear(${1:x})',            doc: 'No easing — returns x unchanged.' },
@@ -967,7 +967,7 @@ const MEMBERS = {
     { label: 'easeInOutBounce',   kind: 'Function', insertText: 'easeInOutBounce(${1:x})',   doc: 'Bounce ease in then out.' },
   ],
 
-  // ── Badge: requests module (fetch-backed HTTP) ─────────────────────────────
+  // -- Badge: requests module (fetch-backed HTTP) -----------------------------
   requests: [
     { label: 'get',     kind: 'Function', insertText: 'get(${1:url})',
       doc: 'HTTP GET. Returns a Response. Optional kwargs: headers, auth, timeout.' },
@@ -983,7 +983,7 @@ const MEMBERS = {
       doc: 'HTTP response. Attributes: .status_code, .reason, .headers, .text, .content; methods .json(), .close().' },
   ],
 
-  // ── Badge: wifi module (simulator shim — always connected) ─────────────────
+  // -- Badge: wifi module (simulator shim — always connected) -----------------
   wifi: [
     { label: 'connect',      kind: 'Function', insertText: 'connect(${1:"ssid"}, ${2:"password"})',
       doc: 'Connect to a network. Args: ssid, psk, timeout=60, retries=5. Returns True. (Simulator connects instantly.)' },
@@ -1000,7 +1000,7 @@ const MEMBERS = {
     { label: 'nameserver',   kind: 'Function', insertText: 'nameserver()',   doc: 'DNS server address (str) or None.' },
   ],
 
-  // ── Badge: fetch module (async streamed downloads) ─────────────────────────
+  // -- Badge: fetch module (async streamed downloads) -------------------------
   fetch: [
     { label: 'AsyncFetch',    kind: 'Class', insertText: 'AsyncFetch(${1:host})',
       doc: 'Async fetcher. AsyncFetch(host, port=None, use_tls=True, debug=False).\nCall .fetch(path) then poll .update() until it returns AsyncFetch.DONE.' },
@@ -1028,7 +1028,7 @@ const MEMBERS = {
     { label: 'ERROR',       kind: 'Constant', doc: 'Status: error (3).' },
   ],
 
-  // ── Badge: pimoroni module (hardware helpers) ──────────────────────────────
+  // -- Badge: pimoroni module (hardware helpers) ------------------------------
   pimoroni: [
     { label: 'Button',        kind: 'Class', insertText: 'Button(${1:pin})',
       doc: 'Debounced button with repeat/hold. Button(button, invert=True, repeat_time=200, hold_time=1000).\nMethods: .read(), .raw(); property .is_pressed.' },
@@ -1050,7 +1050,7 @@ const MEMBERS = {
     { label: 'REVERSED_DIR',  kind: 'Constant', doc: 'Motor/encoder direction: reversed (0x01).' },
   ],
 
-  // ── Badge: urllib.urequest ─────────────────────────────────────────────────
+  // -- Badge: urllib.urequest -------------------------------------------------
   urllib: [
     { label: 'urequest', kind: 'Module', doc: 'Minimal urlopen. import urllib.urequest; urllib.urequest.urlopen(url).' },
   ],
@@ -1060,7 +1060,7 @@ const MEMBERS = {
   ],
 };
 
-/* ── Helper: convert a stub entry → Monaco CompletionItem ────────────────── */
+/* -- Helper: convert a stub entry → Monaco CompletionItem ------------------ */
 function toCompletionItem(entry, range, monaco) {
   const K = monaco.languages.CompletionItemKind;
   const kindMap = {

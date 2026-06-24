@@ -1,7 +1,7 @@
-/* ── Monaco editor configuration: completions + theme ───────────────────── */
+/* -- Monaco editor configuration: completions + theme --------------------- */
 function configureMonaco(monaco) {
 
-  /* ── Type inference: scan document for ident = TypeName(...) patterns ──
+  /* -- Type inference: scan document for ident = TypeName(...) patterns --
      Returns the MEMBERS array for the inferred type, or null.             */
   function inferMembersFromDoc(ident, docText) {
     // Match:  ident = TypeName(        → direct constructor
@@ -30,7 +30,7 @@ function configureMonaco(monaco) {
     }
   }
 
-  /* ── Completion provider ───────────────────────────────────────── */
+  /* -- Completion provider ----------------------------------------- */
   monaco.languages.registerCompletionItemProvider('python', {
     triggerCharacters: ['.', '(', '|'],
 
@@ -42,7 +42,7 @@ function configureMonaco(monaco) {
         endColumn: position.column,
       });
 
-      // ── File-path completion inside string literals ─────────────
+      // -- File-path completion inside string literals -------------
       // Matches the partial path after an opening quote, e.g. open("/rom/fon
       const strMatch = linePrefix.match(/["']((?:\/|\.\/)[^"']*)$/);
       if (strMatch) {
@@ -82,7 +82,7 @@ function configureMonaco(monaco) {
         return { suggestions };
       }
 
-      // ── badge.mode() flag completion ────────────────────────────
+      // -- badge.mode() flag completion ----------------------------
       // Inside a badge.mode( … ) call, offer the display-mode flags.
       // LORES / HIRES are the mutually-exclusive resolution choices, so once
       // one of them is present we stop offering either (you can't combine them).
@@ -148,7 +148,7 @@ function configureMonaco(monaco) {
     },
   });
 
-  /* ── Custom theme (badgewa.re palette + Prism Tomorrow syntax) ─── */
+  /* -- Custom theme (badgewa.re palette + Prism Tomorrow syntax) --- */
   monaco.editor.defineTheme('badgeware', {
     base:    'vs-dark',
     inherit: true,

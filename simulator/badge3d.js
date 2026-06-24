@@ -1,4 +1,4 @@
-/* ── 3D badge display ────────────────────────────────────────────────────── */
+/* -- 3D badge display ------------------------------------------------------ */
 const _badge3dBase = new URL('.', document.currentScript.src).href;
 
 function initBadge3D(simulator, appendOut) {
@@ -152,7 +152,7 @@ function initBadge3D(simulator, appendOut) {
         shadowDirty = true;               // silhouette will change as it spins
       };
 
-      /* ── Double-click the screen to zoom in / out ──────────────────────────
+      /* -- Double-click the screen to zoom in / out --------------------------
          A "home" pose is captured at load; the render loop eases the camera
          between home and a face-on framing of the screen. */
       let   screenFocusReady = false;
@@ -377,7 +377,7 @@ function initBadge3D(simulator, appendOut) {
         if (raycaster.intersectObject(screenMesh, false).length) focusScreen(true);
       });
 
-      /* ── Button press animation (siloed — swap out when geometry improves) ──
+      /* -- Button press animation (siloed — swap out when geometry improves) --
          Approach: onBeforeCompile vertex displacement on the cap mesh(es)
          found by raycasting at each button zone, plus a screen-space ripple. */
       function initButtonAnimator(root, tuftyNode) {
@@ -417,7 +417,7 @@ function initBadge3D(simulator, appendOut) {
         const pressVals = [0, 0, 0, 0, 0];
         const targets   = [0, 0, 0, 0, 0];
 
-        // ── Ripple pool (visual "dash of 3") ─────────────────────────────
+        // -- Ripple pool (visual "dash of 3") -----------------------------
         const RIPPLE_DUR  = 0.42;
         const ripplePool  = Array.from({ length: 4 }, () => {
           const mat  = new THREE.MeshBasicMaterial({
@@ -442,7 +442,7 @@ function initBadge3D(simulator, appendOut) {
           r.t = 0;
         }
 
-        // ── Public API ────────────────────────────────────────────────────
+        // -- Public API ----------------------------------------------------
         const PRESS_SPD   = 22;
         const RELEASE_SPD = 9;
 
@@ -477,7 +477,7 @@ function initBadge3D(simulator, appendOut) {
         };
       }
 
-      /* ── Case LEDs ─────────────────────────────────────────────────────────
+      /* -- Case LEDs ---------------------------------------------------------
          The back-case MATERIAL emits a soft, case-tinted halo plus a tight
          white-hot core around each LED's world position. Nothing to occlude (the
          glow is on the outer surface) and only the back mesh emits, so it can't

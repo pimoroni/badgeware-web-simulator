@@ -1,150 +1,18 @@
-/* ── badgeware-web entry point ──────────────────────────────────────────────
-   Two phases that run in parallel:
-     • bootSimulator()  — spins up the simulator + 3D badge and runs main.py.
-       Has no dependency on Monaco, so it's kicked off immediately (see bottom
-       of file) rather than waiting for the editor bundle to download.
-     • initApp()        — called once Monaco is ready; builds the editor and
-       wires the UI to the already-running simulator. */
+/* -- badgeware-web editor entry point ---------------------------------------
+   The Monaco-dependent half of the app. The simulator + 3D badge are booted
+   separately in boot.js (kicked off before this bundle loads); initApp() adopts
+   that in-flight boot and wires the editor, tabs and file browser to it. */
 const APP_BASE = new URL('.', document.currentScript.src).href;
-
-/* ── Simulator boot (Monaco-independent) ───────────────────────────────────
-   Resolves to a shared context the editor wires itself into. Idempotent. */
-let _bootCtx = null;
-function bootSimulator() {
-  if (_bootCtx) return _bootCtx;
-  _bootCtx = (async () => {
-    await userFS.ready;   // populate the in-memory FS cache before any read below
-    const stdoutEl = document.getElementById('stdout');
-    const statusEl = document.getElementById('status');
-    const stopBtn  = document.getElementById('stop-btn');
-
-    const appendOut = (text, cls) => {
-      const span = document.createElement('span');
-      span.textContent = text + '\n';
-      if (cls) span.className = cls;
-      stdoutEl.appendChild(span);
-      stdoutEl.scrollTop = stdoutEl.scrollHeight;
-    };
-
-    const simulator = await BadgewareSimulator();
-    const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
-
-    /* Run / Stop state (the Stop button is meaningful only while running). */
-    let isRunning = false;
-    const setRunning = (running) => { isRunning = running; stopBtn.disabled = !running; };
-    const onSimulatorStopped = () => {
-      if (!isRunning) return;
-      setRunning(false);
-      statusEl.textContent = 'Stopped (error)';
-    };
-
-    /* Incremental MicroPython traceback parsing. The editor attaches marker
-       hooks (trace.clear / trace.apply) later; until then they're no-ops. */
-    const trace = { frames: [], lastRunKey: null, clear: null, apply: null };
-    // Returns true when `text` is part of a Python traceback (header, a `File …`
-    // frame, or the terminal exception line) so the console can render it red.
-    function parseTracebackLine(text) {
-      const fileMatch = text.match(/^\s+File "([^"]+)", line (\d+)/);
-      if (fileMatch) {
-        trace.frames.push({ file: fileMatch[1], line: parseInt(fileMatch[2], 10) });
-        return true;
-      }
-      // Header — the runtime may prefix it (e.g. "- ERROR: Traceback …"), so match
-      // anywhere in the line rather than only at the start.
-      if (text.includes('Traceback (most recent call last):')) {
-        trace.frames = [];
-        return true;
-      }
-      // Terminal error line: non-whitespace start, frames already accumulated.
-      if (trace.frames.length > 0 && /^\w/.test(text)) {
-        if (trace.apply) trace.apply(text, trace.frames, trace.lastRunKey);
-        trace.frames = [];
-        onSimulatorStopped();   // a fatal exception ends the program
-        return true;
-      }
-      // Standalone runtime error line (e.g. "- ERROR: …") with no traceback.
-      if (text.startsWith('- ERROR')) return true;
-      return false;
-    }
-    simulator.stdout = async (text) => {
-      const isError = parseTracebackLine(text);
-      appendOut(text, isError ? 'out-error' : undefined);
-    };
-
-    /* Shared run/stop, used by both the boot run and the editor's Run button. */
-    const runProgram = async (code, { tabKey = null, status = '' } = {}) => {
-      if (trace.clear) trace.clear();
-      trace.frames = [];
-      trace.lastRunKey = tabKey;
-      stdoutEl.innerHTML = '';
-      appendOut('▶ Running…', 'out-dim');
-      statusEl.textContent = 'Running…';
-      setRunning(true);
-      // simulator.run() tears down the old worker first; drop the screen texture
-      // so the render loop never touches a destroyed frame source.
-      pauseScreen();
-      try {
-        await simulator.run(code, userFS.workerFiles());
-        applyCanvasToScreen();
-        statusEl.textContent = status;
-      } catch (err) {
-        appendOut('✕ ' + err, 'out-error');
-        statusEl.textContent = 'Error';
-        setRunning(false);
-      }
-    };
-    const stopProgram = async () => {
-      pauseScreen();
-      await simulator.stop();
-      setRunning(false);
-      statusEl.textContent = 'Stopped';
-    };
-
-    // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
-    // file to run + open in the editor; otherwise the system boot script (which
-    // launches the menu). NAME resolves against the user FS first, then the system
-    // filesystem (so `?file=blink.py` or `?file=/system/apps/clock/main.py`).
-    const qFile = new URLSearchParams(location.search).get('file');
-    const hFile = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
-    const override = (qFile || hFile || '').trim();
-
-    let defaultCode = null, startupFile = null, warn = null;
-    if (override) {
-      const path  = override.startsWith('/') ? override : '/' + override;
-      const entry = userFS.get(path);
-      if (entry && !entry.binary && !entry.isDir) {
-        defaultCode = entry.text;
-        startupFile = { path, tabKey: path, system: false };
-      } else if (!entry) {
-        defaultCode = await fetch(APP_BASE + 'filesystem' + path)
-          .then(r => r.ok ? r.text() : null).catch(() => null);
-        if (defaultCode != null) startupFile = { path, tabKey: 'sys:' + path, system: true };
-      }
-      if (defaultCode == null) warn = `⚠ Could not load "${override}" — running the default instead.`;
-    }
-    if (defaultCode == null) {
-      startupFile = null;
-      defaultCode = await fetch(APP_BASE + 'filesystem/system/main.py')
-        .then(r => r.ok ? r.text() : null)
-        .catch(() => null)
-        ?? 'badge.mode(HIRES)\n\ndef update():\n    screen.text("Hello!", 10, 10)\n';
-    }
-    // Run it now, in parallel with Monaco loading — don't await the program itself.
-    runProgram(defaultCode, { tabKey: startupFile ? startupFile.tabKey : null });
-    if (warn) appendOut(warn, 'out-dim');
-
-    return { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode, startupFile };
-  })();
-  return _bootCtx;
-}
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { stdoutEl, statusEl, rotateView, trace, runProgram, stopProgram, defaultCode, startupFile } = await bootSimulator();
+  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, addActions } = await bootSimulator();
+  const statusEl   = document.getElementById('status');    // save / read-only messages
+  const galleryEl  = document.getElementById('gallery');   // example gallery (home view)
 
   configureMonaco(monaco);
 
-  /* ── Editor ────────────────────────────────────────────────────── */
+  /* -- Editor ------------------------------------------------------ */
   const editor = monaco.editor.create(document.getElementById('editor'), {
     value:          '# Loading…',
     language:       'python',
@@ -165,7 +33,7 @@ async function initApp() {
     parameterHints: { enabled: true },
   });
 
-  /* ── File / model state (needed early so model functions can reference them) */
+  /* -- File / model state (needed early so model functions can reference them) */
   let currentFilePath = null;   // FS path when a user file is active, otherwise null
   let currentReadOnly = false;
   let currentTabKey   = null;   // key into openModels for the active tab
@@ -173,7 +41,7 @@ async function initApp() {
   const openModels    = new Map();  // tabKey → { model, dirty, readOnly, transient, label? }
   const openOrder     = [];         // ordered list of open tabKeys
 
-  /* ── File browser (left panel) ─────────────────────────────────────────────
+  /* -- File browser (left panel) ---------------------------------------------
      The panel (trees, context menu, FS ops) lives in filebrowser.js; we own the
      tabs/Monaco models and hand it this host so it never touches them directly. */
   const fb = createFileBrowser({
@@ -221,9 +89,9 @@ async function initApp() {
 
   // Bootstrap the editor: a URL deep-link file (opened at the end of init, once the
   // model helpers + FILE_HANDLERS exist) or the default scratch main.py.
-  if (!startupFile) openScratchTab('main.py', defaultCode);
+  if (!startupFile) showGallery();   // home view is the example gallery (the OS runs on the badge regardless)
 
-  /* ── Runtime error → Monaco markers (wired into the boot's traceback parser) */
+  /* -- Runtime error → Monaco markers (wired into the boot's traceback parser) */
   function clearRuntimeMarkers() {
     for (const info of openModels.values()) {
       if (info.model) monaco.editor.setModelMarkers(info.model, 'micropython', []);
@@ -260,11 +128,7 @@ async function initApp() {
   trace.clear = clearRuntimeMarkers;
   trace.apply = applyTracebackMarkers;
 
-  /* ── Run / Stop action ─────────────────────────────────────────── */
-  const runBtn  = document.getElementById('run-btn');
-  const stopBtn = document.getElementById('stop-btn');
-
-  /* ── Auto-save debounce ───────────────────────────────────────────────────
+  /* -- Auto-save debounce ---------------------------------------------------
      Coalesce rapid keystrokes into one IndexedDB write per idle gap instead of
      one write per character. Tune AUTOSAVE_DEBOUNCE_MS: higher = fewer writes,
      but more unsaved text at risk if the tab dies mid-edit. */
@@ -298,55 +162,92 @@ async function initApp() {
   // Don't lose the last debounce window's worth of edits on tab close/reload.
   window.addEventListener('beforeunload', flushPendingSave);
 
-  const runCode = async () => {
+  // Tell the simulator how to fetch the current code to run: flush any pending
+  // autosave, persist the active file, and hand back code + tab + status. The
+  // boot.js command dispatch (Run button) and the F5 action below both use it.
+  setRunProvider(() => {
+    if (!currentTabKey) return null;   // gallery / no active tab — nothing to run
     flushPendingSave();   // cancel any queued write; we persist the latest below
     const code = editor.getValue();
-    // Auto-save to user FS if a named file is open
     if (currentFilePath && !currentReadOnly) {
       userFS.set(currentFilePath, { text: code, binary: false });
     }
-    await runProgram(code, {
+    return {
+      code,
       tabKey: currentTabKey,
       status: currentFilePath && !currentReadOnly ? currentFilePath : '',
-    });
-  };
+    };
+  });
 
-  const stopCode = stopProgram;
-
-  // F5 keybinding inside the editor
+  // F5 keybinding inside the editor — runs the current editor content.
   editor.addAction({
     id:                   'badgeware.run',
     label:                'Run in Simulator',
     keybindings:          [monaco.KeyCode.F5],
     contextMenuGroupId:   'navigation',
     contextMenuOrder:     1,
-    run:                  runCode,
+    run:                  runCurrent,
   });
 
   // Ctrl/Cmd+S — explicit save
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveCurrentFile);
 
-  /* ── Toolbar wiring ────────────────────────────────────────────── */
-  runBtn.addEventListener('click', runCode);
-  stopBtn.addEventListener('click', stopCode);
+  /* -- Example gallery (home view) -----------------------------------------
+     Built from examples/manifest.json. The card image opens the example as a
+     transient, editable tab AND runs it; Edit / Run do one or the other. The
+     toolbar "Examples" button returns here. */
+  function showGallery() {
+    document.getElementById('editor').style.display = 'none';
+    document.getElementById('img-preview').style.display = 'none';
+    galleryEl.style.display = 'block';   // '' would fall back to the CSS display:none
+    currentTabKey = null; currentFilePath = null; currentReadOnly = false;
+    renderTabs();      // clear the active-tab highlight
+    fb.markActive();
+  }
+  addActions({ gallery: showGallery });   // wire the toolbar "Examples" button
 
-  /* ── 3D badge spin buttons (180° steps) ────────────────────────── */
-  document.getElementById('view-prev-btn').addEventListener('click', () => rotateView(-1));
-  document.getElementById('view-next-btn').addEventListener('click', () => rotateView(+1));
+  async function buildGallery() {
+    let manifest;
+    try { manifest = await fetch(APP_BASE + 'examples/manifest.json').then((r) => r.json()); }
+    catch { galleryEl.innerHTML = '<p class="gallery-empty">Couldn’t load the example list.</p>'; return; }
+    galleryEl.innerHTML = '<div class="gallery-grid">' + manifest.examples.map((ex) => {
+      const clip = ex.clip || ex.screenshot.replace(/([^/]+)$/, 'anim/$1');   // screenshots/<n> → screenshots/anim/<n>
+      return `
+      <figure class="example" data-file="${ex.file}">
+        <button class="example-open" data-act="open" title="Open &amp; run">
+          <img class="still" src="${ex.screenshot}" alt="" loading="lazy">
+          <img class="anim" data-clip="${clip}" alt="">
+        </button>
+        <figcaption><b>${ex.file}</b><span>${ex.description}</span></figcaption>
+        <div class="example-actions">
+          <button data-act="edit">Edit</button>
+          <button data-act="run">Run</button>
+        </div>
+      </figure>`;
+    }).join('') + '</div>';
+  }
+  buildGallery();
 
-  document.getElementById('example-select').addEventListener('change', async (e) => {
-    if (!e.target.value) return;
-    const name = e.target.value.split('/').pop();
-    const code = await fetch(e.target.value).then(r => r.ok ? r.text() : null).catch(() => null);
-    if (code != null) openScratchTab(name, code);
-    e.target.value = '';
+  // Lazy-load each card's animated clip the first time it's hovered; CSS swaps to
+  // it on :hover. (mouseover bubbles, so one delegated listener covers every card.)
+  galleryEl.addEventListener('mouseover', (e) => {
+    const anim = e.target.closest('.example')?.querySelector('img.anim[data-clip]');
+    if (anim) { anim.src = anim.dataset.clip; anim.removeAttribute('data-clip'); }
   });
 
-  document.getElementById('clear-btn').addEventListener('click', () => {
-    stdoutEl.innerHTML = '';
+  galleryEl.addEventListener('click', async (e) => {
+    const fig = e.target.closest('.example[data-file]');
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (!fig || !act) return;
+    const file = fig.dataset.file;
+    const code = await fetch(APP_BASE + 'examples/' + file).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+    if (code == null) { statusEl.textContent = `Could not load ${file}`; return; }
+    if (act === 'run') { runProgram(code, { status: file }); return; }   // run only, stay on the gallery
+    const key = openScratchTab(file, code, { transient: true });          // edit → opens the editor view
+    if (act === 'open') runProgram(code, { tabKey: key, status: file });  // image → also run it
   });
 
-  /* ── Load system file list ─────────────────────────────────────── */
+  /* -- Load system file list --------------------------------------- */
   try {
     const fsData = await fetch(APP_BASE + 'filesystem.json').then(r => r.json());
     // Manifest shape: { files: { "/path": byteSize } } — we only need the paths here.
@@ -355,7 +256,7 @@ async function initApp() {
     fb.refresh({ rebuildSystem: true });
   } catch (_) {}
 
-  /* ── File browser state ────────────────────────────────────────── */
+  /* -- File browser state ------------------------------------------ */
   function setCurrentFile(tabKey, readOnly = false) {
     currentTabKey   = tabKey;
     // User-file keys are bare FS paths starting with '/'; others have a scheme prefix
@@ -366,9 +267,17 @@ async function initApp() {
     fb.refresh();
   }
 
-  /* ── Tab / model management ────────────────────────────────────── */
+  /* -- Tab / model management -------------------------------------- */
   function langForPath(p) {
     return p.endsWith('.py') ? 'python' : p.endsWith('.json') ? 'json' : 'plaintext';
+  }
+
+  // Pretty-print a file's text for the editor. JSON gets 2-space indentation (the
+  // standard JSON.parse → JSON.stringify round-trip); invalid JSON is shown as-is.
+  function formatForPreview(path, text) {
+    if (!path.toLowerCase().endsWith('.json')) return text;
+    try { return JSON.stringify(JSON.parse(text), null, 2); }
+    catch { return text; }
   }
 
   function tabLabel(key) {
@@ -380,39 +289,44 @@ async function initApp() {
   function renderTabs() {
     const bar = document.getElementById('tab-bar');
     if (!bar) return;
-    bar.innerHTML = '';
+    // <nav id="tab-bar"> ➜ <ul> ➜ <li> per open file. Structure carries meaning:
+    // first <span> = name, .material-icons <span> = read-only lock, <button> = close.
+    const list = document.createElement('ul');
     for (const key of openOrder) {
       const info = openModels.get(key);
       if (!info) continue;
-      const isActive = key === currentTabKey;
-      const tab = document.createElement('div');
-      tab.className = 'tab' + (isActive ? ' active' : '') + (info.dirty ? ' dirty' : '') + (info.transient ? ' transient' : '');
+
+      const tab = document.createElement('li');
+      // Dynamic state only — structure is tag-based (see app.css).
+      const state = [];
+      if (key === currentTabKey) state.push('active');
+      if (info.dirty)            state.push('dirty');
+      if (info.transient)        state.push('transient');
+      tab.className = state.join(' ');
       tab.title = key;
 
       const name = document.createElement('span');
-      name.className = 'tab-name';
       name.textContent = tabLabel(key);
+      tab.appendChild(name);
 
       if (info.readOnly) {
         const ro = document.createElement('span');
-        ro.className = 'tab-readonly material-icons';
+        ro.className = 'material-icons';   // icon font; identifies the lock glyph
         ro.textContent = 'lock';
-        tab.appendChild(name);
         tab.appendChild(ro);
-      } else {
-        tab.appendChild(name);
       }
 
       const x = document.createElement('button');
-      x.className = 'tab-close';
       x.textContent = '✕';
       x.title = 'Close';
       x.addEventListener('click', ev => { ev.stopPropagation(); closeTab(key); });
       tab.appendChild(x);
+
       tab.addEventListener('click',    () => focusTab(key));
       tab.addEventListener('dblclick', () => promoteTab(key));
-      bar.appendChild(tab);
+      list.appendChild(tab);
     }
+    bar.replaceChildren(list);
   }
 
   function focusTab(key) {
@@ -424,19 +338,21 @@ async function initApp() {
 
     const editorEl  = document.getElementById('editor');
     const imgEl     = document.getElementById('img-preview');
+    galleryEl.style.display = 'none';   // focusing a tab leaves the gallery
 
     if (info.imgUrl) {
       editorEl.style.display  = 'none';
       imgEl.style.display     = 'flex';
-      const imgTag = document.getElementById('img-preview-img');
+      const imgTag = imgEl.querySelector('img');
       imgTag.src = info.imgUrl;
-      document.getElementById('img-preview-name').textContent = tabLabel(key);
+      imgEl.querySelector('span').textContent = tabLabel(key);
+      dimsEl = imgEl.querySelector('small');
       if (info.dimText) {
-        document.getElementById('img-preview-dim').textContent = info.dimText;
+        dimsEl.textContent = info.dimText;
       } else {
-        document.getElementById('img-preview-dim').textContent = '';
+        dimsEl.textContent = '';
         imgTag.onload = () => {
-          document.getElementById('img-preview-dim').textContent = imgTag.naturalWidth + ' × ' + imgTag.naturalHeight + ' px';
+          dimsEl.textContent = imgTag.naturalWidth + ' × ' + imgTag.naturalHeight + ' px';
         };
       }
     } else {
@@ -446,7 +362,7 @@ async function initApp() {
       editor.updateOptions({ readOnly: info.readOnly });
     }
 
-    fb.refresh();
+    fb.markActive();   // highlight only — don't rebuild the tree (would break dblclick)
     renderTabs();
   }
 
@@ -489,20 +405,17 @@ async function initApp() {
     renderTabs();
   }
 
-  function openScratchTab(name, content) {
+  function openScratchTab(name, content, { transient = false } = {}) {
     const key = 'scratch:' + name;
-    if (openModels.has(key)) { focusTab(key); return; }
+    if (openModels.has(key)) { focusTab(key); return key; }
+    if (transient) evictTransient(key);
     const uri   = monaco.Uri.parse('badgeware:///scratch/' + encodeURIComponent(name));
     const model = monaco.editor.createModel(content, langForPath(name), uri);
-    openModels.set(key, { model, dirty: false, readOnly: false, label: name });
+    openModels.set(key, { model, dirty: false, readOnly: false, transient, label: name });
     openOrder.push(key);
-    currentTabKey   = key;
-    currentFilePath = null;
-    currentReadOnly = false;
-    editor.setModel(model);
-    editor.updateOptions({ readOnly: false });
-    renderTabs();
-    fb.refresh();
+    if (transient) transientTabKey = key;
+    focusTab(key);   // sets editor/model/currentTabKey, hides the gallery, renders
+    return key;
   }
 
   function saveCurrentFile() {
@@ -526,16 +439,21 @@ async function initApp() {
     const text = editor.getValue();
     userFS.set(path, { text, binary: false });
 
-    // Re-key the existing model as a permanent user-file tab
+    // Replace the scratch tab with a real user-file tab. We can't reuse the scratch
+    // model — its URI is badgeware:///scratch/<name>, which is immutable and would
+    // collide when a new scratch later takes the same name ("model already exists").
+    // So open the saved path freshly (a model under the user:// URI, or focus it if
+    // already open), then dispose the scratch model + tab, freeing the scratch URI.
     const prevKey = currentTabKey;
     const info    = openModels.get(prevKey);
+
+    openUserFile(path, false);   // creates the user-file model + tab and focuses it
+
     if (transientTabKey === prevKey) transientTabKey = null;
     openModels.delete(prevKey);
     const idx = openOrder.indexOf(prevKey);
-    openOrder.splice(idx, 1, path);
-    openModels.set(path, { ...info, dirty: false, readOnly: false, transient: false, label: null });
-    currentTabKey   = path;
-    currentFilePath = path;
+    if (idx !== -1) openOrder.splice(idx, 1);
+    if (info?.model) info.model.dispose();
 
     fb.refresh();
     renderTabs();
@@ -543,8 +461,8 @@ async function initApp() {
     setTimeout(() => { statusEl.textContent = path; }, 1500);
   }
 
-  /* ── File helpers ──────────────────────────────────────────────── */
-  /* ── File-type dispatch table ──────────────────────────────────── */
+  /* -- File helpers ------------------------------------------------ */
+  /* -- File-type dispatch table ------------------------------------ */
   /* kind: 'text'    — open in Monaco editor                         */
   /* kind: 'image'   — decode bytes → blob URL → img preview         */
   /* kind: 'preview' — parse binary → render canvas → img preview    */
@@ -576,7 +494,7 @@ async function initApp() {
 
   function openBinaryTab(key, buf, handler, transient, mimeOverride) {
     if (openModels.has(key)) {
-      if (!transient && openModels.get(key).transient) promoteTab(key);
+      if (openModels.get(key).transient && (!transient || currentTabKey === key)) promoteTab(key);
       focusTab(key);
       return;
     }
@@ -603,7 +521,7 @@ async function initApp() {
     if (handler.kind === 'text') {
       const key = 'sys:' + path;
       if (openModels.has(key)) {
-        if (!transient && openModels.get(key).transient) promoteTab(key);
+        if (openModels.get(key).transient && (!transient || currentTabKey === key)) promoteTab(key);
         focusTab(key);
         statusEl.textContent = path + ' — read-only';
         return;
@@ -612,7 +530,7 @@ async function initApp() {
       try {
         const text  = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
         const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
-        const model = monaco.editor.createModel(text, langForPath(path), uri);
+        const model = monaco.editor.createModel(formatForPreview(path, text), langForPath(path), uri);
         openModels.set(key, { model, dirty: false, readOnly: true, transient });
         openOrder.push(key);
         if (transient) transientTabKey = key;
@@ -643,20 +561,28 @@ async function initApp() {
 
     if (entry.binary) return;
     if (openModels.has(path)) {
-      if (!transient && openModels.get(path).transient) promoteTab(path);
+      // Promote a transient preview to a permanent tab on an explicit open
+      // (dblclick / Enter), OR on a re-click of the file that's already the
+      // current preview. The re-click rule is an INTENTIONAL choice, not just a
+      // dblclick fallback: a second click commits with no timing/distance
+      // constraint, which is far more accessible than a true double-click (and
+      // mirrors the keyboard model: Space previews, Enter commits). See TODO.md
+      // for the rationale + trade-off — please don't "fix" it back to strict
+      // dblclick.
+      if (openModels.get(path).transient && (!transient || currentTabKey === path)) promoteTab(path);
       focusTab(path);
       return;
     }
     if (transient) evictTransient(path);
     const uri   = monaco.Uri.parse('badgeware:///user' + encodeURIComponent(path));
-    const model = monaco.editor.createModel(entry.text, langForPath(path), uri);
+    const model = monaco.editor.createModel(formatForPreview(path, entry.text), langForPath(path), uri);
     openModels.set(path, { model, dirty: false, readOnly: false, transient });
     openOrder.push(path);
     if (transient) transientTabKey = path;
     focusTab(path);
   }
 
-  /* ── Auto-save / dirty tracking ───────────────────────────────── */
+  /* -- Auto-save / dirty tracking --------------------------------- */
   editor.onDidChangeModelContent(() => {
     if (!currentTabKey) return;
     const info = openModels.get(currentTabKey);
@@ -689,7 +615,7 @@ async function initApp() {
 
   initResizeHandlers();
 
-  /* ── Mobile tab switching ──────────────────────────────────────── */
+  /* -- Mobile tab switching ---------------------------------------- */
   {
     const mobileNav = document.getElementById('mobile-nav');
     const setMobileTab = (tab) => {
@@ -709,8 +635,3 @@ async function initApp() {
   // No auto-run here: bootSimulator() already started main.py in parallel with
   // Monaco loading. The editor is now wired to that running simulator.
 }
-
-// Kick off the simulator boot the moment this script parses — well before the
-// Monaco editor bundle finishes downloading. initApp() (run from the Monaco
-// require() callback) adopts this same in-flight boot.
-bootSimulator();

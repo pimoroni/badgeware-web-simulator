@@ -1,4 +1,4 @@
-/* ── File browser panel ──────────────────────────────────────────────────────
+/* -- File browser panel ------------------------------------------------------
    Owns the left-hand file panel: the user + system file trees, the right-click
    context menu, the toolbar (new / new-folder / upload), and all `userFS`
    mutations. It knows nothing about Monaco models or tabs — those stay in app.js,
@@ -29,7 +29,7 @@ function createFileBrowser(host) {
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const normalisePath = (raw) => { const p = raw.trim(); return p.startsWith('/') ? p : '/' + p; };
 
-  /* ── Tree model ──────────────────────────────────────────────────────────
+  /* -- Tree model ----------------------------------------------------------
      Build a nested {name: child|null} tree from a flat path list. Paths ending
      in "/" are explicit directory markers. */
   function buildDirTree(paths) {
@@ -45,8 +45,12 @@ function createFileBrowser(host) {
     return root;
   }
 
-  // Render a tree node's entries to an HTML string. `user` toggles the editable
-  // (delete button, collapse-state, active highlight) vs read-only system styling.
+  // Render a tree node's entries to a string of <li> elements (the caller wraps
+  // them in a <ul>). Directories stay as <details>/<summary> for free, accessible
+  // collapse; their children recurse into a nested <ul class="dir-children">. File
+  // rows are tabbable (tabindex=0) so the keyboard reaches them too, not just the
+  // directory summaries. `user` toggles editable (delete button, collapse-state,
+  // active highlight) vs read-only system styling.
   function nodeToHtml(node, prefix, user, activePath) {
     const entries = Object.entries(node)
       .filter(([k]) => k !== '__dir')
@@ -60,21 +64,21 @@ function createFileBrowser(host) {
       const full = prefix + '/' + name;
       if (child && child.__dir) {
         const open = user ? !collapsedDirs.has(full) : false;   // user dirs default open
-        html += `<details class="tree-dir" data-path="${esc(full)}"${open ? ' open' : ''}>`
+        html += `<li><details class="tree-dir" data-path="${esc(full)}"${open ? ' open' : ''}>`
               +   `<summary><span class="dir-arrow material-icons">chevron_right</span><span>${esc(name)}/</span></summary>`
-              +   `<div class="dir-children">${nodeToHtml(child, full, user, activePath)}</div>`
-              + `</details>`;
+              +   `<ul class="dir-children">${nodeToHtml(child, full, user, activePath)}</ul>`
+              + `</details></li>`;
       } else if (user) {
         const active = full === activePath ? ' active' : '';
-        html += `<div class="tree-row${active}" data-path="${esc(full)}" title="${esc(full)}">`
+        html += `<li><div class="tree-row${active}" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
               +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-icons">close</span></button></span>`
-              + `</div>`;
+              + `</div></li>`;
       } else {
-        html += `<div class="tree-row" data-path="${esc(full)}" title="${esc(full)}">`
+        html += `<li><div class="tree-row" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
               +   `<span class="row-badge material-icons" title="System file">lock</span>`
-              + `</div>`;
+              + `</div></li>`;
       }
     }
     return html;
@@ -88,21 +92,40 @@ function createFileBrowser(host) {
       if (d.open) collapsedDirs.delete(d.dataset.path); else collapsedDirs.add(d.dataset.path);
     });
 
+    // Rebuilding userList drops keyboard focus; note the focused row's path so we
+    // can restore it (so Space-to-preview keeps focus for the next Tab).
+    const focused = document.activeElement;
+    const refocusPath = (userList.contains(focused) && focused.classList.contains('tree-row'))
+      ? focused.dataset.path : null;
+
     const paths = host.userFS.paths();
     userList.innerHTML = paths.length
-      ? nodeToHtml(buildDirTree(paths), '', true, host.activePath())
+      ? `<ul class="tree">${nodeToHtml(buildDirTree(paths), '', true, host.activePath())}</ul>`
       : '<div class="fp-empty">No files yet.</div>';
+
+    if (refocusPath) {
+      userList.querySelector(`.tree-row[data-path="${refocusPath.replace(/["\\]/g, '\\$&')}"]`)?.focus();
+    }
 
     if (!sysBuilt) {
       sysBuilt = true;
-      sysTree.innerHTML = nodeToHtml(buildDirTree(host.getSystemPaths()), '', false);
+      sysTree.innerHTML = `<ul class="tree">${nodeToHtml(buildDirTree(host.getSystemPaths()), '', false)}</ul>`;
     }
-    const active = host.activePath();
-    sysTree.querySelectorAll('.tree-row').forEach(el =>
-      el.classList.toggle('active', el.dataset.path === active));
+    markActive();
   }
 
-  /* ── Tree interaction (delegated) ────────────────────────────────────────
+  // Sync the active-row highlight on both trees without a rebuild. focusTab uses
+  // this instead of refresh() so a click doesn't replace the row mid-double-click
+  // (which would swallow the dblclick) and keyboard focus is preserved.
+  function markActive() {
+    const active = host.activePath();
+    for (const el of userList.querySelectorAll('.tree-row'))
+      el.classList.toggle('active', el.dataset.path === active);
+    for (const el of sysTree.querySelectorAll('.tree-row'))
+      el.classList.toggle('active', el.dataset.path === active);
+  }
+
+  /* -- Tree interaction (delegated) ----------------------------------------
      <details> handles its own open/close natively; we only wire opens/deletes
      and the context menu. */
   userList.addEventListener('click', (e) => {
@@ -121,6 +144,28 @@ function createFileBrowser(host) {
     const summary = e.target.closest('summary');
     if (summary) showCtxMenu(e, summary.closest('details').dataset.path, true);
   });
+  // Keyboard on a focused file row: Space previews (transient, like single-click),
+  // Enter opens for keeps (like double-click), Delete/Backspace removes it (so the
+  // delete button needn't be a tab stop — it stays mouse-hover only). Directories
+  // use the native <summary> toggle, so only act when a row itself holds focus.
+  userList.addEventListener('keydown', (e) => {
+    if (!e.target.classList.contains('tree-row')) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      host.openFile(e.target.dataset.path, { transient: e.key === ' ' });
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      const path = e.target.dataset.path;
+      // Remember the row to land on (next sibling, else previous) before the rebuild.
+      const rows = [...userList.querySelectorAll('.tree-row')];
+      const i = rows.indexOf(e.target);
+      const nextPath = (rows[i + 1] || rows[i - 1])?.dataset.path;
+      deleteUserPath(path);
+      if (nextPath && !host.userFS.get(path)) {   // deletion happened → move focus on
+        userList.querySelector(`.tree-row[data-path="${nextPath.replace(/["\\]/g, '\\$&')}"]`)?.focus();
+      }
+    }
+  });
 
   sysTree.addEventListener('click', (e) => {
     const row = e.target.closest('.tree-row');
@@ -130,8 +175,14 @@ function createFileBrowser(host) {
     const row = e.target.closest('.tree-row');
     if (row) host.openFile(row.dataset.path, { transient: false, system: true });
   });
+  sysTree.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!e.target.classList.contains('tree-row')) return;
+    e.preventDefault();
+    host.openFile(e.target.dataset.path, { transient: e.key === ' ', system: true });
+  });
 
-  /* ── Context menu ────────────────────────────────────────────────────────*/
+  /* -- Context menu --------------------------------------------------------*/
   let ctxTarget = null;   // { path, isDir }
 
   function showCtxMenu(e, path, isDir) {
@@ -155,35 +206,23 @@ function createFileBrowser(host) {
   document.addEventListener('contextmenu', e => { if (!e.target.closest('#file-ctx-menu')) hideCtxMenu(); }, true);
 
   menu.addEventListener('click', (e) => {
-    const item = e.target.closest('button');   // menu items are the only buttons here
+    const item = e.target.closest('[data-action]');
     if (!item || !ctxTarget) return;
     const { path, isDir } = ctxTarget;
+    const here = isDir ? path : path.slice(0, path.lastIndexOf('/'));   // dir to create into
     hideCtxMenu();
 
-    switch (item.dataset.action) {
-      case 'open':
-        host.openFile(path, { transient: false });
-        break;
-
-      case 'rename':
-        renamePath(path, isDir);
-        break;
-
-      case 'delete':
-        deleteUserPath(path, isDir);
-        break;
-
-      case 'new-here':
-        createUserFile((isDir ? path : path.slice(0, path.lastIndexOf('/'))) + '/');
-        break;
-
-      case 'new-dir-here':
-        createUserDirAt(isDir ? path : path.slice(0, path.lastIndexOf('/')));
-        break;
-    }
+    const actions = {
+      open:           () => host.openFile(path, { transient: false }),
+      rename:         () => renamePath(path, isDir),
+      delete:         () => deleteUserPath(path, isDir),
+      'new-here':     () => createUserFile(here + '/'),
+      'new-dir-here': () => createUserDirAt(here),
+    };
+    actions[item.dataset.action]?.();
   });
 
-  /* ── FS operations (mutate userFS, then tell the host about open tabs) ────*/
+  /* -- FS operations (mutate userFS, then tell the host about open tabs) ----*/
   function renamePath(path, isDir) {
     const parts   = path.split('/');
     const oldName = parts.pop();
@@ -243,11 +282,18 @@ function createFileBrowser(host) {
     refresh();
   }
 
-  /* ── Toolbar ─────────────────────────────────────────────────────────────*/
-  document.getElementById('fp-new').addEventListener('click',   () => host.newScratch());
-  document.getElementById('fp-mkdir').addEventListener('click', () => createUserDirAt(''));
-  document.getElementById('fp-upload').addEventListener('click', () =>
-    document.getElementById('fp-upload-input').click());
+  /* -- Toolbar -------------------------------------------------------------
+     New file / folder / upload — same data-action dispatch, scoped to the user
+     section's header (the tree below has its own delete data-action). */
+  const toolbarActions = {
+    'new-file': () => host.newScratch(),
+    'new-dir':  () => createUserDirAt(''),
+    'upload':   () => document.getElementById('fp-upload-input').click(),
+  };
+  document.querySelector('#fp-user h2').addEventListener('click', (e) => {
+    const action = e.target.closest('[data-action]')?.dataset.action;
+    if (action && toolbarActions[action]) toolbarActions[action]();
+  });
 
   document.getElementById('fp-upload-input').addEventListener('change', async (e) => {
     for (const file of e.target.files) {
@@ -263,5 +309,5 @@ function createFileBrowser(host) {
     e.target.value = '';
   });
 
-  return { refresh };
+  return { refresh, markActive };
 }

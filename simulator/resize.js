@@ -1,86 +1,134 @@
-/* ── Resize handlers ─────────────────────────────────────────────────────── */
-function initResizeHandlers() {
+/* -- Resize handles ----------------------------------------------------------
+   One code path for every panel/section resizer. A handle is fully declarative
+   via data-attributes — no per-handle JavaScript:
 
-  /* ── Vertical resize (user list height) ────────────────────────── */
-  {
-    const handle  = document.getElementById('fp-v-resize');
-    const wrap    = document.getElementById('fp-user-wrap');
-    const overlay = document.getElementById('drag-overlay');
-    const MIN_H = 40, SYS_MIN = 80;
-    let dragging = false, startY = 0, startH = 0;
+     data-drag-target       id of the element to resize
+     data-drag-orientation  "vertical"   → a vertical bar that resizes WIDTH
+                            "horizontal" → a horizontal bar that resizes HEIGHT
+     data-drag-min          lower clamp  (px, or NNvw / NNvh / NN%)
+     data-drag-max          upper clamp  (same units; % is of the handle's parent)
 
-    handle.addEventListener('mousedown', e => {
-      dragging = true; startY = e.clientY; startH = wrap.offsetHeight;
-      handle.classList.add('dragging'); overlay.classList.add('active');
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', e => {
-      if (!dragging) return;
-      const panelH = document.getElementById('file-panel').clientHeight;
-      const maxH   = panelH - SYS_MIN - handle.offsetHeight;
-      wrap.style.height = Math.max(MIN_H, Math.min(maxH, startH + (e.clientY - startY))) + 'px';
-    });
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false; handle.classList.remove('dragging'); overlay.classList.remove('active');
-    });
-  }
+   The grow direction is inferred from DOM order: a target that sits *before* the
+   handle grows as you drag right/down; one *after* the handle (a panel on the
+   trailing edge) inverts. So no explicit "which side" flag is needed.
 
-  /* ── Left resize handle ────────────────────────────────────────── */
-  {
-    const handle  = document.getElementById('left-resize-handle');
-    const panel   = document.getElementById('file-panel');
-    const overlay = document.getElementById('drag-overlay');
-    const MIN_W = 100, MAX_W = 450;
-    let dragging = false, startX = 0, startW = 0;
+   Sizes are persisted to IndexedDB on drag-end and restored on load (desktop
+   only — the mobile layout makes panels full-width, where an inline px size
+   would fight the responsive CSS). */
 
-    handle.addEventListener('mousedown', e => {
-      dragging = true; startX = e.clientX; startW = panel.offsetWidth;
-      handle.classList.add('dragging'); overlay.classList.add('active');
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', e => {
-      if (!dragging) return;
-      panel.style.width = Math.max(MIN_W, Math.min(MAX_W, startW + (e.clientX - startX))) + 'px';
-    });
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false; handle.classList.remove('dragging'); overlay.classList.remove('active');
-    });
-  }
+// Below this width the mobile layout takes over (matches the CSS @media query).
+const MOBILE_MAX = 767;
 
-  /* ── Panel resize ─────────────────────────────────────────────── */
-  {
-    const handle   = document.getElementById('resize-handle');
-    const panel    = document.getElementById('side-panel');
-    const overlay  = document.getElementById('drag-overlay');
-    // Canvas scales with panel width; keep it wide enough to be usable.
-    const MIN_W = 220;
-
-    let dragging = false, startX = 0, startW = 0;
-
-    handle.addEventListener('mousedown', (e) => {
-      dragging = true;
-      startX   = e.clientX;
-      startW   = panel.offsetWidth;
-      handle.classList.add('dragging');
-      overlay.classList.add('active');
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const maxW  = Math.floor(window.innerWidth * 0.7);
-      const newW  = Math.max(MIN_W, Math.min(maxW, startW + (startX - e.clientX)));
-      panel.style.width = newW + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      handle.classList.remove('dragging');
-      overlay.classList.remove('active');
-    });
-  }
-
+// Resolve a min/max spec (px | NNvw | NNvh | NN%) to pixels. Live each call.
+function dragResolveSize(spec, axis, parent) {
+  if (!spec) return null;
+  const n = parseFloat(spec);
+  if (Number.isNaN(n)) return null;
+  if (spec.endsWith('vw')) return window.innerWidth  * n / 100;
+  if (spec.endsWith('vh')) return window.innerHeight * n / 100;
+  if (spec.endsWith('%'))  return (axis === 'width' ? parent.clientWidth : parent.clientHeight) * n / 100;
+  return n;   // plain px
 }
+
+// Tiny IndexedDB key/value store for panel sizes (keyed by target id). Kept in
+// its own DB so it never collides with the userFS over schema/version bumps.
+// All ops degrade to no-ops if IndexedDB is unavailable, so dragging still works.
+const panelSizes = (() => {
+  const DB = 'badgeware.prefs', STORE = 'panel-sizes';
+  let dbp;
+  const db = () => (dbp ??= new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  }));
+  return {
+    get: (key) => db().then(d => new Promise((resolve, reject) => {
+      const req = d.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    })).catch(() => undefined),
+    set: (key, value) => db().then(d => new Promise((resolve, reject) => {
+      const tx = d.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    })).catch(() => {}),
+  };
+})();
+
+// Per-handle geometry derived from its attributes.
+function dragConfig(handle) {
+  const target = document.getElementById(handle.dataset.dragTarget);
+  if (!target) return null;
+  const isWidth = handle.dataset.dragOrientation === 'vertical';   // vertical bar ↔ width
+  return {
+    target,
+    axis:     isWidth ? 'width'  : 'height',
+    coord:    isWidth ? 'clientX' : 'clientY',
+    sizeProp: isWidth ? 'offsetWidth' : 'offsetHeight',
+    // A target before the handle grows in the + direction; one after inverts.
+    sign: (handle.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_PRECEDING) ? 1 : -1,
+  };
+}
+
+// Restore saved sizes as early as possible (called at load, before the editor),
+// so panels don't visibly jump. Skipped on mobile, where panels are full-width.
+async function restorePanelSizes() {
+  if (window.innerWidth <= MOBILE_MAX) return;
+  for (const handle of document.querySelectorAll('[data-drag-target]')) {
+    const cfg = dragConfig(handle);
+    if (!cfg) continue;
+    const saved = await panelSizes.get(handle.dataset.dragTarget);
+    if (saved == null) continue;
+    const parent = handle.parentElement;
+    const min = dragResolveSize(handle.dataset.dragMin, cfg.axis, parent) ?? 0;
+    const max = dragResolveSize(handle.dataset.dragMax, cfg.axis, parent) ?? Infinity;
+    cfg.target.style[cfg.axis] = Math.max(min, Math.min(max, saved)) + 'px';
+  }
+}
+
+function initResizeHandlers() {
+  for (const handle of document.querySelectorAll('[data-drag-target]')) {
+    const cfg = dragConfig(handle);
+    if (!cfg) continue;
+    const { target, axis, coord, sizeProp, sign } = cfg;
+    // Force the resize cursor everywhere for the duration of the drag (see app.css).
+    const dragClass = axis === 'width' ? 'dragging-col' : 'dragging-row';
+
+    let pointer = null, start = 0, startSize = 0;
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      pointer   = e.pointerId;
+      start     = e[coord];
+      startSize = target[sizeProp];
+      // Capturing the pointer routes every move/up to the handle even as it
+      // passes over the editor or canvas — no full-screen overlay needed.
+      handle.setPointerCapture(pointer);
+      handle.classList.add('dragging');
+      document.documentElement.classList.add(dragClass);
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (pointer === null) return;
+      const parent = handle.parentElement;
+      const min = dragResolveSize(handle.dataset.dragMin, axis, parent) ?? 0;
+      const max = dragResolveSize(handle.dataset.dragMax, axis, parent) ?? Infinity;
+      target.style[axis] = Math.max(min, Math.min(max, startSize + sign * (e[coord] - start))) + 'px';
+    });
+    const end = () => {
+      if (pointer === null) return;
+      pointer = null;   // capture auto-releases on pointerup/cancel
+      handle.classList.remove('dragging');
+      document.documentElement.classList.remove(dragClass);
+      panelSizes.set(handle.dataset.dragTarget, target[sizeProp]);   // remember the final size
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+}
+
+// Restore now (before Monaco loads) so panels open at their saved size; the drag
+// wiring itself is set up later by initApp() via initResizeHandlers().
+restorePanelSizes();

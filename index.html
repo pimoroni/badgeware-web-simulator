@@ -21,56 +21,30 @@
 <body>
 
 <div id="toolbar" role="toolbar" aria-label="Run controls">
-  <button id="run-btn" title="Run (F5)"><span class="material-icons">play_arrow</span>Run</button>
-  <button id="stop-btn" title="Stop" disabled><span class="material-icons">stop</span>Stop</button>
-  <select id="example-select" title="Load example">
-    <option value="">Load example&#x2026;</option>
-    <option value="simulator/examples/default_code.py">default_code.py &mdash; welcome / flower</option>
-    <option value="simulator/examples/hello.py">hello.py &mdash; text &amp; pen basics</option>
-    <option value="simulator/examples/shapes.py">shapes.py &mdash; shape factory</option>
-    <option value="simulator/examples/colors.py">colors.py &mdash; rgb / hsv</option>
-    <option value="simulator/examples/buttons.py">buttons.py &mdash; reading input</option>
-    <option value="simulator/examples/menu.py">menu.py &mdash; selection menu</option>
-    <option value="simulator/examples/animation.py">animation.py &mdash; badge.ticks motion</option>
-    <option value="simulator/examples/easing.py">easing.py &mdash; easing curves</option>
-    <option value="simulator/examples/mandelbrot.py">mandelbrot.py &mdash; fractal + FPS</option>
-    <option value="simulator/examples/platformer.py">platformer.py &mdash; movement &amp; gravity</option>
-    <option value="simulator/examples/vectors.py">vectors.py &mdash; vec2 maths</option>
-    <option value="simulator/examples/transforms.py">transforms.py &mdash; mat3 transforms</option>
-    <option value="simulator/examples/gradient.py">gradient.py &mdash; brush.gradient</option>
-    <option value="simulator/examples/text_layout.py">text_layout.py &mdash; word wrap</option>
-    <option value="simulator/examples/scrolling_text.py">scrolling_text.py &mdash; marquee</option>
-    <option value="simulator/examples/fonts.py">fonts.py &mdash; rom &amp; vector fonts</option>
-    <option value="simulator/examples/images.py">images.py &mdash; load &amp; blit</option>
-    <option value="simulator/examples/sprites.py">sprites.py &mdash; SpriteSheet</option>
-    <option value="simulator/examples/caselights.py">caselights.py &mdash; case LEDs</option>
-    <option value="simulator/examples/clock.py">clock.py &mdash; real-time clock</option>
-    <option value="simulator/examples/battery.py">battery.py &mdash; hardware status</option>
-    <option value="simulator/examples/state.py">state.py &mdash; saved state</option>
-  </select>
+  <button data-action="run" title="Run (F5)"><span class="material-icons">play_arrow</span>Run</button>
+  <button data-action="stop" title="Stop" disabled><span class="material-icons">stop</span>Stop</button>
+  <button data-action="gallery" title="Example gallery"><span class="material-icons">grid_view</span>Examples</button>
   <output id="status"></output>
 </div>
 
-<div id="drag-overlay"></div>
 
 <div id="main">
 
-  <!-- ── File explorer ─────────────────────────────────────────── -->
   <nav id="file-panel" aria-label="Files">
-    <section id="fp-user-wrap" aria-label="User files">
+    <section id="fp-user" aria-label="User files">
       <h2>
         <span>Files</span>
-        <button id="fp-new"    title="New file"    aria-label="New file"><span class="material-icons">note_add</span></button>
-        <button id="fp-mkdir"  title="New folder"  aria-label="New folder"><span class="material-icons">create_new_folder</span></button>
-        <button id="fp-upload" title="Upload file" aria-label="Upload file"><span class="material-icons">upload_file</span></button>
+        <button data-action="new-file" title="New file"    aria-label="New file"><span class="material-icons">note_add</span></button>
+        <button data-action="new-dir"  title="New folder"  aria-label="New folder"><span class="material-icons">create_new_folder</span></button>
+        <button data-action="upload"   title="Upload file" aria-label="Upload file"><span class="material-icons">upload_file</span></button>
         <input type="file" id="fp-upload-input" multiple hidden>
       </h2>
       <div id="fp-user-list"></div>
     </section>
 
-    <div id="fp-v-resize"></div>
+    <div data-drag-target="fp-user" data-drag-orientation="horizontal" data-drag-min="40" data-drag-max="85%"></div>
 
-    <section id="fp-sys-wrap" aria-label="System files">
+    <section id="fp-sys" aria-label="System files">
       <h2>
         <span>System</span>
         <span class="material-icons" title="Read-only">lock</span>
@@ -79,7 +53,6 @@
     </section>
   </nav>
 
-  <!-- Shared context menu for file entries -->
   <div id="file-ctx-menu">
     <button data-action="open">Open</button>
     <button data-action="rename">Rename</button>
@@ -90,44 +63,39 @@
     <button data-action="delete">Delete</button>
   </div>
 
-  <div id="left-resize-handle"></div>
+  <div data-drag-target="file-panel" data-drag-orientation="vertical" data-drag-min="100" data-drag-max="450"></div>
 
-  <!-- ── Editor (primary content) ──────────────────────────────── -->
   <main id="editor-panel">
-    <div id="tab-bar"></div>
+    <nav id="tab-bar" aria-label="Open files"></nav>
     <div id="editor"></div>
     <figure id="img-preview">
-      <img id="img-preview-img" alt="">
+      <img alt="">
       <figcaption>
-        <span id="img-preview-name"></span>
-        <span id="img-preview-dim"></span>
+        <span></span>
+        <small></small>
       </figcaption>
     </figure>
+    <!-- Example gallery (home view); cards are built from examples/manifest.json -->
+    <div id="gallery"></div>
   </main>
 
-  <div id="resize-handle" title="Drag to resize"></div>
+  <div data-drag-target="side-panel" data-drag-orientation="vertical" data-drag-min="220" data-drag-max="70vw" title="Drag to resize"></div>
 
-  <!-- ── Badge view + output ───────────────────────────────────── -->
   <aside id="side-panel" aria-label="Badge and output">
-    <figure id="simulator-wrap">
-      <!-- BadgewareSimulator host: no canvas here (the screen renders as a DataTexture
-           in the 3D view). Kept off-screen; serves as the pause/resume observer target. -->
-      <div id="sim-host"></div>
-      <!-- 3D badge view — buttons are interactive hit areas on the model -->
+    <figure id="simulator">
       <div id="badge-3d-wrap"></div>
-      <!-- Spin the 3D badge in 180° steps -->
-      <div id="badge-view-controls">
-        <button id="view-prev-btn" title="Spin left"><span class="material-icons">chevron_left</span></button>
-        <button id="view-next-btn" title="Spin right"><span class="material-icons">chevron_right</span></button>
-      </div>
+      <nav>
+        <button data-action="spin-prev" title="Spin left"><span class="material-icons">chevron_left</span></button>
+        <button data-action="spin-next" title="Spin right"><span class="material-icons">chevron_right</span></button>
+      </nav>
     </figure>
 
-    <section id="stdout-wrap">
-      <h2 id="stdout-header">
+    <section id="stdout">
+      <h2>
         Output
-        <button id="clear-btn" title="Clear output">&#10005;</button>
+        <button data-action="clear" title="Clear output"><span class="material-icons">delete</span></button>
       </h2>
-      <div id="stdout"></div>
+      <div></div>
     </section>
   </aside>
 
@@ -148,11 +116,9 @@
 <script src="simulator/badge3d.js"></script>
 <script src="simulator/resize.js"></script>
 <script src="simulator/filebrowser.js"></script>
+<script src="simulator/boot.js"></script>
 <script src="simulator/app.js"></script>
 
-<!-- Monaco Editor (AMD loader) — requires CORS-eligible CDN responses.
-     If the server is started with --cross (COEP require-corp) ensure your
-     network can reach cdn.jsdelivr.net and that it returns CORS headers. -->
 <script crossorigin="anonymous"
         src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 

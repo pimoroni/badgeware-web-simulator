@@ -220,7 +220,7 @@ const BadgewareSimulator = async (target = null) => {
     return simulator
 }
 
-/* ── Embedded simulators (scroll-into-view canvas demos) ───────────────────────
+/* -- Embedded simulators (scroll-into-view canvas demos) -----------------------
    Render the badge framebuffer straight into a plain 2D <canvas> — no 3D view —
    and run each embed's code only while it's scrolled into view. This lets a demo
    or docs page show many examples at once, all backed by the same badgeware.js +

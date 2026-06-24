@@ -28,7 +28,7 @@
       overflow: hidden;
     }
 
-    /* ── Toolbar ─────────────────────────────────────────────────── */
+    /* -- Toolbar --------------------------------------------------- */
     #toolbar {
       background: rgba(10, 20, 30, 0.85);
       border-bottom: 1px solid var(--border);
@@ -50,9 +50,9 @@
       vertical-align: middle;
       user-select: none;
     }
-    #run-btn .material-icons, #stop-btn .material-icons { font-size: 1.0625rem; }
+    #toolbar button .material-icons { font-size: 1.0625rem; }
 
-    #run-btn, #stop-btn {
+    #toolbar button {
       display: inline-flex;
       align-items: center;
       gap: 3px;
@@ -68,31 +68,26 @@
       letter-spacing: 0.02em;
       transition: filter 0.1s;
     }
-    #run-btn:hover, #stop-btn:hover   { filter: brightness(1.15); }
-    #run-btn:active, #stop-btn:active { filter: brightness(0.9); }
-    #stop-btn {
+    #toolbar button:hover  { filter: brightness(1.15); }
+    #toolbar button:active { filter: brightness(0.9); }
+    #toolbar button[data-action="stop"] {
       background: rgb(220, 70, 60);
       color: rgb(250, 240, 240);
     }
-    #stop-btn:disabled {
+    #toolbar button[data-action="stop"]:disabled {
       background: var(--panel, rgb(40, 44, 52));
       color: rgb(120, 124, 132);
       cursor: default;
       filter: none;
     }
 
-    #example-select {
+    /* "Examples" is a navigation button, not a primary action — secondary look. */
+    #toolbar button[data-action="gallery"] {
       background: var(--panel);
       color: var(--white);
+      font-weight: 400;
       border: 1px solid var(--border);
-      padding: 4px 8px;
-      font-size: 0.75rem;
-      font-family: inherit;
-      font-weight: 300;
-      border-radius: 0.4rem;
-      cursor: pointer;
     }
-    #example-select:focus { outline: 1px solid var(--orange); }
 
     #status {
       margin-left: auto;
@@ -100,7 +95,7 @@
       color: var(--dim);
     }
 
-    /* ── Main layout ─────────────────────────────────────────────── */
+    /* -- Main layout ----------------------------------------------- */
     #main {
       display: flex;
       flex: 1;
@@ -110,7 +105,7 @@
       background: linear-gradient(45deg, rgba(65, 89, 208, 0.3) 0.000%, rgba(200, 79, 192, 0.3) 50.000%, rgba(255, 205, 112, 0.1) 100.000%)
     }
 
-    /* ── Editor panel ────────────────────────────────────────────── */
+    /* -- Editor panel ---------------------------------------------- */
     #editor-panel {
       flex: 1;
       min-width: 0;
@@ -119,11 +114,12 @@
       flex-direction: column;
     }
 
-    /* ── Tab bar ─────────────────────────────────────────────────── */
+    /* -- Tab bar (nav > ul > li; open editor files) ---------------------------
+       Structure is conveyed by tags: li = a tab, its first <span> = the name,
+       a .material-icons <span> = the read-only lock, <button> = close. Only the
+       dynamic state (active / dirty / transient) is carried as classes. */
     #tab-bar {
       height: 33px;
-      display: flex;
-      align-items: stretch;
       overflow-x: auto;
       overflow-y: hidden;
       background: rgba(6, 14, 22, 0.95);
@@ -131,8 +127,9 @@
       flex-shrink: 0;
     }
     #tab-bar::-webkit-scrollbar { height: 0; }
+    #tab-bar ul { display: flex; align-items: stretch; height: 100%; list-style: none; }
 
-    .tab {
+    #tab-bar li {
       display: flex;
       align-items: center;
       gap: 5px;
@@ -148,38 +145,41 @@
       user-select: none;
       position: relative;
     }
-    .tab:hover { color: var(--faint); background: rgba(235,245,255,0.03); }
-    .tab.active {
+    #tab-bar li:hover { color: var(--faint); background: rgba(235,245,255,0.03); }
+    #tab-bar li.active {
       color: var(--white);
       background: var(--bg);
       border-bottom: 2px solid var(--orange);
       margin-bottom: -1px;
     }
+
+    /* tab name */
+    #tab-bar li > span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    #tab-bar li.transient > span:first-child { font-style: italic; }
     /* dot for unsaved scratch tabs */
-    .tab.dirty .tab-name::after {
+    #tab-bar li.dirty > span:first-child::after {
       content: '●'; font-size: 0.4375rem; color: var(--orange);
       margin-left: 4px; vertical-align: super;
     }
-    .tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-    .tab.transient .tab-name { font-style: italic; }
-    .tab-readonly { font-size: 0.8125rem; color: var(--dim); margin-left: 2px; }
+    /* read-only lock glyph */
+    #tab-bar li .material-icons { font-size: 0.8125rem; color: var(--dim); margin-left: 2px; }
 
-    .tab-close {
+    #tab-bar li button {
       background: none; border: none;
       color: inherit; opacity: 0;
       cursor: pointer; font-size: 0.625rem;
       line-height: 1; padding: 2px 3px;
       border-radius: 2px; flex-shrink: 0;
     }
-    .tab:hover .tab-close { opacity: 0.4; }
-    .tab-close:hover { opacity: 1 !important; background: rgba(235,245,255,0.1); }
+    #tab-bar li:hover button { opacity: 0.4; }
+    #tab-bar li button:hover { opacity: 1 !important; background: rgba(235,245,255,0.1); }
 
     #editor {
       flex: 1;
       min-height: 0;
     }
 
-    /* ── Image preview (shown instead of #editor for image tabs) ─── */
+    /* -- Image preview (shown instead of #editor for image tabs) --- */
     #img-preview {
       display: none;
       flex: 1;
@@ -203,38 +203,98 @@
       font-size: 0.6875rem;
       color: var(--dim);
     }
+    /* The dimensions are a <small> (semantic "fine print"); keep them the same
+       size as the name for now — drop this rule to visually de-emphasise them. */
+    #img-preview figcaption small { font-size: inherit; }
 
-    /* ── Drag handles (panel & section resizers) ─────────────────────────────
-       Shared look + hover/drag feedback. The .dragging class is toggled by
-       resize.js; .vertical / .horizontal set the axis. */
-    .drag-handle {
+    /* -- Example gallery (home view, sits where #editor does) ---------------- */
+    #gallery {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+    }
+    .example {
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    /* The screenshot is a button: click = open + run. Native pixels, crisp scale.
+       Two stacked images — the still, and the APNG clip shown on hover (lazily
+       loaded by app.js; transparent until then, so the still shows through). */
+    .example-open {
+      display: block; padding: 0; border: none; cursor: pointer;
+      position: relative; aspect-ratio: 4 / 3;
+      background: rgb(6, 6, 9); border-bottom: 1px solid var(--border);
+    }
+    .example-open img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; image-rendering: pixelated;
+    }
+    .example-open .anim { opacity: 0; transition: opacity 0.12s; }
+    .example-open:hover .anim  { opacity: 1; }
+    .example-open:hover .still { filter: brightness(1.1); }   /* feedback before the clip loads */
+    .example-open:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+
+    .example figcaption { padding: 6px 8px 2px; }
+    .example figcaption b    { display: block; font-size: 0.75rem; font-weight: 700; color: var(--white); }
+    .example figcaption span { display: block; font-size: 0.6875rem; color: var(--dim); }
+
+    .example-actions { display: flex; gap: 6px; padding: 6px 8px 8px; }
+    .example-actions button {
+      flex: 1; font-family: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer;
+      padding: 4px 0; border-radius: 0.35rem; border: 1px solid var(--border);
+      background: none; color: var(--faint);
+      transition: color 0.15s, background 0.15s, border-color 0.15s, filter 0.1s;
+    }
+    .example-actions button:hover { color: var(--white); border-color: var(--faint); }
+    .example-actions button[data-act="run"] {
+      background: var(--orange); color: rgb(10, 20, 30); border-color: var(--orange);
+    }
+    .example-actions button[data-act="run"]:hover { filter: brightness(1.12); color: rgb(10, 20, 30); }
+
+    .gallery-empty { padding: 20px; color: var(--dim); font-size: 0.8125rem; }
+
+    /* -- Drag handles (panel & section resizers) -----------------------------
+       Identified by the same data-attributes resize.js reads, so no marker class
+       is needed. data-drag-orientation sets the axis; .dragging is toggled while
+       a drag is in progress. */
+    [data-drag-target] {
       flex-shrink: 0;
       background: var(--border);
       position: relative;
       transition: background 0.15s;
     }
     /* Widen the pointer hit area without changing the visible 4px strip. */
-    .drag-handle::after { content: ''; position: absolute; }
-    .drag-handle:hover,
-    .drag-handle.dragging { background: rgba(224, 137, 32, 0.5); }
+    [data-drag-target]::after { content: ''; position: absolute; }
+    [data-drag-target]:hover,
+    [data-drag-target].dragging { background: rgba(224, 137, 32, 0.5); }
 
-    .drag-handle.vertical        { width: 4px;  cursor: col-resize; }   /* dragged left/right */
-    .drag-handle.vertical::after { inset: 0 -4px; }
+    [data-drag-orientation="vertical"]        { width: 4px;  cursor: col-resize; }   /* dragged left/right */
+    [data-drag-orientation="vertical"]::after { inset: 0 -4px; }
 
-    .drag-handle.horizontal        { height: 4px; cursor: row-resize; } /* dragged up/down */
-    .drag-handle.horizontal::after { inset: -4px 0; }
+    [data-drag-orientation="horizontal"]        { height: 4px; cursor: row-resize; } /* dragged up/down */
+    [data-drag-orientation="horizontal"]::after { inset: -4px 0; }
 
-    /* Transparent overlay absorbs pointer events from Monaco + canvas during drag */
-    #drag-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      cursor: col-resize;
-    }
-    #drag-overlay.active { display: block; }
+    /* While a drag is in progress (resize.js sets this on <html>): force one
+       resize cursor everywhere and suppress text selection. Pointer capture keeps
+       the events flowing to the handle, so no overlay element is needed. */
+    .dragging-col, .dragging-col *,
+    .dragging-row, .dragging-row * { user-select: none; }
+    .dragging-col, .dragging-col * { cursor: col-resize !important; }
+    .dragging-row, .dragging-row * { cursor: row-resize !important; }
 
-    /* ── Side panel ──────────────────────────────────────────────── */
+    /* -- Side panel ------------------------------------------------ */
     #side-panel {
       width: 547px;
       flex-shrink: 0;
@@ -246,7 +306,7 @@
       overflow: visible;
     }
 
-    /* ── Simulator ───────────────────────────────────────────────── */
+    /* -- Simulator ------------------------------------------------- */
     #simulator {
       padding: 0 12px;
       flex-shrink: 0;
@@ -284,7 +344,7 @@
       outline: none;
     }
 
-    /* ── 3D badge spin buttons (180° steps) ──────────────────────── */
+    /* -- 3D badge spin buttons (180° steps) ------------------------ */
     /* Container spans the view but ignores pointer events, so only the two
        edge buttons are clickable and the badge stays raycastable between them. */
     #simulator nav {
@@ -328,21 +388,21 @@
         opacity: 0;
     }
 
-    /* ── Output ──────────────────────────────────────────────────── */
-    #stdout-wrap {
+    /* -- Output (#stdout is the whole view: title bar + scrolling log) ------- */
+    #stdout {
       flex: 1;
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
 
-    /* Shared bar look lives in the "#file-panel h2, #stdout-wrap h2" rule below. */
-    #stdout-wrap h2 {
+    /* Shared bar look lives in the "#file-panel h2, #stdout h2" rule below. */
+    #stdout h2 {
       padding: 5px 12px;
       justify-content: space-between;
     }
 
-    #clear-btn {
+    #stdout button {   /* clear-output button */
       background: none;
       border: none;
       color: var(--dim);
@@ -353,9 +413,9 @@
       line-height: 1;
       transition: color 0.15s;
     }
-    #clear-btn:hover { color: var(--white); }
+    #stdout button:hover { color: var(--white); }
 
-    #stdout {
+    #stdout > div {   /* the scrolling log */
       flex: 1;
       overflow-y: auto;
       padding: 8px 12px;
@@ -368,14 +428,14 @@
       background: rgba(0, 0, 0, 0.2);
     }
 
-    #stdout::-webkit-scrollbar       { width: 6px; }
-    #stdout::-webkit-scrollbar-track { background: transparent; }
-    #stdout::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.15); border-radius: 3px; }
+    #stdout > div::-webkit-scrollbar       { width: 6px; }
+    #stdout > div::-webkit-scrollbar-track { background: transparent; }
+    #stdout > div::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.15); border-radius: 3px; }
 
     .out-dim   { color: var(--dim); }
     .out-error { color: rgb(244, 94, 84); }
 
-    /* ── File panel ──────────────────────────────────────────────── */
+    /* -- File panel ------------------------------------------------ */
     #file-panel {
       width: 200px;
       flex-shrink: 0;
@@ -388,7 +448,7 @@
 
     /* Section title bar: file-explorer sections + the output panel share one look. */
     #file-panel h2,
-    #stdout-wrap h2 {
+    #stdout h2 {
       font-size: 0.625rem;
       font-weight: 400;
       color: var(--dim);
@@ -417,8 +477,8 @@
     #file-panel h2 button:hover { color: var(--white); background: rgba(235,245,255,0.06); }
     #file-panel h2 button .material-icons { font-size: 1.125rem; display: block; }
 
-    /* ── User section (resizable) ────────────────────────────────── */
-    #fp-user-wrap {
+    /* -- User section (resizable) ---------------------------------- */
+    #fp-user {
       flex-shrink: 0;
       height: 220px;        /* default; drag handle overrides via inline style */
       min-height: 40px;
@@ -440,8 +500,8 @@
       font-style: italic;
     }
 
-    /* ── System section (fills remaining space) ──────────────────── */
-    #fp-sys-wrap {
+    /* -- System section (fills remaining space) -------------------- */
+    #fp-sys {
       flex: 1;
       overflow: hidden;
       display: flex;
@@ -462,7 +522,7 @@
     #fp-user-list::-webkit-scrollbar-thumb,
     #fp-sys-tree::-webkit-scrollbar-thumb { background: rgba(180,190,200,0.12); border-radius: 2px; }
 
-    /* ── Context menu ────────────────────────────────────────────── */
+    /* -- Context menu ---------------------------------------------- */
     #file-ctx-menu {
       display: none;
       position: fixed;
@@ -493,7 +553,7 @@
     #file-ctx-menu button[data-action="delete"]:hover { color: rgba(240,141,73,1); background: rgba(240,141,73,0.07); }
     #file-ctx-menu hr { border: none; height: 1px; background: var(--border); margin: 3px 0; }
 
-    /* ── Tree rows ───────────────────────────────────────────────── */
+    /* -- Tree rows ------------------------------------------------- */
     .tree-row {
       display: flex;
       align-items: center;
@@ -508,6 +568,12 @@
     }
     .tree-row:hover { background: rgba(235,245,255,0.05); color: var(--white); }
     .tree-row.active { background: var(--faint-orange); color: var(--orange); }
+    /* Keyboard focus — file rows and directory summaries are both tab stops. */
+    .tree-row:focus-visible,
+    details.tree-dir > summary:focus-visible {
+      outline: 1px solid var(--orange);
+      outline-offset: -1px;
+    }
 
     .tree-row .row-name {
       flex: 1;
@@ -522,6 +588,7 @@
     }
 
     .row-actions { display: none; gap: 1px; flex-shrink: 0; }
+    /* Mouse-only affordance; keyboard deletes a focused row with Delete/Backspace. */
     .tree-row:hover .row-actions { display: flex; }
 
     .row-action {
@@ -541,7 +608,7 @@
     /* Lock badge (system files + the "System" header) sized for the Material glyph. */
     .row-badge.material-icons { font-size: 0.8125rem; }
 
-    /* ── Collapsible system directories ─────────────────────────── */
+    /* -- Collapsible system directories --------------------------- */
     details.tree-dir { }
 
     details.tree-dir > summary {
@@ -568,16 +635,14 @@
     }
     details.tree-dir[open] > summary .dir-arrow { transform: rotate(90deg); }
 
-    .dir-children { padding-left: 10px; }
+    #fp-user-list ul, #fp-sys-tree ul { list-style: none; }   /* tree = nested lists */
+    .dir-children { padding-left: 10px; }                     /* indent each level */
 
-    /* ── Mobile nav (hidden on desktop) ─────────────────────────── */
+    /* -- Mobile nav (hidden on desktop) --------------------------- */
     #mobile-nav { display: none; }
 
-    /* ── Mobile layout ───────────────────────────────────────────── */
+    /* -- Mobile layout --------------------------------------------- */
     @media (max-width: 767px) {
-
-      /* Compact toolbar */
-      #example-select { display: none; }
 
       /* Main: stack vertically */
       #main {
@@ -603,7 +668,7 @@
       }
 
       /* stdout hidden unless Output tab active */
-      #stdout-wrap { display: none; }
+      #stdout { display: none; }
 
       /* File panel: full-width, hidden until Files tab */
       #file-panel {
@@ -623,17 +688,17 @@
       }
 
       /* Hide the panel-width resize handles (the vertical bars) */
-      .drag-handle.vertical { display: none; }
+      [data-drag-orientation="vertical"] { display: none; }
 
-      /* ── Per-tab visibility ──────────────────────────────────── */
+      /* -- Per-tab visibility ------------------------------------ */
       body[data-mobile-tab="files"]  #file-panel   { display: flex; }
       body[data-mobile-tab="code"]   #editor-panel { display: flex; }
 
       /* Output tab: side-panel grows to fill, stdout revealed */
       body[data-mobile-tab="output"] #side-panel   { flex: 1; overflow: hidden; }
-      body[data-mobile-tab="output"] #stdout-wrap  { display: flex; }
+      body[data-mobile-tab="output"] #stdout  { display: flex; }
 
-      /* ── Mobile nav ──────────────────────────────────────────── */
+      /* -- Mobile nav -------------------------------------------- */
       #mobile-nav {
         display: flex;
         flex-shrink: 0;

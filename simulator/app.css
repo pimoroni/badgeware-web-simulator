@@ -47,16 +47,28 @@
       z-index: 1;
     }
 
-    /* Material Icons (Google): inherit the surrounding size by default; sized per use below. */
-    .material-icons {
+    /* Material Symbols Outlined (Google): the family + ligature setup come from
+       Google's served rule; here we inherit the surrounding size (sized per use
+       below) and set the variable axes. FILL 0 = outlined (the default look);
+       run/stop override to FILL 1 below since they're primary transport controls. */
+    .material-symbols-outlined {
       font-size: inherit;
       line-height: 1;
       vertical-align: middle;
       user-select: none;
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     }
-    #toolbar button .material-icons { font-size: 1.0625rem; }
+    /* Run / Stop read as primary actions — keep them solid while the rest stays
+       outlined. Targets both the toolbar and the floating mobile bar (and the
+       play↔refresh swap) via their data-action, so no per-glyph class is needed. */
+    [data-action="run"]  .material-symbols-outlined,
+    [data-action="stop"] .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    #toolbar button .material-symbols-outlined,
+    #toolbar .buy .material-symbols-outlined { font-size: 1.0625rem; }
 
-    #toolbar button {
+    /* The Buy link shares the button shape (it's an <a>, hence text-decoration). */
+    #toolbar button,
+    #toolbar .buy {
       display: inline-flex;
       align-items: center;
       gap: 3px;
@@ -70,10 +82,11 @@
       border-radius: 0.4rem;
       cursor: pointer;
       letter-spacing: 0.02em;
+      text-decoration: none;
       transition: filter 0.1s;
     }
-    #toolbar button:hover  { filter: brightness(1.15); }
-    #toolbar button:active { filter: brightness(0.9); }
+    #toolbar button:hover,  #toolbar .buy:hover  { filter: brightness(1.15); }
+    #toolbar button:active, #toolbar .buy:active { filter: brightness(0.9); }
     #toolbar button[data-action="stop"] {
       background: rgb(220, 70, 60);
       color: rgb(250, 240, 240);
@@ -94,11 +107,8 @@
       border: 1px solid var(--border);
     }
 
-    #status {
-      margin-left: auto;
-      font-size: 0.6875rem;
-      color: var(--dim);
-    }
+    /* "Buy" — a green CTA linking out to the badge shop (external, not an app action). */
+    #toolbar .buy { background: var(--green); }
 
     /* -- Main layout ----------------------------------------------- */
     #main {
@@ -121,7 +131,7 @@
 
     /* -- Tab bar (nav > ul > li; open editor files) ---------------------------
        Structure is conveyed by tags: li = a tab, its first <span> = the name,
-       a .material-icons <span> = the read-only lock, <button> = close. Only the
+       a .material-symbols-outlined <span> = the read-only lock, <button> = close. Only the
        dynamic state (active / dirty / transient) is carried as classes. */
     #tab-bar {
       height: 33px;
@@ -167,7 +177,7 @@
       margin-left: 4px; vertical-align: super;
     }
     /* read-only lock glyph */
-    #tab-bar li .material-icons { font-size: 0.8125rem; color: var(--dim); margin-left: 2px; }
+    #tab-bar li .material-symbols-outlined { font-size: 0.8125rem; color: var(--dim); margin-left: 2px; }
 
     #tab-bar li button {
       background: none; border: none;
@@ -183,6 +193,26 @@
       flex: 1;
       min-height: 0;
     }
+
+    /* -- Status bar (foot of the editor panel) --------------------------------
+       Run state, save toasts, and read-only/path messages — moved here out of the
+       toolbar's top-right (the badge's spill zone). It bookends the tab bar as the
+       editor panel's bottom chrome, so it spans just the middle column, not the
+       whole window. boot.js still writes the inner #status by id; long paths
+       truncate with an ellipsis. (A <footer> is reserved for a future brand footer.) */
+    #statusbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 2px 12px;
+      background: rgba(6, 14, 22, 0.95);
+      border-top: 1px solid var(--border);
+      font-size: 0.6875rem;
+      color: var(--dim);
+      user-select: none;
+    }
+    #status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* -- Image preview (shown instead of #editor for image tabs) --- */
     #img-preview {
@@ -330,9 +360,12 @@
       background: transparent;
       position: relative;
       overflow: visible;
-      /* spill slightly past the container: up over the toolbar, down over OUTPUT */
+      /* Spill past the container: up over the toolbar, and down over the OUTPUT
+         title by exactly that title bar's height, so the badge overlaps it fully
+         whatever the title's font/icon size is. boot.js measures #stdout h2 and
+         mirrors its height into --badge-spill; the fallback covers first paint / no-JS. */
       margin-top: -8%;
-      margin-bottom: -24px;
+      margin-bottom: calc(var(--badge-spill, 33px) * -1);
       transition: margin 0.25s ease;
     }
     /* When the screen is zoomed in, pull the badge back inside its container so
@@ -387,7 +420,7 @@
       color: var(--white);
       background: rgba(10, 20, 30, 0.85);
     }
-    #simulator nav button .material-icons { font-size: 1.375rem; }
+    #simulator nav button .material-symbols-outlined { font-size: 1.375rem; }
 
     #simulator.screen-zoomed nav {
         opacity: 0;
@@ -407,16 +440,20 @@
       justify-content: space-between;
     }
 
-    #stdout button {   /* clear-output button */
+    #stdout button {   /* clear-output button — icon sized with the file-header icons below */
       background: none;
       border: none;
       color: var(--dim);
       cursor: pointer;
-      font-size: 0.625rem;
       font-family: inherit;
       padding: 0 2px;
       line-height: 1;
       transition: color 0.15s;
+      /* The badge spills down over this title bar; lift only the button back above
+         it (the badge sits at #simulator's z-index 5) so it stays clickable while
+         the OUTPUT text itself stays covered. */
+      position: relative;
+      z-index: 6;
     }
     #stdout button:hover { color: var(--white); }
 
@@ -466,7 +503,7 @@
     }
     #file-panel h2 { padding: 5px 8px 4px; gap: 2px; min-height: 37px; } /* min-height lines up the user/system files headings in mobile view */
     #file-panel h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
-    #file-panel h2 .material-icons { font-size: 0.8125rem; }   /* System lock glyph */
+    #file-panel h2 .material-symbols-outlined { font-size: 0.8125rem; }   /* System lock glyph */
 
     #file-panel h2 button {
       background: none;
@@ -480,7 +517,10 @@
       font-family: inherit;
     }
     #file-panel h2 button:hover { color: var(--white); background: rgba(235,245,255,0.06); }
-    #file-panel h2 button .material-icons { font-size: 1.125rem; display: block; }
+    /* The output "clear" button shares the file-header icon size (both are header
+       action buttons), so they read as one family across the two panels. */
+    #file-panel h2 button .material-symbols-outlined,
+    #stdout button .material-symbols-outlined { font-size: 1.125rem; display: block; }
 
     /* -- User section (resizable) ---------------------------------- */
     #fp-user {
@@ -612,10 +652,10 @@
     }
     .row-action:hover { opacity: 1; }
     .row-action[data-action="delete"]:hover { color: rgba(240,141,73,1); }
-    .row-action .material-icons { font-size: 0.875rem; display: block; }
+    .row-action .material-symbols-outlined { font-size: 0.875rem; display: block; }
 
     /* Lock badge (system files + the "System" header) sized for the Material glyph. */
-    .row-badge.material-icons { font-size: 0.8125rem; }
+    .row-badge.material-symbols-outlined { font-size: 0.8125rem; }
 
     /* -- Collapsible system directories --------------------------- */
     details.tree-dir { }
@@ -658,8 +698,10 @@
           display: none !important;
       }
 
-      /* Drop the desktop toolbar; run/stop float on the badge instead. */
+      /* Drop the desktop toolbar + status bar; run/stop float on the badge, and
+         run feedback lives in the Output tab. */
       #toolbar { display: none; }
+      #statusbar { display: none; }
 
       /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
       #mobile-nav { order: -2; }
@@ -699,7 +741,7 @@
         background: var(--orange); color: rgb(10, 20, 30);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
       }
-      #mobile-run button .material-icons { font-size: 1.375rem; }
+      #mobile-run button .material-symbols-outlined { font-size: 1.375rem; }
       #mobile-run button[data-action="stop"] { background: rgb(220, 70, 60); color: rgb(250, 240, 240); }
       #mobile-run button:disabled { background: var(--panel); color: rgb(120, 124, 132); box-shadow: none; }
 
@@ -751,6 +793,6 @@
         color: var(--dim); cursor: pointer;
         touch-action: manipulation; transition: color 0.15s; user-select: none;
       }
-      #mobile-nav button .material-icons { font-size: 1.375rem; }
+      #mobile-nav button .material-symbols-outlined { font-size: 1.375rem; }
       #mobile-nav button.active { color: var(--orange); border-bottom-color: var(--orange); }
     }

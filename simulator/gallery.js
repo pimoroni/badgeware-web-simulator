@@ -5,13 +5,12 @@
    tabs.showGallery — this module only owns the cards and their clicks. */
 const APP_BASE = new URL('.', import.meta.url).href;
 
-/* deps: { runProgram, openExample } — runProgram(code, opts) from boot;
+/* galleryEl is the home-view container (app.js owns the lookup). deps:
+   { runProgram, openExample, setStatus } — runProgram(code, opts) from boot;
    openExample(name, code) opens the example as a transient editor tab and returns
-   its tab key (app.js wires it to tabs.openScratchTab). */
-export function initGallery({ runProgram, openExample }) {
-  const galleryEl = document.getElementById('gallery');
-  const statusEl  = document.getElementById('status');
-
+   its tab key (app.js wires it to tabs.openScratchTab); setStatus(text) writes the
+   shared status line (boot owns it) so we never poke that node directly. */
+export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
   async function build() {
     let manifest;
     try { manifest = await fetch(APP_BASE + 'examples/manifest.json').then((r) => r.json()); }
@@ -50,7 +49,7 @@ export function initGallery({ runProgram, openExample }) {
     if (!fig || !act) return;
     const file = fig.dataset.file;
     const code = await fetch(APP_BASE + 'examples/' + file).then((r) => (r.ok ? r.text() : null)).catch(() => null);
-    if (code == null) { statusEl.textContent = `Could not load ${file}`; return; }
+    if (code == null) { setStatus(`Could not load ${file}`); return; }
     if (act === 'run') { runProgram(code, { status: file }); return; }   // run only, stay on the gallery
     const key = openExample(file, code);                                 // edit → opens the editor view
     if (act === 'open') runProgram(code, { tabKey: key, status: file }); // image → also run it

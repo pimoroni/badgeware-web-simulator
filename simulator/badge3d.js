@@ -1,7 +1,8 @@
 /* -- 3D badge display ------------------------------------------------------ */
 const _badge3dBase = new URL('.', import.meta.url).href;
 
-export function initBadge3D(simulator, appendOut) {
+// wrap is the container element the renderer mounts into (boot.js injects it).
+export function initBadge3D(simulator, appendOut, wrap) {
   let three = null, screenMesh = null, screenTex = null;
   let screenLive = false;   // true while the live simulator is driving the screen
   let rotateView = () => {};  // assigned once the scene is ready (spin in 180° steps)
@@ -121,7 +122,6 @@ export function initBadge3D(simulator, appendOut) {
       const { VerticalBlurShader }   = await import('three/addons/shaders/VerticalBlurShader.js');
       three = THREE;
 
-      const wrap = document.getElementById('badge-3d-wrap');
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       // Skip three.js's per-program getProgramInfoLog() check — it forces a
       // synchronous GPU sync as each material first compiles (~110ms at startup

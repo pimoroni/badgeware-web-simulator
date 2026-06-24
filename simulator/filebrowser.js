@@ -1,8 +1,11 @@
 /* -- File browser panel ------------------------------------------------------
    Owns the left-hand file panel: the user + system file trees, the right-click
    context menu, the toolbar (new / new-folder / upload), and all `userFS`
-   mutations. It knows nothing about Monaco models or tabs — those stay in app.js,
-   reached through the injected `host`:
+   mutations. It knows nothing about Monaco models or tabs — those stay in app.js.
+
+   els  — the panel's DOM, looked up + injected by app.js (the module never reaches
+   into the document for identity): { userList, sysTree, ctxMenu, uploadInput,
+   userHeader }. host — data + callbacks it can't reach itself:
 
      host.userFS            — the IndexedDB-backed FS (see fs.js)
      host.getSystemPaths()  — current system file list (populated after fetch)
@@ -22,10 +25,8 @@
    build, and one delegated listener per container reads data-path / data-action. */
 import { delegate } from './util.js';
 
-export function createFileBrowser(host) {
-  const userList = document.getElementById('fp-user-list');
-  const sysTree  = document.getElementById('fp-sys-tree');
-  const menu     = document.getElementById('file-ctx-menu');
+export function createFileBrowser(els, host) {
+  const { userList, sysTree, ctxMenu: menu, uploadInput, userHeader } = els;
 
   const collapsedDirs = new Set();   // user-tree dirs the user has collapsed
   let sysBuilt = false;
@@ -70,19 +71,19 @@ export function createFileBrowser(host) {
       if (child && child.__dir) {
         const open = user ? !collapsedDirs.has(full) : false;   // user dirs default open
         html += `<li><details class="tree-dir" data-path="${esc(full)}"${open ? ' open' : ''}>`
-              +   `<summary><span class="dir-arrow material-icons">chevron_right</span><span>${esc(name)}/</span></summary>`
+              +   `<summary><span class="dir-arrow material-symbols-outlined">chevron_right</span><span>${esc(name)}/</span></summary>`
               +   `<ul class="dir-children">${nodeToHtml(child, full, user, activePath)}</ul>`
               + `</details></li>`;
       } else if (user) {
         const active = full === activePath ? ' active' : '';
         html += `<li><div class="tree-row${active}" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-icons">close</span></button></span>`
+              +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-symbols-outlined">close</span></button></span>`
               + `</div></li>`;
       } else {
         html += `<li><div class="tree-row" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-badge material-icons" title="System file">lock</span>`
+              +   `<span class="row-badge material-symbols-outlined" title="System file">lock</span>`
               + `</div></li>`;
       }
     }
@@ -291,13 +292,13 @@ export function createFileBrowser(host) {
   /* -- Toolbar -------------------------------------------------------------
      New file / folder / upload — same data-action dispatch, scoped to the user
      section's header (the tree below has its own delete data-action). */
-  delegate(document.querySelector('#fp-user h2'), {
+  delegate(userHeader, {
     'new-file': () => host.newScratch(),
     'new-dir':  () => createUserDirAt(''),
-    'upload':   () => document.getElementById('fp-upload-input').click(),
+    'upload':   () => uploadInput.click(),
   });
 
-  document.getElementById('fp-upload-input').addEventListener('change', async (e) => {
+  uploadInput.addEventListener('change', async (e) => {
     for (const file of e.target.files) {
       const path = normalisePath(file.name);
       if (host.isTextFile(path) || file.type.startsWith('text/')) {

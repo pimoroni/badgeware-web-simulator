@@ -22,10 +22,24 @@ export function bootSimulator() {
   if (_bootCtx) return _bootCtx;
   _bootCtx = (async () => {
     await userFS.ready;   // populate the in-memory FS cache before any read below
-    const stdoutEl = document.querySelector('#stdout > div');   // the scrolling log inside the view
-    const statusEl = document.getElementById('status');
+    const stdoutEl    = document.querySelector('#stdout > div');   // the scrolling log inside the view
+    const statusEl    = document.getElementById('status');
+    const badge3dWrap = document.getElementById('badge-3d-wrap');  // the 3D badge's container (injected into badge3d)
     const stopBtns = document.querySelectorAll('[data-action="stop"]');   // toolbar + floating mobile
-    const runIcons = document.querySelectorAll('[data-action="run"] .material-icons');   // play ↔ reload glyph
+    const runIcons = document.querySelectorAll('[data-action="run"] .material-symbols-outlined');   // play ↔ reload glyph
+
+    // The status line is boot's surface, and setStatus is its ONLY writer — so the
+    // run-state messages below and the transient "flash" messages from other modules
+    // (tabs: saved / read-only; gallery: load errors) can't clobber each other. A
+    // pending flash-restore is cancelled by any later write, so it can never land on
+    // top of a newer message (e.g. a save toast settling over a "Running…").
+    let flashTimer = null;
+    const setStatus   = (text) => { clearTimeout(flashTimer); statusEl.textContent = text; };
+    const flashStatus = (text, ms = 1500) => {
+      const prev = statusEl.textContent;
+      setStatus(text);
+      flashTimer = setTimeout(() => { statusEl.textContent = prev; }, ms);
+    };
 
     const appendOut = (text, cls) => {
       const span = document.createElement('span');
@@ -36,7 +50,19 @@ export function bootSimulator() {
     };
 
     const simulator = await BadgewareSimulator();
-    const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut);
+    const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut, badge3dWrap);
+
+    // The badge canvas spills down to overlap the OUTPUT title bar. CSS can't read
+    // a sibling's height, so mirror #stdout h2's measured height into --badge-spill
+    // (the margin reads it; see #badge-3d-wrap in app.css). A ResizeObserver keeps
+    // it exact across font swaps, the clear-icon size, and breakpoint changes — so
+    // the overlap is never a hand-tuned magic number again.
+    const outputTitle = document.querySelector('#stdout h2');
+    if (outputTitle && 'ResizeObserver' in window) {
+      const syncBadgeSpill = () => badge3dWrap.style.setProperty('--badge-spill', outputTitle.offsetHeight + 'px');
+      new ResizeObserver(syncBadgeSpill).observe(outputTitle);
+      syncBadgeSpill();
+    }
 
     /* Run / Stop state (the Stop button is meaningful only while running). */
     let isRunning  = false;
@@ -56,7 +82,7 @@ export function bootSimulator() {
     const onSimulatorStopped = () => {
       if (!isRunning) return;
       setRunning(false);
-      statusEl.textContent = 'Stopped (error)';
+      setStatus('Stopped (error)');
     };
 
     /* Incremental MicroPython traceback parsing. The editor attaches marker
@@ -100,7 +126,7 @@ export function bootSimulator() {
       runningKey = tabKey;   // what's now running, for the Run-vs-Reload icon
       stdoutEl.innerHTML = '';
       appendOut('▶ Running…', 'out-dim');
-      statusEl.textContent = 'Running…';
+      setStatus('Running…');
       setRunning(true);
       // simulator.run() tears down the old worker first; drop the screen texture
       // so the render loop never touches a destroyed frame source.
@@ -108,10 +134,10 @@ export function bootSimulator() {
       try {
         await simulator.run(code, userFS.workerFiles());
         applyCanvasToScreen();
-        statusEl.textContent = status;
+        setStatus(status);
       } catch (err) {
         appendOut('✕ ' + err, 'out-error');
-        statusEl.textContent = 'Error';
+        setStatus('Error');
         setRunning(false);
       }
     };
@@ -119,7 +145,7 @@ export function bootSimulator() {
       pauseScreen();
       await simulator.stop();
       setRunning(false);
-      statusEl.textContent = 'Stopped';
+      setStatus('Stopped');
     };
 
     /* (Re)launch the badge OS (the menu). Fetched fresh rather than reusing
@@ -205,6 +231,11 @@ export function bootSimulator() {
       // The editor tells us which tab Run would target now (null = gallery/OS), so
       // the Run icon can show reload-vs-play. Side-effect-free, unlike runProvider.
       notifyRunTarget: (key) => { runTarget = key ?? null; syncRunIcon(); },
+      // The status line is boot's surface (it owns the run-state messages). Other
+      // modules with transient messages write through these rather than reaching for
+      // the node: setStatus(text) sets it; flashStatus(text, ms) shows a message then
+      // restores whatever was there (tabs: saved/read-only; gallery: load errors).
+      setStatus, flashStatus,
       // Let the editor half register extra data-action commands (e.g. "gallery").
       addActions: (extra) => Object.assign(actions, extra),
     };

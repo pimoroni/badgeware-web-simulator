@@ -17,11 +17,17 @@ const APP_BASE = new URL('.', import.meta.url).href;
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, notifyRunTarget, addActions } = await bootSimulator();
+  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, notifyRunTarget, setStatus, flashStatus, addActions } = await bootSimulator();
   const mobileNav = document.getElementById('mobile-nav');
 
+  // app.js is the wiring layer: it resolves the DOM by id and injects elements into
+  // the leaf modules (which never reach into the document for identity themselves).
+  // #editor and #gallery are each shared by two consumers, so they're named here.
+  const editorEl  = document.getElementById('editor');
+  const galleryEl = document.getElementById('gallery');
+
   // Editor instance + its language/theme/completions all live in editor.js.
-  const editor = createEditor(document.getElementById('editor'));
+  const editor = createEditor(editorEl);
 
   /* -- Mobile tabs ----------------------------------------------------------
      On mobile the panels stack and a top icon bar switches between Gallery /
@@ -35,8 +41,17 @@ async function initApp() {
     if (tab === 'code' && isMobile()) requestAnimationFrame(() => editor.layout());
   }
 
-  // The tab/model system owns all tab state; we hand it the editor + boot seams.
-  const tabs = createTabs({ editor, notifyRunTarget, selectMobilePanel });
+  // The tab/model system owns all tab state; we hand it the editor-area panes it
+  // switches between, plus the editor instance + boot seams (status / run / mobile).
+  const tabs = createTabs(
+    {
+      tabBar:     document.getElementById('tab-bar'),
+      gallery:    galleryEl,
+      editorPane: editorEl,
+      imgPreview: document.getElementById('img-preview'),
+    },
+    { editor, setStatus, flashStatus, notifyRunTarget, selectMobilePanel },
+  );
 
   function setMobileTab(tab) {
     if (tab === 'gallery') return tabs.showGallery();
@@ -52,18 +67,27 @@ async function initApp() {
      The panel (trees, context menu, FS ops) lives in filebrowser.js; tabs.js owns
      the Monaco models/tabs. Both are handed seams so neither touches the other's
      internals; tabs.connect(fb) closes the loop (it needs fb.syncRows/refresh). */
-  const fb = createFileBrowser({
-    userFS,
-    getSystemPaths,            // imported accessor (fs.js) → current system file list
-    activePath: tabs.activePath,
-    openPaths:  tabs.openPaths,
-    transientPath: tabs.transientPath,
-    isTextFile: tabs.isTextFile,
-    openFile:   tabs.openFile,
-    newScratch: tabs.newScratch,
-    onRenamed:  tabs.onRenamed,
-    onDeleted:  tabs.onDeleted,
-  });
+  const fb = createFileBrowser(
+    {
+      userList:    document.getElementById('fp-user-list'),
+      sysTree:     document.getElementById('fp-sys-tree'),
+      ctxMenu:     document.getElementById('file-ctx-menu'),
+      uploadInput: document.getElementById('fp-upload-input'),
+      userHeader:  document.querySelector('#fp-user h2'),
+    },
+    {
+      userFS,
+      getSystemPaths,            // imported accessor (fs.js) → current system file list
+      activePath: tabs.activePath,
+      openPaths:  tabs.openPaths,
+      transientPath: tabs.transientPath,
+      isTextFile: tabs.isTextFile,
+      openFile:   tabs.openFile,
+      newScratch: tabs.newScratch,
+      onRenamed:  tabs.onRenamed,
+      onDeleted:  tabs.onDeleted,
+    },
+  );
   tabs.connect(fb);
 
   // Run provider + traceback markers: boot.js calls these into tabs.
@@ -85,21 +109,26 @@ async function initApp() {
   // Example gallery (home view, gallery.js). The "Examples" toolbar button returns
   // here via boot's action map; the cards open/run examples through these seams.
   addActions({ gallery: tabs.showGallery });
-  initGallery({ runProgram, openExample: (name, code) => tabs.openScratchTab(name, code, { transient: true }) });
+  initGallery(galleryEl, {
+    runProgram,
+    openExample: (name, code) => tabs.openScratchTab(name, code, { transient: true }),
+    setStatus,
+  });
 
-  // Home view while we finish booting (overridden by the deep-link / restore below).
-  if (!startupFile) tabs.showGallery();
+  // Commit the home view FIRST: reopen the saved workspace + honour any ?file= /
+  // #name deep-link. bootstrap() picks the view itself (a restored tab, or the
+  // gallery when there's nothing to restore) and depends only on IndexedDB — no
+  // network. Doing it before the system-list fetch below avoids a brief flash of
+  // the gallery while that fetch is in flight when the saved state is a tab.
+  await tabs.bootstrap(startupFile);
 
-  /* -- Load system file list --------------------------------------- */
+  /* -- Load system file list (populates the System tree) ----------- */
   try {
     const fsData = await fetch(APP_BASE + 'filesystem.json').then(r => r.json());
     // Manifest shape: { files: { "/path": byteSize } } — we only need the paths here.
     setSystemPaths(Object.keys(fsData.files || {}));
     fb.refresh({ rebuildSystem: true });   // real system paths arrived → (re)build the tree
   } catch (_) {}
-
-  // Reopen the saved workspace + honour any ?file= / #name deep-link on top of it.
-  await tabs.bootstrap(startupFile);
 
   fb.refresh();              // initial file tree render
   initResizeHandlers();

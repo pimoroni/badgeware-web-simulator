@@ -30,13 +30,12 @@ const sessionStore = (() => {
   return { load: () => kv.get('editor'), save: (value) => kv.set('editor', value) };
 })();
 
-/* deps: { editor, notifyRunTarget, selectMobilePanel } — things tabs can't import
-   or query itself. The file browser is wired in later via connect(), since tabs
-   and the browser are mutually dependent. */
-export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
-  const statusEl  = document.getElementById('status');    // save / read-only messages
-  const galleryEl = document.getElementById('gallery');   // example gallery (home view)
-  const tabBarEl  = document.getElementById('tab-bar');   // hidden while the gallery is up
+/* panes: the editor-area elements tabs switches between (app.js owns the lookups) —
+   { tabBar, gallery, editorPane, imgPreview }. deps: { editor, setStatus, flashStatus,
+   notifyRunTarget, selectMobilePanel } — things tabs can't import or query itself
+   (setStatus/flashStatus write boot's status line). The file browser is wired in
+   later via connect(), since tabs and the browser are mutually dependent. */
+export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTarget, selectMobilePanel }) {
   let fb = null;   // file browser, late-bound (syncRows / refresh); see connect()
 
   let currentTabKey   = null;   // id of the active tab, or null when the gallery is up
@@ -63,10 +62,10 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
   }
   // Single owner of the editor-area view switch: 'gallery' | 'editor' | 'image'.
   function applyView(view) {
-    document.getElementById('editor').style.display      = view === 'editor' ? '' : 'none';
-    document.getElementById('img-preview').style.display = view === 'image'  ? 'flex' : 'none';
-    galleryEl.style.display = view === 'gallery' ? 'block' : 'none';
-    tabBarEl.style.display  = view === 'gallery' ? 'none'  : '';
+    panes.editorPane.style.display = view === 'editor' ? '' : 'none';
+    panes.imgPreview.style.display = view === 'image'  ? 'flex' : 'none';
+    panes.gallery.style.display    = view === 'gallery' ? 'block' : 'none';
+    panes.tabBar.style.display     = view === 'gallery' ? 'none'  : '';
   }
 
   const langForPath = (p) => (p.endsWith('.py') ? 'python' : p.endsWith('.json') ? 'json' : 'plaintext');
@@ -208,10 +207,10 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
   // mutation sites — focusTab/showGallery/close/promote/rename/delete/etc. — so
   // it's tied to changes, not to re-renders.
   function renderTabs() {
-    const bar = tabBarEl;
+    const bar = panes.tabBar;
     if (!bar) return;
     // <nav id="tab-bar"> ➜ <ul> ➜ <li> per open file. Structure carries meaning:
-    // first <span> = name, .material-icons <span> = read-only lock, <button> = close.
+    // first <span> = name, .material-symbols-outlined <span> = read-only lock, <button> = close.
     const list = document.createElement('ul');
     for (const key of openOrder) {
       const t = openModels.get(key);
@@ -231,7 +230,7 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
 
       if (isReadOnly(t)) {
         const ro = document.createElement('span');
-        ro.className = 'material-icons';   // icon font; identifies the lock glyph
+        ro.className = 'material-symbols-outlined';   // icon font; identifies the lock glyph
         ro.textContent = 'lock';
         tab.appendChild(ro);
       }
@@ -257,7 +256,7 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
     applyView(t.view);   // 'editor' or 'image' — owns the gallery/tab-bar/pane toggles
 
     if (t.view === 'image') {
-      const imgEl  = document.getElementById('img-preview');
+      const imgEl  = panes.imgPreview;
       const imgTag = imgEl.querySelector('img');
       imgTag.src = t.imgUrl;
       imgEl.querySelector('span').textContent = t.name;
@@ -357,9 +356,7 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
     if (active.source === 'user') {
       // User file — flush any debounced edit, then flash confirmation
       flushPendingSave();
-      const prev = statusEl.textContent;
-      statusEl.textContent = '✓ Saved ' + active.name;
-      setTimeout(() => { statusEl.textContent = prev; }, 1400);
+      flashStatus('✓ Saved ' + active.name, 1400);
       return;
     }
 
@@ -390,8 +387,8 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
     fb?.refresh();
     renderTabs();
     saveSession();   // scratch tab replaced by a user-file tab
-    statusEl.textContent = '✓ Saved ' + path;
-    setTimeout(() => { statusEl.textContent = path; }, 1500);
+    setStatus(path);                      // the new resting status is the saved file's path
+    flashStatus('✓ Saved ' + path);       // …flashed over by the save confirmation
   }
 
   function openBinaryTab({ source, path }, buf, handler, transient, mimeOverride) {
@@ -426,7 +423,7 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
       if (openModels.has(key)) {
         if (openModels.get(key).transient && (!transient || currentTabKey === key)) promoteTab(key);
         focusTab(key);
-        statusEl.textContent = path + ' — read-only';
+        setStatus(path + ' — read-only');
         return;
       }
       if (transient) evictTransient(key);
@@ -445,7 +442,7 @@ export function createTabs({ editor, notifyRunTarget, selectMobilePanel }) {
         openBinaryTab({ source: 'sys', path }, buf, handler, transient);
       } catch (_) {}
     }
-    statusEl.textContent = path + ' — read-only';
+    setStatus(path + ' — read-only');
   }
 
   function openUserFile(path, transient = false) {

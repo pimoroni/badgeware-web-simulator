@@ -1,6 +1,33 @@
-/* -- Monaco editor configuration: completions + theme --------------------- */
+/* -- Monaco editor setup: instance + language / theme / completions ---------
+   createEditor() registers the Python language tweaks, the badgeware theme and
+   the completion provider (once), then mounts and returns the editor instance.
+   app.js just calls it; all editor knobs live here. */
 import { BADGEWARE_GLOBALS, MEMBERS } from './completions.js';
 import { userFS, getSystemPaths } from './fs.js';
+
+// Mount the Badgeware editor in `container` and return the Monaco instance.
+export function createEditor(container) {
+  configureMonaco(monaco);
+  return monaco.editor.create(container, {
+    value:          '# Loading…',
+    language:       'python',
+    theme:          'badgeware',
+    fontSize:       16,
+    fontFamily:     'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
+    fontLigatures:  true,
+    minimap:        { enabled: false },
+    scrollBeyondLastLine: false,
+    lineNumbers:    'on',
+    tabSize:        2,
+    insertSpaces:   true,
+    automaticLayout: true,
+    wordWrap:       'on',
+    renderLineHighlight: 'line',
+    suggestOnTriggerCharacters: true,
+    quickSuggestions: { other: true, comments: false, strings: false },
+    parameterHints: { enabled: true },
+  });
+}
 
 // Convert a declarative completion stub (see completions.js) → a Monaco
 // CompletionItem. Lives here, with its only consumer, so completions.js stays
@@ -33,7 +60,7 @@ function toCompletionItem(entry, range, monaco) {
   };
 }
 
-export function configureMonaco(monaco) {
+function configureMonaco(monaco) {
 
   /* -- Type inference: scan document for ident = TypeName(...) patterns --
      Returns the MEMBERS array for the inferred type, or null.             */

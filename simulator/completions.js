@@ -1,7 +1,7 @@
 /* -------------------------------------------------------------------------
    completions.js — declarative Monaco completion DATA for the Badgeware editor.
-   Pure data (no logic): the toCompletionItem() mapper lives in editor-config.js,
-   its only consumer.
+   Pure data (no logic): the toCompletionItem() mapper lives in editor.js, its
+   only consumer.
 
    Exports:
      BADGEWARE_GLOBALS  — top-level identifiers: Badgeware API + MicroPython

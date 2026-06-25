@@ -1,7 +1,7 @@
 # Reading buttons. badge.update() polls them once per frame:
-#   badge.pressed()  — true on the frame a button goes down
-#   badge.held()     — true the whole time a button is down
-#   badge.released() — true on the frame a button comes up
+#   badge.pressed()  - true on the frame a button goes down
+#   badge.held()     - true the whole time a button is down
+#   badge.released() - true on the frame a button comes up
 # Test a single button with: BUTTON_A in badge.pressed()
 
 badge.mode(HIRES)

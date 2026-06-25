@@ -1,5 +1,5 @@
 # text.tokenise() + text.draw() lay out word-wrapped rich text inside a rect.
-# [tags] in the string call your glyph_renderers — here to change pen colour
+# [tags] in the string call your glyph_renderers - here to change pen colour
 # mid-sentence and to blit an inline skull image.
 
 import math

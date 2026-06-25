@@ -1,4 +1,4 @@
-# screen.triangle(p1, p2, p3) fills a triangle from three vec2 points — a field
+# screen.triangle(p1, p2, p3) fills a triangle from three vec2 points - a field
 # of random ones jittering around drifting centres.
 
 import math

@@ -1,5 +1,5 @@
 # A tour of the shape factory: rectangle, circle, ellipse, star, squircle, pie,
-# arc, regular_polygon and line — each shown filled and again as a .stroke()
+# arc, regular_polygon and line - each shown filled and again as a .stroke()
 # outline, all spun and scaled through a mat3 transform.
 
 import math

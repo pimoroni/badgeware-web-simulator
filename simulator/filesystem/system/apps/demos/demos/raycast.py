@@ -64,7 +64,7 @@ minimap_overlay_mv = memoryview(minimap_overlay)
 minimap_overlay_len = minimap_overlay.width * minimap_overlay.height
 
 
-# @micropython.viper  — a native memset. The viper emitter isn't in the WASM
+# @micropython.viper  - a native memset. The viper emitter isn't in the WASM
 # build, so it's shimmed with the plain-Python loop below (slower, but it runs).
 # def clear(buf: ptr32, length: int):
 #   for i in range(length):
@@ -77,7 +77,7 @@ def clear(buf, length):
 d_proj = (screen.width / 2) / math.tan(player.fov * (math.pi / 180) / 2)
 
 
-# @micropython.native  — also unavailable in the WASM build; runs as plain Python.
+# @micropython.native  - also unavailable in the WASM build; runs as plain Python.
 def update():
   player.pos = vec2(
     math.sin(badge.ticks / 2000) * 2 + 11,

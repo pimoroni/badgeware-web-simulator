@@ -1,5 +1,5 @@
 # brush.pixelate mosaics whatever's already on screen inside the shape you draw,
-# its block size pulsing — like a censor bar that follows the circle.
+# its block size pulsing - like a censor bar that follows the circle.
 
 import math
 

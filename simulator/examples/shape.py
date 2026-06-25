@@ -1,6 +1,6 @@
 # shape.custom(outer, hole) builds a vector shape (here a square with a square
 # hole) that you draw with screen.shape(). Its .transform is a mat3 you can
-# translate / scale / rotate — set it per draw to stamp the shape many times.
+# translate / scale / rotate - set it per draw to stamp the shape many times.
 
 import math
 

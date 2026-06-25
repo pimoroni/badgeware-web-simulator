@@ -1,5 +1,5 @@
 # brush.blur blurs only what's *already on screen* within the shape you draw with
-# it — a frosted-glass window over the backdrop, not the whole frame.
+# it - a frosted-glass window over the backdrop, not the whole frame.
 
 import math
 

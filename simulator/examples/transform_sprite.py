@@ -1,5 +1,5 @@
 # Draw a sprite through an arbitrary mat3 by filling its rectangle with
-# brush.image — letting you rotate and scale about any pivot, which plain blit
+# brush.image - letting you rotate and scale about any pivot, which plain blit
 # can't do.
 
 import math

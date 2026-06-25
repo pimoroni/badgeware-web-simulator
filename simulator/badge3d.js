@@ -281,7 +281,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
          CASE_NORMAL: strength of the shell's own GLB normal map (the moulded-plastic
            surface texture/definition). Note it's low-res, so cranking it hard starts
            to read as blocky/faceted. (Tune with exposure.) */
-      const CASE_COLOR    = [1.0, 0.22, 0.0];
+      const CASE_COLOR    = [1.0, 0.42, 0.0];
       const CASE_FROST    = 0.25;
       const CASE_SPECULAR = 0.3;
       const CASE_NORMAL   = 1.0;

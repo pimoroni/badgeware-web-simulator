@@ -253,12 +253,19 @@ export function initBadge3D(simulator, appendOut, wrap) {
       // reads saturated; the key light does the lifting. (Higher ambient washes the
       // badge out and desaturates the orange - tweak these two to taste.)
       scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      // Key + fill live in a rig that orbits the badge as it flips. The moulded-case
+      // detail reads best with the light swung round and raised when the back faces
+      // us, so the render loop tweens the rig between these front/back endpoints
+      // (azimuth + elevation, degrees) by how back-facing the badge currently is.
+      const LIGHT_ORBIT = [275, 325];   // front, back azimuth
+      const LIGHT_ELEV  = [20, 70];     // front, back elevation
+      const lightRig = new THREE.Group();
+      scene.add(lightRig);
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
       keyLight.position.set(0.4, 0.8, 1);
-      scene.add(keyLight);
       const fillLight = new THREE.DirectionalLight(0x8090d0, 0.6);
       fillLight.position.set(-0.6, 0.2, 0.3);
-      scene.add(fillLight);
+      lightRig.add(keyLight, fillLight);
 
       /* -- Case look tunables --------------------------------------------------
          CASE_COLOR: the orange tint (multiplies the GLB albedo). Drop the green
@@ -270,10 +277,14 @@ export function initBadge3D(simulator, appendOut, wrap) {
          CASE_SPECULAR: strength of the surface specular highlight (0..1), decoupled
            from CASE_FROST. roughness drives BOTH the frost blur and the gloss, so a
            low CASE_FROST leaves a sharp glossy highlight; dial this down for a matte,
-           non-shiny plastic surface without losing the frost. (Tune with exposure.) */
+           non-shiny plastic surface without losing the frost.
+         CASE_NORMAL: strength of the shell's own GLB normal map (the moulded-plastic
+           surface texture/definition). Note it's low-res, so cranking it hard starts
+           to read as blocky/faceted. (Tune with exposure.) */
       const CASE_COLOR    = [1.0, 0.22, 0.0];
       const CASE_FROST    = 0.25;
       const CASE_SPECULAR = 0.3;
+      const CASE_NORMAL   = 1.0;
 
       /* Button raycasting */
       const allHitMeshes = [];
@@ -661,13 +672,14 @@ export function initBadge3D(simulator, appendOut, wrap) {
         caseRoot.traverse((o) => {
           if (!o.isMesh) return;
           // Frost the translucent shell. It's a transmission material, so roughness
-          // is the frosted-glass blur (the GLB ships it near-clear at 0.2); the
-          // normal map still supplies the fine surface texture. See CASE_FROST.
+          // is the frosted-glass blur (the GLB ships it near-clear at 0.2). See CASE_FROST.
           o.material.roughness = CASE_FROST;
           // Dim the surface specular independently of roughness so a low frost value
           // doesn't read as glossy wet plastic (no env map, so this highlight is just
           // the key light reflecting off the shell). See CASE_SPECULAR.
           o.material.specularIntensity = CASE_SPECULAR;
+          // GLB normal map carries the moulded surface texture/definition. See CASE_NORMAL.
+          if (o.material.normalMap) o.material.normalScale.set(CASE_NORMAL, CASE_NORMAL);
           o.material.onBeforeCompile = (shader) => {
             shader.uniforms.uLed = uLed;
             shader.uniforms.uInt = uInt;
@@ -924,6 +936,10 @@ export function initBadge3D(simulator, appendOut, wrap) {
           const k = Math.min(1, 10 * dt);
           viewNode.rotation.y += (viewTargetY - viewNode.rotation.y) * k;
           if (Math.abs(viewTargetY - viewNode.rotation.y) < 1e-4) viewNode.rotation.y = viewTargetY;
+          // Orbit the light rig with the flip: 0 = front-facing, 1 = back-facing.
+          const backness = (1 - Math.cos(viewNode.rotation.y - FRONT_Y)) / 2;
+          lightRig.rotation.y = (LIGHT_ORBIT[0] + (LIGHT_ORBIT[1] - LIGHT_ORBIT[0]) * backness) * Math.PI / 180;
+          lightRig.rotation.x = (LIGHT_ELEV[0]  + (LIGHT_ELEV[1]  - LIGHT_ELEV[0])  * backness) * Math.PI / 180;
         }
         // Ease the camera between the home and screen-framed poses.
         if (camEasing) {

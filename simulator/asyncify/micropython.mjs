@@ -5351,22 +5351,22 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('onSbrkGrow');
 }
 var ASM_CONSTS = {
-  223464: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
- 223567: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
- 223670: ($0) => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.backlight = $0 / 255; } },  
- 223798: () => { var w = (typeof WorkerGlobalScope !== 'undefined') ? WorkerGlobalScope.worker : null; return (w && w.running && w.paused) ? 1 : 0; },  
- 223933: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return $1 ? 1 : 0; if(s.machine.gpio_in[$0] !== undefined) return s.machine.gpio_in[$0] | 0; if($1 && (s.input & $1)) return 0; if($1) return 1; return s.machine.gpio[$0] | 0; },  
- 224340: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; s.machine.gpio[$0] = $1 ? 1 : 0; },  
- 224612: ($0, $1, $2) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; var p = s.machine.pwm[$0]; if(!p) { p = {}; s.machine.pwm[$0] = p; } p.freq = $1; p.duty = $2; if($0 >= 0 && $0 < 4) { s.machine.caselights[$0] = $2 / 65535; if(s.update_caselights) s.update_caselights(); } },  
- 225058: ($0) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(s && s.machine.adc[$0] !== undefined) return s.machine.adc[$0] | 0; if($0 === 0) return 39700; if($0 === 2) return 21845; if($0 === 3) return 40000; return 0; },  
- 225444: () => { return new Date().getFullYear(); },  
- 225481: () => { return new Date().getMonth() + 1; },  
- 225519: () => { return new Date().getDate(); },  
- 225552: () => { return (new Date().getDay() + 6) % 7; },  
- 225594: () => { return new Date().getHours(); },  
- 225628: () => { return new Date().getMinutes(); },  
- 225664: () => { return new Date().getSeconds(); },  
- 225700: () => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.postMessage({reset: true}); } }
+  223512: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
+ 223615: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
+ 223718: ($0) => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.backlight = $0 / 255; } },  
+ 223846: () => { var w = (typeof WorkerGlobalScope !== 'undefined') ? WorkerGlobalScope.worker : null; return (w && w.running && w.paused) ? 1 : 0; },  
+ 223981: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return $1 ? 1 : 0; if(s.machine.gpio_in[$0] !== undefined) return s.machine.gpio_in[$0] | 0; if($1 && (s.input & $1)) return 0; if($1) return 1; return s.machine.gpio[$0] | 0; },  
+ 224388: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; s.machine.gpio[$0] = $1 ? 1 : 0; },  
+ 224660: ($0, $1, $2) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; var p = s.machine.pwm[$0]; if(!p) { p = {}; s.machine.pwm[$0] = p; } p.freq = $1; p.duty = $2; if($0 >= 0 && $0 < 4) { s.machine.caselights[$0] = $2 / 65535; if(s.update_caselights) s.update_caselights(); } },  
+ 225106: ($0) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(s && s.machine.adc[$0] !== undefined) return s.machine.adc[$0] | 0; if($0 === 0) return 39700; if($0 === 2) return 21845; if($0 === 3) return 40000; return 0; },  
+ 225492: () => { return new Date().getFullYear(); },  
+ 225529: () => { return new Date().getMonth() + 1; },  
+ 225567: () => { return new Date().getDate(); },  
+ 225600: () => { return (new Date().getDay() + 6) % 7; },  
+ 225642: () => { return new Date().getHours(); },  
+ 225676: () => { return new Date().getMinutes(); },  
+ 225712: () => { return new Date().getSeconds(); },  
+ 225748: () => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.postMessage({reset: true}); } }
 };
 function proxy_convert_mp_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); proxy_convert_js_to_mp_obj_jsside_force_double_proxy(ret, out); }
 function proxy_convert_mp_to_js_then_js_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); const js_obj = PyProxy.toJs(ret); proxy_convert_js_to_mp_obj_jsside(js_obj, out); }

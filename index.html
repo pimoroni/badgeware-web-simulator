@@ -55,7 +55,9 @@
   <button data-action="gallery" title="Example gallery"><span class="material-symbols-outlined">grid_view</span>Examples</button>
   <button data-action="run-os" title="Run badgeOS"><span class="material-symbols-outlined">memory</span>badgeOS</button>
   <a class="buy" href="https://badgewa.re/buy" target="_blank" rel="noopener" title="Buy a badge"><span class="material-symbols-outlined">shopping_cart</span>Buy</a>
-  <!-- The toolbar's right side is intentionally empty: the 3D badge spills up over it. -->
+  <!-- Help sits at the far right (margin-left:auto), raised above the badge that
+       spills up over the toolbar there (see #toolbar button.icon-btn in app.css). -->
+  <button data-action="help" class="icon-btn" title="Help" aria-label="Help"><span class="material-symbols-outlined">help</span></button>
 </div>
 
 
@@ -107,6 +109,61 @@
       </figcaption>
     </figure>
     <div id="gallery"></div>
+    <div id="help">
+      <div class="help-doc">
+        <h2>Getting around</h2>
+        <p>A quick tour of the simulator. For the Python API and the full guides, head to
+           <a href="https://badgewa.re/docs" target="_blank" rel="noopener">badgewa.re/docs</a>.</p>
+
+        <h3>Getting Started</h3>
+        <p>We recommend browsing the <a href="#" data-action="gallery">examples gallery</a> and getting a feel for the
+           building blocks of a Badgeware application. Find an example you like, edit it, tweak the code
+           and see what happens!</p>
+        <p>Alternatively, <a href="#" data-action="run-os">take badgeOS for a spin</a> and get that Badgeware out of
+           the box experience <a href="https://badgewa.re/buy">before you buy.</a></p>
+
+        <h3>Running your code</h3>
+        <ul class="help-keys">
+          <li><span class="k"><kbd>F5</kbd> or <b>Run</b></span><span>run whatever's in the editor</span></li>
+          <li><span class="k"><b>Stop</b></span><span>halt the running program</span></li>
+          <li><span class="k"><b>badgeOS</b></span><span>boot the badge's menu, just like the real thing</span></li>
+        </ul>
+        <p>With nothing open, <b>Run</b> launches badgeOS too, so you're never stuck. The Run
+           icon turns to a reload when you're about to re-run what's already going.</p>
+
+        <h3>Editor shortcuts</h3>
+        <ul class="help-keys">
+          <li><span class="k"><kbd>F5</kbd></span><span>run</span></li>
+          <li><span class="k"><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>S</kbd></span><span>save the current file</span></li>
+        </ul>
+        <p>Your files autosave as you type, so a save is really just for peace of mind.</p>
+
+        <h3>Pressing the badge's buttons</h3>
+        <p>Click the 3D badge once to give it focus, then your keyboard becomes the badge:</p>
+        <ul class="help-keys">
+          <li><span class="k"><kbd>&larr;</kbd></span><span>A</span></li>
+          <li><span class="k"><kbd>Space</kbd></span><span>B</span></li>
+          <li><span class="k"><kbd>&rarr;</kbd></span><span>C</span></li>
+          <li><span class="k"><kbd>&uarr;</kbd> <kbd>&darr;</kbd></span><span>Up / Down</span></li>
+          <li><span class="k"><kbd>Esc</kbd></span><span>Home</span></li>
+        </ul>
+
+        <h3>The 3D badge</h3>
+        <ul class="help-keys">
+          <li><span class="k">Double-click</span><span>zoom the screen in to frame the display; double-click again to pull back out</span></li>
+          <li><span class="k">&lsaquo; &rsaquo;</span><span>the on-badge arrows spin it round to see the other side</span></li>
+        </ul>
+
+        <h3>Files</h3>
+        <ul class="help-keys">
+          <li><span class="k">Click / <kbd>Space</kbd></span><span>peek at a file (its tab shows in italic)</span></li>
+          <li><span class="k">Double-click / <kbd>Enter</kbd></span><span>open it for keeps</span></li>
+          <li><span class="k"><kbd>Delete</kbd></span><span>remove the selected file</span></li>
+        </ul>
+        <p>The <b>System</b> tree is read-only. Have a rummage to see how the built-in apps
+           tick, then borrow whatever you fancy for your own.</p>
+      </div>
+    </div>
     <div id="statusbar"><output id="status"></output></div>
   </main>
 

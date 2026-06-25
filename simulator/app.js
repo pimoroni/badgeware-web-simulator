@@ -49,6 +49,7 @@ async function initApp() {
       gallery:    galleryEl,
       editorPane: editorEl,
       imgPreview: document.getElementById('img-preview'),
+      help:       document.getElementById('help'),
     },
     { editor, setStatus, flashStatus, notifyRunTarget, selectMobilePanel },
   );
@@ -108,7 +109,7 @@ async function initApp() {
 
   // Example gallery (home view, gallery.js). The "Examples" toolbar button returns
   // here via boot's action map; the cards open/run examples through these seams.
-  addActions({ gallery: tabs.showGallery });
+  addActions({ gallery: tabs.showGallery, help: tabs.toggleHelp });
   initGallery(galleryEl, {
     runProgram,
     openExample: (name, code) => tabs.openScratchTab(name, code, { transient: true }),

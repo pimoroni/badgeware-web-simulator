@@ -39,6 +39,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
   let fb = null;   // file browser, late-bound (syncRows / refresh); see connect()
 
   let currentTabKey   = null;   // id of the active tab, or null when the gallery is up
+  let currentView     = 'gallery';  // editor-area view; applyView is its only writer
   let transientTabKey = null;   // id of the one transient (preview) tab, if any
   const openModels    = new Map();  // id → tab record (see file header)
   const openOrder     = [];         // ordered list of ids
@@ -60,12 +61,14 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     const sys = source === 'sys' ? 'sys:' : '';
     return view === 'image' ? binPrefix(path) + ':' + sys + path : sys + path;
   }
-  // Single owner of the editor-area view switch: 'gallery' | 'editor' | 'image'.
+  // Single owner of the editor-area view switch: 'gallery' | 'editor' | 'image' | 'help'.
   function applyView(view) {
+    currentView = view;
     panes.editorPane.style.display = view === 'editor' ? '' : 'none';
     panes.imgPreview.style.display = view === 'image'  ? 'flex' : 'none';
     panes.gallery.style.display    = view === 'gallery' ? 'block' : 'none';
-    panes.tabBar.style.display     = view === 'gallery' ? 'none'  : '';
+    panes.help.style.display       = view === 'help'   ? 'block' : 'none';
+    panes.tabBar.style.display     = (view === 'gallery' || view === 'help') ? 'none' : '';
   }
 
   const langForPath = (p) => (p.endsWith('.py') ? 'python' : p.endsWith('.json') ? 'json' : 'plaintext');
@@ -492,6 +495,20 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     selectMobilePanel('gallery');
   }
 
+  /* -- Help (overlay view) ------------------------------------------------- */
+  // The toolbar's ? toggles a static help panel over the editor area without
+  // touching the open tabs; toggling off returns to whatever was showing (the
+  // active tab, or the gallery). It's a pure view switch, so the run target and
+  // editor model are left exactly as they were.
+  function toggleHelp() {
+    if (currentView === 'help') {
+      const t = activeTab();
+      applyView(t ? t.view : 'gallery');
+    } else {
+      applyView('help');
+    }
+  }
+
   /* -- File-browser host callbacks ----------------------------------------- */
   function onRenamed(oldPath, newPath) {
     // Re-point a queued write so unsaved edits follow the file to its new path.
@@ -601,7 +618,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     // Late-bind the file browser (syncRows / refresh) once it exists.
     connect: (filebrowser) => { fb = filebrowser; },
     // App-facing operations:
-    showGallery, openScratchTab, saveCurrentFile, focusCodeOrNew, bootstrap,
+    showGallery, toggleHelp, openScratchTab, saveCurrentFile, focusCodeOrNew, bootstrap,
     getRunRequest, clearMarkers: clearRuntimeMarkers, applyMarkers: applyTracebackMarkers,
   };
 }

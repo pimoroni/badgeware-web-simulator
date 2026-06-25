@@ -36,15 +36,15 @@
     #toolbar {
       background: rgba(10, 20, 30, 0.85);
       border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(1rem);
       padding: 6px 12px;
       display: flex;
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
       user-select: none;
-      position: relative;
-      z-index: 1;
+      /* No stacking context here (no z-index, no backdrop-filter): that lets the
+         help button's own z-index lift it above the spilled badge. The backdrop
+         blur was invisible anyway - the bar's background is the body colour. */
     }
 
     /* badgewa.re wordmark (inlined, so it inherits a fill from CSS rather than
@@ -110,7 +110,7 @@
       filter: none;
     }
 
-    /* "Examples" / "badgeOS" are navigation, not the primary action — secondary look. */
+    /* "Examples" / "badgeOS" are navigation, not the primary action - secondary look. */
     #toolbar button[data-action="gallery"],
     #toolbar button[data-action="run-os"] {
       background: var(--panel);
@@ -119,7 +119,20 @@
       border: 1px solid var(--border);
     }
 
-    /* "Buy" — a green CTA linking out to the badge shop (external, not an app action). */
+    /* "Help" - an icon-only utility button, parked at the far right. margin-left:auto
+       pushes it past the badge-spill gap; z-index lifts it above the badge (z-index 5)
+       so it stays clickable where the badge overlaps the toolbar. */
+    #toolbar button.icon-btn {
+      background: var(--panel);
+      color: var(--white);
+      border: 1px solid var(--border);
+      padding: 4px 6px;
+      margin-left: auto;
+      position: relative;
+      z-index: 6;
+    }
+
+    /* "Buy" - a green CTA linking out to the badge shop (external, not an app action). */
     #toolbar .buy { background: var(--green); }
 
     /* -- Main layout ----------------------------------------------- */
@@ -323,6 +336,48 @@
     .example-actions button[data-act="run"]:hover { filter: brightness(1.12); color: rgb(10, 20, 30); }
 
     .gallery-empty { padding: 20px; color: var(--dim); font-size: 0.8125rem; }
+
+    /* -- Help view (toggled by the toolbar ?, sits where #editor does) -------- */
+    #help {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 22px;
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .help-doc {
+      max-width: 600px;
+      margin: 0 auto;
+      color: var(--faint);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+    }
+    .help-doc h2 { color: var(--white); font-size: 1.0625rem; font-weight: 700; margin-bottom: 6px; }
+    .help-doc h3 {
+      color: var(--orange);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin: 22px 0 8px;
+    }
+    .help-doc p { margin-bottom: 10px; }
+    .help-doc a { color: var(--blue); }
+    .help-doc b { color: var(--white); font-weight: 500; }
+    .help-keys { list-style: none; display: flex; flex-direction: column; gap: 7px; margin-bottom: 4px; }
+    .help-keys li { display: flex; gap: 14px; }
+    .help-keys .k { flex: 0 0 150px; color: var(--white); }
+    .help-doc kbd {
+      font-family: inherit;
+      font-size: 0.6875rem;
+      background: rgba(235, 245, 255, 0.08);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--white);
+    }
 
     /* -- Drag handles (panel & section resizers) -----------------------------
        Identified by the same data-attributes resize.js reads, so no marker class

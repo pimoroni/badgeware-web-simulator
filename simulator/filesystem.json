@@ -144,12 +144,12 @@
         "/system/apps/demos/demos/lines.py": 358,
         "/system/apps/demos/demos/pattern.py": 860,
         "/system/apps/demos/demos/pixelate.py": 964,
-        "/system/apps/demos/demos/raycast.py": 4364,
+        "/system/apps/demos/demos/raycast.py": 4637,
         "/system/apps/demos/demos/shape.py": 432,
         "/system/apps/demos/demos/sprites.py": 480,
         "/system/apps/demos/demos/stroke.py": 1058,
         "/system/apps/demos/demos/text.py": 1663,
-        "/system/apps/demos/demos/transform_sprite.py": 498,
+        "/system/apps/demos/demos/transform_sprite.py": 648,
         "/system/apps/demos/demos/triangles.py": 464,
         "/system/apps/demos/demos/vector_shapes.py": 1395,
         "/system/apps/demos/demos/vector_text.py": 2066,
@@ -236,7 +236,7 @@
         "/system/assets/squirrel-sprites/running.png": 1111,
         "/system/assets/squirrel-sprites/sleep.png": 567,
         "/system/assets/world.geo.json": 215029,
-        "/system/main.py": 585,
+        "/system/main.py": 604,
         "/system/secrets.py": 374
     }
 }

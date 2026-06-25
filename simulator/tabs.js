@@ -248,7 +248,10 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
       tab.addEventListener('dblclick', () => promoteTab(key));
       list.appendChild(tab);
     }
-    bar.replaceChildren(list);
+    // Replace only the <ul>, preserving other children (e.g. #tab-controls).
+    const existing = bar.querySelector(':scope > ul');
+    if (existing) existing.replaceWith(list);
+    else          bar.insertBefore(list, bar.firstChild);
     fb?.syncRows();   // project active/open/transient onto the file tree (cheap toggles)
   }
 

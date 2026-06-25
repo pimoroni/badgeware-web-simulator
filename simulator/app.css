@@ -7,6 +7,7 @@
       --orange:      rgb(224, 137, 32);
       --green:       rgb(32, 224, 70);
       --blue:        rgb(32, 189, 224);
+      --pink:        rgb(255, 86, 244);
       --faint-orange:rgba(224, 137, 32, 0.15);
       --faint-green: rgba(32, 224, 70,  0.12);
       --faint-white: rgba(235, 245, 255, 0.5);
@@ -97,7 +98,7 @@
       text-decoration: none;
       transition: filter 0.1s;
     }
-    #toolbar button:hover,  #toolbar .buy:hover  { filter: brightness(1.15); }
+    #toolbar button:hover,  #toolbar .buy:hover  { filter: brightness(1.3); }
     #toolbar button:active, #toolbar .buy:active { filter: brightness(0.9); }
     #toolbar button[data-action="stop"] {
       background: rgb(220, 70, 60);
@@ -110,8 +111,9 @@
       filter: none;
     }
 
-    /* "Examples" / "badgeOS" are navigation, not the primary action - secondary look. */
+    /* "Examples" / "Editor" / "badgeOS" are navigation, not the primary action - secondary look. */
     #toolbar button[data-action="gallery"],
+    #toolbar button[data-action="editor"],
     #toolbar button[data-action="run-os"] {
       background: var(--panel);
       color: var(--white);
@@ -133,7 +135,7 @@
     }
 
     /* "Buy" - a green CTA linking out to the badge shop (external, not an app action). */
-    #toolbar .buy { background: var(--green); }
+    #toolbar .buy { background: var(--pink); color: var(--white) }
 
     /* -- Main layout ----------------------------------------------- */
     #main {
@@ -160,14 +162,55 @@
        dynamic state (active / dirty / transient) is carried as classes. */
     #tab-bar {
       height: 33px;
-      overflow-x: auto;
-      overflow-y: hidden;
+      display: flex;
+      align-items: stretch;
       background: rgba(6, 14, 22, 0.95);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+      overflow: hidden;
     }
-    #tab-bar::-webkit-scrollbar { height: 0; }
-    #tab-bar ul { display: flex; align-items: stretch; height: 100%; list-style: none; }
+    #tab-bar ul {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      list-style: none;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    #tab-bar ul::-webkit-scrollbar { height: 0; }
+
+    /* -- Run / Stop controls docked to the right of the tab bar -- */
+    #tab-controls {
+      display: flex;
+      align-items: stretch;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+    }
+    #tab-controls button {
+      width: 33px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    #tab-controls button:last-child { border-right: none; }
+    #tab-controls .material-symbols-outlined { font-size: 1.0625rem; }
+    #tab-controls [data-action="run"]           { color: var(--green); }
+    #tab-controls [data-action="run"]:hover     { background: rgba(32, 224, 70, 0.12); }
+    #tab-controls [data-action="run"].reloading { color: var(--orange); }
+    #tab-controls [data-action="run"].reloading:hover { background: rgba(224, 137, 32, 0.15); }
+    #tab-controls [data-action="stop"] { color: rgb(220, 70, 60); }
+    #tab-controls [data-action="stop"]:hover { background: rgba(220, 70, 60, 0.12); }
+    #tab-controls [data-action="stop"]:disabled {
+      color: var(--dim);
+      cursor: default;
+    }
+    #tab-controls [data-action="stop"]:disabled:hover { background: none; }
 
     #tab-bar li {
       display: flex;
@@ -778,9 +821,10 @@
       }
 
       /* Drop the desktop toolbar + status bar; run/stop float on the badge, and
-         run feedback lives in the Output tab. */
+         run feedback lives in the Output tab. Tab controls duplicate mobile-run. */
       #toolbar { display: none; }
       #statusbar { display: none; }
+      #tab-controls { display: none; }
 
       /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
       #mobile-nav { order: -2; }
@@ -817,12 +861,14 @@
         width: 2.2rem; height: 2.2rem;
         display: flex; align-items: center; justify-content: center;
         border: none; border-radius: 0.5rem; cursor: pointer;
-        background: var(--orange); color: rgb(10, 20, 30);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        background: rgba(10, 20, 30, 0.55); color: var(--green);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(6px);
       }
       #mobile-run button .material-symbols-outlined { font-size: 1.375rem; }
-      #mobile-run button[data-action="stop"] { background: rgb(220, 70, 60); color: rgb(250, 240, 240); }
-      #mobile-run button:disabled { background: var(--panel); color: rgb(120, 124, 132); box-shadow: none; }
+      #mobile-run button[data-action="run"].reloading { color: var(--orange); }
+      #mobile-run button[data-action="stop"] { color: rgb(220, 70, 60); }
+      #mobile-run button:disabled { color: var(--dim); box-shadow: none; }
 
       /* stdout hidden unless Output tab; the tab is its title, so drop the header. */
       #stdout { display: none; }

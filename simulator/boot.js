@@ -72,7 +72,10 @@ export function bootSimulator() {
     // Switch the active tab to something else and it falls back to a fresh play.
     const syncRunIcon = () => {
       const reload = isRunning && runTarget === runningKey;
-      runIcons.forEach((i) => { i.textContent = reload ? 'refresh' : 'play_arrow'; });
+      runIcons.forEach((i) => {
+        i.textContent = reload ? 'refresh' : 'play_arrow';
+        i.closest('[data-action="run"]')?.classList.toggle('reloading', reload);
+      });
     };
     const setRunning = (running) => {
       isRunning = running;

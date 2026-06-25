@@ -1,26 +1,230 @@
 {
-  "examples": [
-    { "file": "default_code.py",   "description": "welcome / flower",   "screenshot": "screenshots/default_code.png" },
-    { "file": "hello.py",          "description": "text & pen basics",  "screenshot": "screenshots/hello.png" },
-    { "file": "shapes.py",         "description": "shape factory",      "screenshot": "screenshots/shapes.png" },
-    { "file": "colors.py",         "description": "rgb / hsv",          "screenshot": "screenshots/colors.png" },
-    { "file": "buttons.py",        "description": "reading input",      "screenshot": "screenshots/buttons.png" },
-    { "file": "menu.py",           "description": "selection menu",     "screenshot": "screenshots/menu.png" },
-    { "file": "animation.py",      "description": "badge.ticks motion", "screenshot": "screenshots/animation.png" },
-    { "file": "easing.py",         "description": "easing curves",      "screenshot": "screenshots/easing.png" },
-    { "file": "mandelbrot.py",     "description": "fractal + FPS",      "screenshot": "screenshots/mandelbrot.png" },
-    { "file": "platformer.py",     "description": "movement & gravity", "screenshot": "screenshots/platformer.png" },
-    { "file": "vectors.py",        "description": "vec2 maths",         "screenshot": "screenshots/vectors.png" },
-    { "file": "transforms.py",     "description": "mat3 transforms",    "screenshot": "screenshots/transforms.png" },
-    { "file": "gradient.py",       "description": "brush.gradient",     "screenshot": "screenshots/gradient.png" },
-    { "file": "text_layout.py",    "description": "word wrap",          "screenshot": "screenshots/text_layout.png" },
-    { "file": "scrolling_text.py", "description": "marquee",            "screenshot": "screenshots/scrolling_text.png" },
-    { "file": "fonts.py",          "description": "rom & vector fonts", "screenshot": "screenshots/fonts.png" },
-    { "file": "images.py",         "description": "load & blit",        "screenshot": "screenshots/images.png" },
-    { "file": "sprites.py",        "description": "SpriteSheet",        "screenshot": "screenshots/sprites.png" },
-    { "file": "caselights.py",     "description": "case LEDs",          "screenshot": "screenshots/caselights.png" },
-    { "file": "clock.py",          "description": "real-time clock",    "screenshot": "screenshots/clock.png" },
-    { "file": "battery.py",        "description": "hardware status",    "screenshot": "screenshots/battery.png" },
-    { "file": "state.py",          "description": "saved state",        "screenshot": "screenshots/state.png" }
+  "version": "20260625b",
+  "categories": [
+    {
+      "name": "Basics",
+      "examples": [
+        {
+          "file": "hello.py",
+          "description": "smallest app",
+          "screenshot": "screenshots/hello.png"
+        },
+        {
+          "file": "colors.py",
+          "description": "rgb \u00b7 hsv \u00b7 oklch",
+          "screenshot": "screenshots/colors.png"
+        },
+        {
+          "file": "buttons.py",
+          "description": "reading input",
+          "screenshot": "screenshots/buttons.png"
+        }
+      ]
+    },
+    {
+      "name": "Shapes",
+      "examples": [
+        {
+          "file": "circles.py",
+          "description": "circles & rnd",
+          "screenshot": "screenshots/circles.png"
+        },
+        {
+          "file": "lines.py",
+          "description": "random lines",
+          "screenshot": "screenshots/lines.png"
+        },
+        {
+          "file": "triangles.py",
+          "description": "random triangles",
+          "screenshot": "screenshots/triangles.png"
+        },
+        {
+          "file": "intersect.py",
+          "description": "rect overlap",
+          "screenshot": "screenshots/intersect.png"
+        },
+        {
+          "file": "shape.py",
+          "description": "custom shape",
+          "screenshot": "screenshots/shape.png"
+        },
+        {
+          "file": "vector_shapes.py",
+          "description": "shape gallery",
+          "screenshot": "screenshots/vector_shapes.png"
+        }
+      ]
+    },
+    {
+      "name": "Strokes & fills",
+      "examples": [
+        {
+          "file": "gradient.py",
+          "description": "gradients",
+          "screenshot": "screenshots/gradient.png"
+        },
+        {
+          "file": "pattern.py",
+          "description": "bitmap patterns",
+          "screenshot": "screenshots/pattern.png"
+        },
+        {
+          "file": "dither.py",
+          "description": "dithering",
+          "screenshot": "screenshots/dither.png"
+        },
+        {
+          "file": "stroke.py",
+          "description": "stroke alignment",
+          "screenshot": "screenshots/stroke.png"
+        },
+        {
+          "file": "joins_caps.py",
+          "description": "joins & caps",
+          "screenshot": "screenshots/joins_caps.png"
+        },
+        {
+          "file": "fill_rules.py",
+          "description": "fill rules",
+          "screenshot": "screenshots/fill_rules.png"
+        }
+      ]
+    },
+    {
+      "name": "Brushes & effects",
+      "examples": [
+        {
+          "file": "image_brush.py",
+          "description": "image brush",
+          "screenshot": "screenshots/image_brush.png"
+        },
+        {
+          "file": "lighten_darken.py",
+          "description": "lighten / darken",
+          "screenshot": "screenshots/lighten_darken.png"
+        },
+        {
+          "file": "pixelate.py",
+          "description": "pixelate",
+          "screenshot": "screenshots/pixelate.png"
+        },
+        {
+          "file": "blur.py",
+          "description": "frame blur",
+          "screenshot": "screenshots/blur.png"
+        },
+        {
+          "file": "blur_brush.py",
+          "description": "blur brush",
+          "screenshot": "screenshots/blur_brush.png"
+        }
+      ]
+    },
+    {
+      "name": "Sprites",
+      "examples": [
+        {
+          "file": "sprites.py",
+          "description": "sprite blit",
+          "screenshot": "screenshots/sprites.png"
+        },
+        {
+          "file": "spritesheet.py",
+          "description": "SpriteSheet anim",
+          "screenshot": "screenshots/spritesheet.png"
+        },
+        {
+          "file": "transform_sprite.py",
+          "description": "transformed sprite",
+          "screenshot": "screenshots/transform_sprite.png"
+        }
+      ]
+    },
+    {
+      "name": "Text",
+      "examples": [
+        {
+          "file": "scrolling_text.py",
+          "description": "marquee",
+          "screenshot": "screenshots/scrolling_text.png"
+        },
+        {
+          "file": "text.py",
+          "description": "rich text",
+          "screenshot": "screenshots/text.png"
+        },
+        {
+          "file": "vector_text.py",
+          "description": "vector text",
+          "screenshot": "screenshots/vector_text.png"
+        }
+      ]
+    },
+    {
+      "name": "Motion & games",
+      "examples": [
+        {
+          "file": "easing.py",
+          "description": "easing curves",
+          "screenshot": "screenshots/easing.png"
+        },
+        {
+          "file": "menu.py",
+          "description": "selection menu",
+          "screenshot": "screenshots/menu.png"
+        },
+        {
+          "file": "platformer.py",
+          "description": "movement & gravity",
+          "screenshot": "screenshots/platformer.png"
+        }
+      ]
+    },
+    {
+      "name": "Badge hardware",
+      "examples": [
+        {
+          "file": "caselights.py",
+          "description": "case LEDs",
+          "screenshot": "screenshots/caselights.png"
+        },
+        {
+          "file": "battery.py",
+          "description": "hardware status",
+          "screenshot": "screenshots/battery.png"
+        },
+        {
+          "file": "clock.py",
+          "description": "real-time clock",
+          "screenshot": "screenshots/clock.png"
+        },
+        {
+          "file": "state.py",
+          "description": "saved state",
+          "screenshot": "screenshots/state.png"
+        }
+      ]
+    },
+    {
+      "name": "Going further",
+      "examples": [
+        {
+          "file": "line_clip.py",
+          "description": "line clipping",
+          "screenshot": "screenshots/line_clip.png"
+        },
+        {
+          "file": "mandelbrot.py",
+          "description": "fractal + FPS",
+          "screenshot": "screenshots/mandelbrot.png"
+        },
+        {
+          "file": "raycast.py",
+          "description": "raycaster",
+          "screenshot": "screenshots/raycast.png"
+        }
+      ]
+    }
   ]
 }

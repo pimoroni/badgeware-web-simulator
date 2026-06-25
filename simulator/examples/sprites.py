@@ -1,23 +1,27 @@
-# SpriteSheet slices a grid of frames out of a single image. .animation()
-# returns an AnimatedSprite; frame() picks a frame and wraps around the count,
-# so dividing badge.ticks by a frame time plays it back.
+# screen.blit(image, rect) draws an image scaled into a destination rectangle.
+# Setting image.alpha before each blit fades the copies in and out.
 
-badge.mode(HIRES)
+import random
+import math
 
-# running.png is 7 frames of 32x32 in a single row: SpriteSheet(file, cols, rows)
-sheet = SpriteSheet("/system/assets/squirrel-sprites/running.png", 7, 1)
-runner = sheet.animation()
+badge.mode(LORES | VSYNC)
+
+skull = image.load("/system/assets/skull.png")
 
 while True:
-    # Advance one frame every 80ms.
-    frame = runner.frame(badge.ticks / 80)
+  random.seed(0)
+  for i in range(30):
+    s = (math.sin(badge.ticks / 500) * 1) + 2
 
-    # blit(image, rect) scales the sprite into a 96x96 box.
-    x = screen.width // 2 - 48
-    y = screen.height // 2 - 48
-    screen.blit(frame, rect(x, y, 96, 96))
+    skull.alpha = int((math.sin((badge.ticks + i * 30) / 500) + 1) * 127)
 
-    screen.pen = color.white
-    screen.text("SpriteSheet animation", 10, 10)
+    x = math.sin(i + badge.ticks / 1000) * 40
+    y = math.cos(i + badge.ticks / 1000) * 40
 
-    badge.update()
+    pos = vec2(x + rnd(-20, 180), y + rnd(-20, 140))
+
+    dr = rect(
+      pos.x, pos.y, 32 * s, 24 * s
+    )
+    screen.blit(skull, dr)
+  badge.update()

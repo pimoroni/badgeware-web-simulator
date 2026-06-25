@@ -1,10 +1,11 @@
 # The real-time clock. rtc.datetime() returns a tuple:
 #   (year, month, day, hour, minute, second, weekday)
+# The simulator appends a sub-seconds value, so take the first seven either way.
 
 badge.mode(HIRES)
 
 while True:
-    year, month, day, hour, minute, second, weekday = rtc.datetime()
+    year, month, day, hour, minute, second, weekday = rtc.datetime()[:7]
 
     clock = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
     date = "{:04d}-{:02d}-{:02d}".format(year, month, day)

@@ -666,7 +666,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
           caseBackClone.traverse(child => {
             if (child.isMesh) {
               child.material = child.material.clone();
-              child.material.color.setRGB(1, 0.42, 0);
+              child.material.color.setRGB(1, 0.22, 0);
             }
           });
           tuftyNode.add(caseBackClone);

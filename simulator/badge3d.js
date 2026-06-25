@@ -158,6 +158,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
       let   screenFocusReady = false;
       let   zoomed           = false;
       let   camEasing        = false;
+      let   gestureTapTimer  = null;   // pending touch tap→B pulse (gesture D-pad, below)
       const homePos     = new THREE.Vector3();
       const homeLook    = new THREE.Vector3();
       const camPosGoal  = new THREE.Vector3();
@@ -181,6 +182,9 @@ export function initBadge3D(simulator, appendOut, wrap) {
 
       function focusScreen(on) {
         if (!screenFocusReady) return;
+        // Any zoom toggle cancels a pending tap→B, so a double-tap that zooms out
+        // never leaves a stray B in flight (see the touch gesture handlers below).
+        if (gestureTapTimer) { clearTimeout(gestureTapTimer); gestureTapTimer = null; }
         if (on) {
           const { pos, look } = framedScreenPose();
           camPosGoal.copy(pos);
@@ -196,23 +200,40 @@ export function initBadge3D(simulator, appendOut, wrap) {
         wrap.parentElement.classList.toggle('screen-zoomed', on);
       }
 
-      /* Forward badge key events from the 3D canvas */
-      const keyMap = { 38: 2, 40: 1, 37: 16, 39: 4, 32: 8, 27: 32 };
+      /* -- Badge buttons: one source of truth -------------------------------
+         BTN names each button's bitmask, taken from the simulator (which owns the
+         wire protocol the worker reads via simulator.buttons) so there's a single
+         canonical table - reused by the key map, the button raycast, the touch
+         D-pad, the press markers and the press animation. A = left face button,
+         B = select, C = right face button, plus the Up/Down edge and Home.
+         setButtons() is the ONE place that mutates the mask and notifies the
+         worker; every input path goes through it. */
+      const BTN = {
+        a:  simulator.BUTTON_LEFT,  b:    simulator.BUTTON_SELECT, c:    simulator.BUTTON_RIGHT,
+        up: simulator.BUTTON_UP,    down: simulator.BUTTON_DOWN,   home: simulator.BUTTON_HOME,
+      };
+      function setButtons(mask, down) {
+        if (!simulator.micropython) return;
+        if (down) simulator.buttons |= mask;
+        else      simulator.buttons &= ~mask;
+        simulator.micropython.postMessage({ buttons: simulator.buttons });
+      }
+
+      /* Forward badge key presses from the focused 3D canvas: arrows = D-pad / A /
+         C, space = B, escape = Home. */
+      const keyMap = {
+        ArrowUp: BTN.up, ArrowDown: BTN.down, ArrowLeft: BTN.a, ArrowRight: BTN.c,
+        ' ': BTN.b, Escape: BTN.home,
+      };
       renderer.domElement.tabIndex = 0;
-      renderer.domElement.addEventListener('keydown', ev => {
-        const btn = keyMap[ev.keyCode] ?? 0;
-        if (!btn || !simulator.micropython) return;
-        simulator.buttons |= btn;
-        simulator.micropython.postMessage({ buttons: simulator.buttons });
+      const onKey = (down) => (ev) => {
+        const mask = keyMap[ev.key];
+        if (!mask) return;
+        setButtons(mask, down);
         ev.preventDefault();
-      });
-      renderer.domElement.addEventListener('keyup', ev => {
-        const btn = keyMap[ev.keyCode] ?? 0;
-        if (!btn || !simulator.micropython) return;
-        simulator.buttons &= ~btn;
-        simulator.micropython.postMessage({ buttons: simulator.buttons });
-        ev.preventDefault();
-      });
+      };
+      renderer.domElement.addEventListener('keydown', onKey(true));
+      renderer.domElement.addEventListener('keyup',   onKey(false));
 
       /* Lighting. Brightness comes mostly from ambient + fill: the screen's diffuse
          is black (its picture is emissive), so neither can glare it — only the case
@@ -324,46 +345,113 @@ export function initBadge3D(simulator, appendOut, wrap) {
         if (Math.abs(lp.x) < 0.029 && lp.z < 0.022 && lp.z > -0.022) return { mask: 0, worldPt: null };
         // Right-edge panel only — constrain Z so far corners don't fire
         if (lp.x > 0.028 && lp.x < 0.045 && lp.z > -0.016 && lp.z < 0.020) {
-          return { mask: lp.z < 0.005 ? 2 : 1, worldPt };                     // UP / DOWN
+          return { mask: lp.z < 0.005 ? BTN.up : BTN.down, worldPt };          // UP / DOWN
         }
         // Bottom button strip — constrain to centred region just below screen
         if (lp.z > 0.018 && lp.z < 0.035 && Math.abs(lp.x) < 0.028) {
-          const mask = lp.x < -0.008 ? 16 : lp.x < +0.008 ? 8 : 4;
+          const mask = lp.x < -0.008 ? BTN.a : lp.x < +0.008 ? BTN.b : BTN.c;
           return { mask, worldPt };                                             // A / B / C
         }
         return { mask: 0, worldPt: null };
       }
 
-      // Capture-phase pointerdown so button hits are handled before anything else
+      /* -- Zoomed-in touch D-pad ---------------------------------------------
+         When the screen is framed there's no room to aim at the physical buttons,
+         so the framed screen becomes a gamepad: swipe left/right/up/down = A/C/Up/
+         Down, a single tap = B, a double-tap zooms back out. This rides on the SAME
+         pointer events as the button raycast and the dblclick zoom - the input path
+         that actually works on iOS - rather than a separate touch-event stream that
+         fights it. A touchmove handler below default-prevents page scroll while
+         zoomed so iOS can't steal a swipe (pointercancel) mid-gesture. */
+      const SWIPE_MIN_PX  = 28;    // a drag shorter than this counts as a tap
+      const DOUBLE_TAP_MS = 320, DOUBLE_TAP_PX = 44;
+      const TAP_B_DELAY   = 250;   // ms to wait out a possible zoom-out double-tap before B
+      const GESTURE_PULSE = 120;   // ms each gesture holds its button down
+      let gActive = false, gStartX = 0, gStartY = 0, gLastX = 0, gLastY = 0;
+      let lastTapT = 0, lastTapX = 0, lastTapY = 0, lastGestureT = 0;
+
+      // Fire a button as a brief press→release pulse (long enough for the running
+      // program to poll it), the way a discrete swipe/tap should read.
+      function pulseButton(mask) {
+        setButtons(mask, true);
+        setTimeout(() => setButtons(mask, false), GESTURE_PULSE);
+      }
+      // Swipe direction → D-pad button. Left/right are the A/C face buttons.
+      const swipeMask = (dx, dy) => Math.abs(dx) > Math.abs(dy)
+        ? (dx < 0 ? BTN.a  : BTN.c)
+        : (dy < 0 ? BTN.up : BTN.down);
+
+      // Resolve a finished zoomed-in gesture (from pointerup). A drag = a D-pad
+      // direction; a tap = B, unless it's the second of a quick double-tap, which
+      // zooms back out. The tap→B is deferred so that double-tap can cancel it.
+      function endGesture(x, y) {
+        gActive = false;
+        lastGestureT = performance.now();   // lets the dblclick handler ignore the synthetic one
+        const dx = x - gStartX, dy = y - gStartY;
+        if (Math.hypot(dx, dy) >= SWIPE_MIN_PX) { pulseButton(swipeMask(dx, dy)); return; }
+        const t = performance.now();
+        if (t - lastTapT < DOUBLE_TAP_MS &&
+            Math.hypot(x - lastTapX, y - lastTapY) < DOUBLE_TAP_PX) {
+          lastTapT = 0;
+          if (gestureTapTimer) { clearTimeout(gestureTapTimer); gestureTapTimer = null; }
+          focusScreen(false);
+          return;
+        }
+        lastTapT = t; lastTapX = x; lastTapY = y;
+        gestureTapTimer = setTimeout(() => { gestureTapTimer = null; pulseButton(BTN.b); }, TAP_B_DELAY);
+      }
+
+      // Capture-phase pointerdown so button hits are handled before anything else.
       renderer.domElement.addEventListener('pointerdown', ev => {
+        if (ev.pointerType !== 'mouse' && zoomed) {
+          // Zoomed-in: the framed screen is the D-pad; start tracking a swipe/tap
+          // instead of a raycast button press underneath it.
+          if (gestureTapTimer) { clearTimeout(gestureTapTimer); gestureTapTimer = null; }
+          gActive = true;
+          gStartX = gLastX = ev.clientX; gStartY = gLastY = ev.clientY;
+          return;
+        }
         const { mask, worldPt } = buttonMaskAt(ev);
         if (!mask) return;
         heldMask = mask;
-        simulator.buttons |= mask;
-        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
+        setButtons(mask, true);
         if (buttonAnimator) buttonAnimator.press(mask, worldPt);
         ev.stopPropagation();
       }, true);
 
+      renderer.domElement.addEventListener('pointermove', ev => {
+        if (gActive) { gLastX = ev.clientX; gLastY = ev.clientY; }
+      });
+
       renderer.domElement.addEventListener('pointerup', ev => {
+        if (gActive) { endGesture(ev.clientX, ev.clientY); return; }
         if (!heldMask) return;
-        simulator.buttons &= ~heldMask;
+        setButtons(heldMask, false);
         if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
-        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
         ev.stopPropagation();
       }, true);
 
       renderer.domElement.addEventListener('pointercancel', () => {
+        // iOS may cancel a pointer if it decides the drag was a page scroll; if it
+        // was actually a swipe, still fire it from the last tracked position.
+        if (gActive) {
+          gActive = false;
+          const dx = gLastX - gStartX, dy = gLastY - gStartY;
+          if (Math.hypot(dx, dy) >= SWIPE_MIN_PX) { lastGestureT = performance.now(); pulseButton(swipeMask(dx, dy)); }
+          return;
+        }
         if (!heldMask) return;
-        simulator.buttons &= ~heldMask;
+        setButtons(heldMask, false);
         if (buttonAnimator) buttonAnimator.release(heldMask);
         heldMask = 0;
-        if (simulator.micropython) simulator.micropython.postMessage({ buttons: simulator.buttons });
       });
 
-      // Double-click the screen to frame it; double-click again to zoom back out.
-      renderer.domElement.addEventListener('dblclick', ev => {
+      // Toggle the screen zoom from a pointer position: out when zoomed, in only
+      // when the point lands on the (front-facing) screen mesh — back-face culling
+      // means a hit misses when spun to the rear. Shared by the mouse double-click
+      // and the touch double-tap below.
+      function toggleZoomAt(ev) {
         if (!screenFocusReady) return;
         if (zoomed) { focusScreen(false); return; }
         const rect  = renderer.domElement.getBoundingClientRect();
@@ -372,10 +460,25 @@ export function initBadge3D(simulator, appendOut, wrap) {
           ((ev.clientY - rect.top)  / rect.height) * -2 + 1,
         );
         raycaster.setFromCamera(mouse, camera);
-        // Only zoom in when the double-click actually lands on the (front-facing)
-        // screen mesh — back-face culling means this misses when spun to the rear.
         if (raycaster.intersectObject(screenMesh, false).length) focusScreen(true);
+      }
+
+      // Double-click / double-tap toggles the zoom. The canvas keeps the default
+      // touch-action so iOS still synthesises this dblclick from a double-tap (any
+      // touch-action override makes Safari swallow it). Ignore the synthetic dblclick
+      // that trails a zoomed-in touch gesture - the pointer handlers above already
+      // dealt with that double-tap (zoom out), so this must not re-toggle.
+      renderer.domElement.addEventListener('dblclick', ev => {
+        if (performance.now() - lastGestureT < 700) return;
+        toggleZoomAt(ev);
       });
+
+      // The ONLY touch-event listener: while zoomed, stop a swipe from panning or
+      // zooming the page so iOS doesn't cancel the pointer mid-gesture. All gesture
+      // LOGIC lives in the pointer handlers above; this just locks scrolling.
+      renderer.domElement.addEventListener('touchmove', (ev) => {
+        if (zoomed) ev.preventDefault();
+      }, { passive: false });
 
       /* -- Button press animation (siloed — swap out when geometry improves) --
          Approach: onBeforeCompile vertex displacement on the cap mesh(es)
@@ -390,11 +493,11 @@ export function initBadge3D(simulator, appendOut, wrap) {
 
         // Button zone centres in screen-local space (Y=0 = on screen plane)
         const BTN_DEFS = [
-          { mask: 16, slc: new THREE.Vector3(-0.018,  0,  0.023) }, // A
-          { mask:  8, slc: new THREE.Vector3(  0.00,  0,  0.023) }, // B
-          { mask:  4, slc: new THREE.Vector3(+0.018,  0,  0.023) }, // C
-          { mask:  2, slc: new THREE.Vector3(+0.035,  0, -0.002) }, // UP
-          { mask:  1, slc: new THREE.Vector3(+0.035,  0, +0.010) }, // DOWN
+          { mask: BTN.a,    slc: new THREE.Vector3(-0.018,  0,  0.023) }, // A
+          { mask: BTN.b,    slc: new THREE.Vector3(  0.00,  0,  0.023) }, // B
+          { mask: BTN.c,    slc: new THREE.Vector3(+0.018,  0,  0.023) }, // C
+          { mask: BTN.up,   slc: new THREE.Vector3(+0.035,  0, -0.002) }, // UP
+          { mask: BTN.down, slc: new THREE.Vector3(+0.035,  0, +0.010) }, // DOWN
         ];
 
         // Raycast from in front of each zone inward to find actual hit mesh + world point
@@ -689,8 +792,8 @@ export function initBadge3D(simulator, appendOut, wrap) {
         /* Button anchor markers baked into the GLB (see claude/tools/isolate_badge.py).
            Parented under `tufty`, so they spin with the badge. */
         buttonMarkers = [
-          ['sim_btn_a', 16], ['sim_btn_b', 8], ['sim_btn_c', 4],
-          ['sim_btn_up', 2], ['sim_btn_down', 1],
+          ['sim_btn_a', BTN.a], ['sim_btn_b', BTN.b], ['sim_btn_c', BTN.c],
+          ['sim_btn_up', BTN.up], ['sim_btn_down', BTN.down],
         ].map(([name, mask]) => ({ mask, node: root.getObjectByName(name) }))
          .filter(b => b.node);
 

@@ -6,18 +6,15 @@
       "examples": [
         {
           "file": "hello.py",
-          "description": "smallest app",
-          "screenshot": "screenshots/hello.png"
+          "description": "smallest app"
         },
         {
           "file": "colors.py",
-          "description": "rgb \u00b7 hsv \u00b7 oklch",
-          "screenshot": "screenshots/colors.png"
+          "description": "rgb \u00b7 hsv \u00b7 oklch"
         },
         {
           "file": "buttons.py",
-          "description": "reading input",
-          "screenshot": "screenshots/buttons.png"
+          "description": "reading input"
         }
       ]
     },
@@ -26,33 +23,27 @@
       "examples": [
         {
           "file": "circles.py",
-          "description": "circles & rnd",
-          "screenshot": "screenshots/circles.png"
+          "description": "circles & rnd"
         },
         {
           "file": "lines.py",
-          "description": "random lines",
-          "screenshot": "screenshots/lines.png"
+          "description": "random lines"
         },
         {
           "file": "triangles.py",
-          "description": "random triangles",
-          "screenshot": "screenshots/triangles.png"
+          "description": "random triangles"
         },
         {
           "file": "intersect.py",
-          "description": "rect overlap",
-          "screenshot": "screenshots/intersect.png"
+          "description": "rect overlap"
         },
         {
           "file": "shape.py",
-          "description": "custom shape",
-          "screenshot": "screenshots/shape.png"
+          "description": "custom shape"
         },
         {
           "file": "vector_shapes.py",
-          "description": "shape gallery",
-          "screenshot": "screenshots/vector_shapes.png"
+          "description": "shape gallery"
         }
       ]
     },
@@ -61,33 +52,27 @@
       "examples": [
         {
           "file": "gradient.py",
-          "description": "gradients",
-          "screenshot": "screenshots/gradient.png"
+          "description": "gradients"
         },
         {
           "file": "pattern.py",
-          "description": "bitmap patterns",
-          "screenshot": "screenshots/pattern.png"
+          "description": "bitmap patterns"
         },
         {
           "file": "dither.py",
-          "description": "dithering",
-          "screenshot": "screenshots/dither.png"
+          "description": "dithering"
         },
         {
           "file": "stroke.py",
-          "description": "stroke alignment",
-          "screenshot": "screenshots/stroke.png"
+          "description": "stroke alignment"
         },
         {
           "file": "joins_caps.py",
-          "description": "joins & caps",
-          "screenshot": "screenshots/joins_caps.png"
+          "description": "joins & caps"
         },
         {
           "file": "fill_rules.py",
-          "description": "fill rules",
-          "screenshot": "screenshots/fill_rules.png"
+          "description": "fill rules"
         }
       ]
     },
@@ -96,28 +81,23 @@
       "examples": [
         {
           "file": "image_brush.py",
-          "description": "image brush",
-          "screenshot": "screenshots/image_brush.png"
+          "description": "image brush"
         },
         {
           "file": "lighten_darken.py",
-          "description": "lighten / darken",
-          "screenshot": "screenshots/lighten_darken.png"
+          "description": "lighten / darken"
         },
         {
           "file": "pixelate.py",
-          "description": "pixelate",
-          "screenshot": "screenshots/pixelate.png"
+          "description": "pixelate"
         },
         {
           "file": "blur.py",
-          "description": "frame blur",
-          "screenshot": "screenshots/blur.png"
+          "description": "frame blur"
         },
         {
           "file": "blur_brush.py",
-          "description": "blur brush",
-          "screenshot": "screenshots/blur_brush.png"
+          "description": "blur brush"
         }
       ]
     },
@@ -126,18 +106,15 @@
       "examples": [
         {
           "file": "sprites.py",
-          "description": "sprite blit",
-          "screenshot": "screenshots/sprites.png"
+          "description": "sprite blit"
         },
         {
           "file": "spritesheet.py",
-          "description": "SpriteSheet anim",
-          "screenshot": "screenshots/spritesheet.png"
+          "description": "SpriteSheet anim"
         },
         {
           "file": "transform_sprite.py",
-          "description": "transformed sprite",
-          "screenshot": "screenshots/transform_sprite.png"
+          "description": "transformed sprite"
         }
       ]
     },
@@ -146,18 +123,15 @@
       "examples": [
         {
           "file": "scrolling_text.py",
-          "description": "marquee",
-          "screenshot": "screenshots/scrolling_text.png"
+          "description": "marquee"
         },
         {
           "file": "text.py",
-          "description": "rich text",
-          "screenshot": "screenshots/text.png"
+          "description": "rich text"
         },
         {
           "file": "vector_text.py",
-          "description": "vector text",
-          "screenshot": "screenshots/vector_text.png"
+          "description": "vector text"
         }
       ]
     },
@@ -166,18 +140,15 @@
       "examples": [
         {
           "file": "easing.py",
-          "description": "easing curves",
-          "screenshot": "screenshots/easing.png"
+          "description": "easing curves"
         },
         {
           "file": "menu.py",
-          "description": "selection menu",
-          "screenshot": "screenshots/menu.png"
+          "description": "selection menu"
         },
         {
           "file": "platformer.py",
-          "description": "movement & gravity",
-          "screenshot": "screenshots/platformer.png"
+          "description": "movement & gravity"
         }
       ]
     },
@@ -186,23 +157,19 @@
       "examples": [
         {
           "file": "caselights.py",
-          "description": "case LEDs",
-          "screenshot": "screenshots/caselights.png"
+          "description": "case LEDs"
         },
         {
           "file": "battery.py",
-          "description": "hardware status",
-          "screenshot": "screenshots/battery.png"
+          "description": "hardware status"
         },
         {
           "file": "clock.py",
-          "description": "real-time clock",
-          "screenshot": "screenshots/clock.png"
+          "description": "real-time clock"
         },
         {
           "file": "state.py",
-          "description": "saved state",
-          "screenshot": "screenshots/state.png"
+          "description": "saved state"
         }
       ]
     },
@@ -211,18 +178,15 @@
       "examples": [
         {
           "file": "line_clip.py",
-          "description": "line clipping",
-          "screenshot": "screenshots/line_clip.png"
+          "description": "line clipping"
         },
         {
           "file": "mandelbrot.py",
-          "description": "fractal + FPS",
-          "screenshot": "screenshots/mandelbrot.png"
+          "description": "fractal + FPS"
         },
         {
           "file": "raycast.py",
-          "description": "raycaster",
-          "screenshot": "screenshots/raycast.png"
+          "description": "raycaster"
         }
       ]
     }

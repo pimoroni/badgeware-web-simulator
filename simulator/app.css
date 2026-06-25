@@ -161,7 +161,7 @@
        a .material-symbols-outlined <span> = the read-only lock, <button> = close. Only the
        dynamic state (active / dirty / transient) is carried as classes. */
     #tab-bar {
-      height: 33px;
+      height: 37px;
       display: flex;
       align-items: stretch;
       background: rgba(6, 14, 22, 0.95);
@@ -188,7 +188,7 @@
       border-left: 1px solid var(--border);
     }
     #tab-controls button {
-      width: 33px;
+      width: 37px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -316,8 +316,11 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      padding: 14px;
+      padding: 0;
       background: rgba(0, 0, 0, 0.15);
+    }
+    #gallery::-webkit-scrollbar {
+      display: none;  /* Redundant and overlaps our lovely stop button placement */
     }
     /* Category header before each grid (shares the section-title look). */
     .gallery-category {
@@ -326,15 +329,19 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--faint);
-      margin: 0 2px 10px;
-      padding-bottom: 6px;
+      margin: 0;
       border-bottom: 1px solid var(--border);
+      height: 37px;
+      align-items: center;
+      display: flex;
+      padding: 5px 8px 4px;
     }
     .gallery-grid + .gallery-category { margin-top: 24px; }   /* space between sections */
     .gallery-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 14px;
+      padding: 12px;
     }
     .example {
       display: flex;
@@ -344,21 +351,31 @@
       border-radius: 0.5rem;
       overflow: hidden;
     }
-    /* The screenshot is a button: click = open + run. Native pixels, crisp scale.
-       Two stacked images — the still, and the APNG clip shown on hover (lazily
-       loaded by app.js; transparent until then, so the still shows through). */
+    /* The screenshot is a button: click = open + run. The still and the live hover
+       canvas are produced by the simulator itself (preview.js): a spinner shows
+       centred until the still is captured, then fades in; on hover the shared
+       preview canvas is moved in on top and plays the example live. */
     .example-open {
       display: block; padding: 0; border: none; cursor: pointer;
       position: relative; aspect-ratio: 4 / 3;
       background: rgb(6, 6, 9); border-bottom: 1px solid var(--border);
     }
-    .example-open img {
+    .example-open .still,
+    .example-open .preview-canvas {
       position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: contain; image-rendering: pixelated;
     }
-    .example-open .anim { opacity: 0; transition: opacity 0.12s; }
-    .example-open:hover .anim  { opacity: 1; }
-    .example-open:hover .still { filter: brightness(1.1); }   /* feedback before the clip loads */
+    .example-open .still { opacity: 0; transition: opacity 0.15s; }
+    .example.ready .example-open .still { opacity: 1; }
+    /* Centred spinner (not stretched full-bleed like the still); hidden once ready. */
+    .example-open .spinner {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 34px; height: 34px; image-rendering: auto;
+    }
+    .example.ready .example-open .spinner { display: none; }
+    /* Live preview canvas: moved into the hovered card by gallery.js, faded in. */
+    .example-open .preview-canvas { opacity: 0; transition: opacity 0.12s; }
+    .example.previewing .example-open .preview-canvas { opacity: 1; }
     .example-open:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
 
     .example figcaption { padding: 6px 8px 2px; }
@@ -367,16 +384,45 @@
 
     .example-actions { display: flex; gap: 6px; padding: 6px 8px 8px; }
     .example-actions button {
-      flex: 1; font-family: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer;
+      flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+      font-family: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer;
       padding: 4px 0; border-radius: 0.35rem; border: 1px solid var(--border);
       background: none; color: var(--faint);
       transition: color 0.15s, background 0.15s, border-color 0.15s, filter 0.1s;
     }
+    .example-actions button .material-symbols-outlined { font-size: 0.95rem; }
     .example-actions button:hover { color: var(--white); border-color: var(--faint); }
+    /* Run matches the editor's green play control (filled icon, dark text on green). */
     .example-actions button[data-act="run"] {
-      background: var(--orange); color: rgb(10, 20, 30); border-color: var(--orange);
+      color: var(--green);
     }
-    .example-actions button[data-act="run"]:hover { filter: brightness(1.12); color: rgb(10, 20, 30); }
+    .example-actions button[data-act="run"] .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .example-actions button[data-act="run"]:hover { filter: brightness(1.12); color: var(--green); }
+
+    /* Floating Stop pinned to the gallery's top-right, mirroring the editor's stop
+       button (red filled icon, dim when idle). The sticky wrapper is zero-height so
+       it never pushes the grid down - no layout jump as it pins on scroll. */
+    .gallery-controls {
+      position: sticky; top: 0; height: 0; z-index: 3;
+      display: flex; justify-content: flex-end; align-items: flex-start;
+    }
+    .gallery-stop {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0;
+      cursor: pointer;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: rgb(220, 70, 60);
+      transition: background 0.15s, color 0.15s;
+      width: 37px;
+      height: 37px;
+    }
+    .gallery-stop .material-symbols-outlined { font-size: 1.0625rem; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .gallery-stop:hover { background: rgba(220, 70, 60, 0.12); }
+    .gallery-stop:disabled { color: var(--dim); cursor: default; }
+    .gallery-stop:disabled:hover { background: var(--panel); }
 
     .gallery-empty { padding: 20px; color: var(--dim); font-size: 0.8125rem; }
 
@@ -825,6 +871,7 @@
       #toolbar { display: none; }
       #statusbar { display: none; }
       #tab-controls { display: none; }
+      .gallery-controls { display: none; }   /* run/stop live on the badge on mobile */
 
       /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
       #mobile-nav { order: -2; }

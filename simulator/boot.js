@@ -25,7 +25,6 @@ export function bootSimulator() {
     const stdoutEl    = document.querySelector('#stdout > div');   // the scrolling log inside the view
     const statusEl    = document.getElementById('status');
     const badge3dWrap = document.getElementById('badge-3d-wrap');  // the 3D badge's container (injected into badge3d)
-    const stopBtns = document.querySelectorAll('[data-action="stop"]');   // toolbar + floating mobile
     const runIcons = document.querySelectorAll('[data-action="run"] .material-symbols-outlined');   // play ↔ reload glyph
 
     // The status line is boot's surface, and setStatus is its ONLY writer — so the
@@ -79,7 +78,9 @@ export function bootSimulator() {
     };
     const setRunning = (running) => {
       isRunning = running;
-      stopBtns.forEach((b) => { b.disabled = !running; });
+      // Queried live (not cached): the gallery adds its own [data-action="stop"]
+      // after boot, and it needs to track run-state like the toolbar/mobile ones.
+      document.querySelectorAll('[data-action="stop"]').forEach((b) => { b.disabled = !running; });
       syncRunIcon();
     };
     const onSimulatorStopped = () => {

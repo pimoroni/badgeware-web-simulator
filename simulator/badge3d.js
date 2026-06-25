@@ -47,6 +47,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
     m.map               = null;
     m.emissive.setRGB(1, 1, 1);
     m.emissiveIntensity = 1.5;   // slight glow on top of the displayed image
+    m.toneMapped        = false; // the screen is the literal framebuffer - don't tone-map the app's pixels
     // Near-black until the first frame lands, so the panel never flashes white.
     m.emissiveMap       = screenTex || offTexture();
     m.needsUpdate       = true;
@@ -100,6 +101,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
       m.emissive.setRGB(1, 1, 1);
       m.emissiveIntensity = 1.5;
       m.emissiveMap = offTexture();
+      m.toneMapped = false;
       m.needsUpdate = true;
     }
     renderDirty = true;   // panel went to "off" — redraw once
@@ -132,6 +134,14 @@ export function initBadge3D(simulator, appendOut, wrap) {
       renderer.setSize(wrap.clientWidth, wrap.clientHeight);
       renderer.setClearColor(0x000000, 0);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      // Tone mapping: without it the case clips/overexposes (lighting tweaks then do
+      // nothing and the surface washes out, hiding the normal-map detail). Neutral
+      // (Khronos PBR Neutral) tames the highlights while keeping the orange's hue and
+      // saturation - better for an authentic product look than ACES (which desats).
+      // Exposure is the master brightness knob; the screen opts out (toneMapped=false
+      // in applyCanvasToScreen) so the displayed pixels stay colour-accurate.
+      renderer.toneMapping = THREE.NeutralToneMapping;
+      renderer.toneMappingExposure = 1.0;
       wrap.appendChild(renderer.domElement);
 
       const scene  = new THREE.Scene();
@@ -239,13 +249,31 @@ export function initBadge3D(simulator, appendOut, wrap) {
          is black (its picture is emissive), so neither can glare it — only the case
          and components brighten. The strong directional key is left as-is; bumping it
          would put a specular hotspot on the screen. */
-      scene.add(new THREE.AmbientLight(0xffffff, 1.05));
+      // Ambient kept fairly low so shadows/blacks stay deep and the case colour
+      // reads saturated; the key light does the lifting. (Higher ambient washes the
+      // badge out and desaturates the orange - tweak these two to taste.)
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
       keyLight.position.set(0.4, 0.8, 1);
       scene.add(keyLight);
-      const fillLight = new THREE.DirectionalLight(0x8090d0, 0.85);
+      const fillLight = new THREE.DirectionalLight(0x8090d0, 0.6);
       fillLight.position.set(-0.6, 0.2, 0.3);
       scene.add(fillLight);
+
+      /* -- Case look tunables --------------------------------------------------
+         CASE_COLOR: the orange tint (multiplies the GLB albedo). Drop the green
+           channel toward red for a deeper look, raise toward ~0.42 for factory orange.
+         CASE_FROST: roughness of the translucent back shell. It's a transmission
+           material, so this is the frosted-glass blur - the GLB ships it near-clear
+           (0.2 = glossy); raise toward ~0.6 for more frost. The normal map still adds
+           the fine surface texture on top.
+         CASE_SPECULAR: strength of the surface specular highlight (0..1), decoupled
+           from CASE_FROST. roughness drives BOTH the frost blur and the gloss, so a
+           low CASE_FROST leaves a sharp glossy highlight; dial this down for a matte,
+           non-shiny plastic surface without losing the frost. (Tune with exposure.) */
+      const CASE_COLOR    = [1.0, 0.22, 0.0];
+      const CASE_FROST    = 0.25;
+      const CASE_SPECULAR = 0.3;
 
       /* Button raycasting */
       const allHitMeshes = [];
@@ -632,8 +660,14 @@ export function initBadge3D(simulator, appendOut, wrap) {
 
         caseRoot.traverse((o) => {
           if (!o.isMesh) return;
-          o.material.roughness = 0.2;      // frostiness
-          o.material.thickness = 0.0015;   // 1.5 mm volume
+          // Frost the translucent shell. It's a transmission material, so roughness
+          // is the frosted-glass blur (the GLB ships it near-clear at 0.2); the
+          // normal map still supplies the fine surface texture. See CASE_FROST.
+          o.material.roughness = CASE_FROST;
+          // Dim the surface specular independently of roughness so a low frost value
+          // doesn't read as glossy wet plastic (no env map, so this highlight is just
+          // the key light reflecting off the shell). See CASE_SPECULAR.
+          o.material.specularIntensity = CASE_SPECULAR;
           o.material.onBeforeCompile = (shader) => {
             shader.uniforms.uLed = uLed;
             shader.uniforms.uInt = uInt;
@@ -769,7 +803,7 @@ export function initBadge3D(simulator, appendOut, wrap) {
           caseBackClone.traverse(child => {
             if (child.isMesh) {
               child.material = child.material.clone();
-              child.material.color.setRGB(1, 0.22, 0);
+              child.material.color.setRGB(...CASE_COLOR);
             }
           });
           tuftyNode.add(caseBackClone);

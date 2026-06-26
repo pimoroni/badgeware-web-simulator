@@ -61,7 +61,7 @@ export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
     galleryEl.innerHTML =
       `<div class="gallery-controls"><button class="gallery-stop" data-action="stop" title="Stop" aria-label="Stop"><span class="material-symbols-outlined">stop</span></button></div>` +
       manifest.categories.map((cat) =>
-        `<h3 class="gallery-category">${cat.name}</h3>` +
+        `<h3>${cat.name}</h3>` +
         `<div class="gallery-grid">${cat.examples.map(card).join('')}</div>`,
       ).join('');
     wireStills();

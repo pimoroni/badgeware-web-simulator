@@ -78,7 +78,7 @@ export function createFileBrowser(els, host) {
         const active = full === activePath ? ' active' : '';
         html += `<li><div class="tree-row${active}" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`
               +   `<span class="row-name">${esc(name)}</span>`
-              +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-symbols-outlined">close</span></button></span>`
+              +   `<span class="row-actions"><button class="row-action" title="Delete" data-action="delete"><span class="material-symbols-outlined">delete</span></button></span>`
               + `</div></li>`;
       } else {
         html += `<li><div class="tree-row" tabindex="0" data-path="${esc(full)}" title="${esc(full)}">`

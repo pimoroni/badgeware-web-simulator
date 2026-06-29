@@ -27,11 +27,10 @@ async function initApp() {
   const editor = createEditor(editorEl);
 
   /* -- Mobile tabs ----------------------------------------------------------
-     On mobile the panels stack and a top icon bar switches between Examples /
+     On mobile the panels stack and a top icon bar switches between Gallery /
      Files / Code / Output. selectMobilePanel() flips the visible panel + nav
-     highlight; tabs.js calls it (focusTab → 'code'), so opening a file jumps to
-     the Code view. The Examples tab leaves for examples.html (see setMobileTab).
-     No-ops on desktop. */
+     highlight; tabs.js calls it (focusTab → 'code', showGallery → 'gallery'), so
+     opening a file or example jumps to the Code view. No-ops on desktop. */
   const isMobile = () => matchMedia('(max-width: 767px)').matches;
   function selectMobilePanel(tab) {
     document.body.dataset.mobileTab = tab;

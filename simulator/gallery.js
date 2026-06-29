@@ -57,7 +57,7 @@ export function initGallery(galleryEl, { openExample, setStatus }) {
     version = manifest.version || 'dev';
     galleryEl.innerHTML =
       manifest.categories.map((cat) =>
-        `<h3>${cat.name}</h3>` +
+        `<h3><span>${cat.name}</span></h3>` +
         `<div class="gallery-grid">${cat.examples.map(card).join('')}</div>`,
       ).join('');
     wireStills();

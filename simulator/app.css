@@ -1,7 +1,7 @@
 :root {
       /* -- Palette ------------------------------------------------------ */
       --bg:          rgb(10, 20, 30);
-      --panel:       rgba(20, 30, 40, 0.6);
+      --panel:       rgba(20, 30, 40, 1.0);
       --bar-bg:      rgba(6, 14, 22, 0.95);   /* tab bar / status bar / mobile nav chrome */
       --border:      rgba(180, 190, 200, 0.12);
       --white:       rgb(235, 245, 255);
@@ -25,7 +25,7 @@
       --scroll-thumb:rgba(180, 190, 200, 0.15);
 
       /* -- Metrics ------------------------------------------------------ */
-      --bar: 37px;   /* height of the chrome bars; square edge of their controls */
+      --bar: 40px;   /* height of the chrome bars; square edge of their controls */
 
       /* Type scale (px->rem conversions live here, not inline). */
       --text-lg:  1.10rem;   /* help heading */
@@ -67,12 +67,13 @@
 
     /* -- Toolbar --------------------------------------------------- */
     #toolbar {
+      height: 69px;
       background: rgba(10, 20, 30, 0.85);   /* toolbar-only tint; bars use --bar-bg */
       border-bottom: 1px solid var(--border);
-      padding: 6px 12px;
+      padding: 0 1.6rem;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 20px;
       flex-shrink: 0;
       user-select: none;
       /* No stacking context here (no z-index, no backdrop-filter): that lets the
@@ -90,7 +91,7 @@
       transition: opacity 0.15s;
     }
     #toolbar .brand:hover { opacity: 0.75; }
-    #toolbar .brand svg { height: 1.15rem; width: auto; display: block; fill: var(--white); }
+    #toolbar .brand svg { height: 42px; width: auto; display: block; fill: var(--white); }
 
     /* Material Symbols Outlined (Google): the family + ligature setup come from
        Google's served rule; here we inherit the surrounding size (sized per use
@@ -130,6 +131,9 @@
       text-decoration: none;
       transition: filter 0.1s;
     }
+    #toolbar .help {
+      margin-left: auto;
+    }
     #toolbar button:hover,  #toolbar .buy:hover  { filter: brightness(1.3); }
     #toolbar button:active, #toolbar .buy:active { filter: brightness(0.9); }
     #toolbar button[data-action="stop"] {
@@ -146,7 +150,7 @@
     /* "Examples" / "Editor" / "badgeOS" are navigation, not the primary action - secondary look. */
     #toolbar button[data-action="gallery"],
     #toolbar button[data-action="editor"],
-    #toolbar button[data-action="run-os"] {
+    #toolbar button[data-action="help"] {
       background: var(--panel);
       color: var(--white);
       font-weight: 400;
@@ -158,12 +162,11 @@
     /* "Help" - an icon-only utility button, parked at the far right. margin-left:auto
        pushes it past the badge-spill gap; z-index lifts it above the badge (z-index 5)
        so it stays clickable where the badge overlaps the toolbar. */
-    #toolbar button.icon-btn {
+    #toolbar button.help {
       background: var(--panel);
       color: var(--white);
       border: 1px solid var(--border);
       padding: 4px 6px;
-      margin-left: auto;
       position: relative;
       z-index: 6;
     }
@@ -219,20 +222,31 @@
       display: flex;
       align-items: stretch;
       flex-shrink: 0;
-      border-left: 1px solid var(--border);
     }
+    #stdout button,
+    #file-panel button,
     #tab-controls button {
+      color: var(--faint-white);
       width: var(--bar);
       display: flex;
       align-items: center;
       justify-content: center;
       background: none;
       border: none;
-      border-right: 1px solid var(--border);
+      border-left: 1px solid var(--border);
       cursor: pointer;
       transition: background 0.12s;
     }
-    #tab-controls button:last-child { border-right: none; }
+
+    #stdout button {
+      border-color: transparent;
+    }
+
+    #stdout button:hover,
+    #file-panel button:hover,
+    #tab-controls button:hover { color: var(--white); }
+    #file-panel .material-symbols-outlined,
+    #stdout .material-symbols-outlined,
     #tab-controls .material-symbols-outlined { font-size: var(--icon); }
     #tab-controls [data-action="run"]           { color: var(--green); }
     #tab-controls [data-action="run"]:hover     { background: var(--faint-green); }
@@ -374,9 +388,10 @@
       display: flex;
       flex-direction: column;
       background: var(--panel);
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 0.5rem;
       overflow: hidden;
+      box-shadow: 0 0 1rem rgba(20, 30, 40, .2);
     }
     /* The screenshot is a button: click/tap = play the example in place. The still
        and the live canvas are produced by the simulator itself (preview.js): a
@@ -386,7 +401,7 @@
     .example-open {
       display: block; padding: 0; border: none; cursor: pointer;
       position: relative; aspect-ratio: 4 / 3;
-      background: rgb(6, 6, 9); border-bottom: 1px solid var(--border);
+      background: rgb(6, 6, 9); border-bottom: none;
     }
     .example-open .still,
     .example-open .preview-canvas {
@@ -412,9 +427,9 @@
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
       display: flex; align-items: center; justify-content: center;
       width: 3.4rem; height: 3.4rem; border-radius: 50%;
-      background: rgba(10, 20, 30, 0.55); color: var(--white);
+      background: rgba(255, 255, 255, 0.1); color: var(--white);
       font-size: 2rem; font-variation-settings: var(--glyph-filled);
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
       pointer-events: none; transition: opacity 0.15s, transform 0.15s, color 0.15s;
     }
     .example-open:hover .example-play { transform: translate(-50%, -50%) scale(1.08); color: var(--green); transition: opacity 0.2s; }
@@ -425,7 +440,7 @@
 
     /* Title + description on the left; Edit pinned to their right (click/tap the
        card itself to run). */
-    .example-meta { display: flex; align-items: center; gap: 8px; padding: 7px 8px 8px; }
+    .example-meta { display: flex; align-items: stretch; gap: 8px; padding: 1em; }
     .example-meta figcaption { flex: 1; min-width: 0; }
     .example-meta figcaption b    { display: block; font-size: var(--text-sm); font-weight: 700; color: var(--white); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .example-meta figcaption span { display: block; font-size: var(--text-xs); color: var(--dim);   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -493,18 +508,65 @@
       flex-shrink: 0;
       background: var(--border);
       position: relative;
+      z-index: 7;                 /* lift the handle (+ its toggle tab) above the panels */
       transition: background 0.15s;
     }
     /* Widen the pointer hit area without changing the visible 4px strip. */
     [data-drag-target]::after { content: ''; position: absolute; }
     [data-drag-target]:hover,
-    [data-drag-target].dragging { background: rgba(224, 137, 32, 0.5); }
+    [data-drag-target].dragging { background: var(--orange); }
 
     [data-drag-orientation="vertical"]        { width: 4px;  cursor: col-resize; }   /* dragged left/right */
     [data-drag-orientation="vertical"]::after { inset: 0 -4px; }
 
     [data-drag-orientation="horizontal"]        { height: 4px; cursor: row-resize; } /* dragged up/down */
     [data-drag-orientation="horizontal"]::after { inset: -4px 0; }
+
+    /* -- Panel toggle (double-click a vertical handle) -----------------------
+       Each vertical handle wears a chevron tab and doubles as a show/hide toggle
+       for its panel. resize.js tags the handle with .panel-before / .panel-after
+       (which side the panel sits) and .collapsed (current state); the chevron
+       points toward the panel when open, away when hidden. */
+    [data-drag-orientation="vertical"]::before {
+      content: "";
+      font-family: 'Material Symbols Outlined';
+      font-variation-settings: var(--glyph);
+      font-size: var(--icon-md);
+      line-height: 1;
+      color: var(--faint);
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(0, -50%);
+      width: calc(var(--bar) / 2); height: var(--bar);
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bar-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      transition: background 0.15s;
+    }
+    [data-drag-orientation="vertical"]:hover::before { color: var(--white); background: var(--orange); }
+    /* Chevron glyphs (Material Symbols codepoints): ‹ = e5cb, › = e5cc. */
+    [data-drag-orientation="vertical"].panel-before::before           { 
+      border-radius: 0 5px 5px 0;
+      left: 100%;
+      content: "\e5cb"; }  /* collapse the left panel */
+    [data-drag-orientation="vertical"].panel-before.collapsed::before { content: "\e5cc"; }  /* re-open it */
+    [data-drag-orientation="vertical"].panel-after::before            { 
+      transform: translate(-100%, -50%);
+      border-radius: 5px 0 0 5px;
+      left: 0;
+      content: "\e5cc"; }  /* collapse the right panel */
+    [data-drag-orientation="vertical"].panel-after.collapsed::before  { content: "\e5cb"; }  /* re-open it */
+
+    /* Collapsed panel: zero width, content + border hidden. .animating carries the
+       slide and is only present while toggling, so a plain drag stays instant.
+       Desktop-only — the mobile layout owns the panel widths (full-width tabs). */
+    @media (min-width: 768px) {
+      #file-panel.panel-collapsed, #side-panel.panel-collapsed {
+        width: 0 !important; min-width: 0; overflow: hidden; border-width: 0;
+      }
+      #file-panel.animating, #side-panel.animating { transition: width 0.28s ease; overflow: hidden; }
+    }
 
     /* While a drag is in progress (resize.js sets this on <html>): force one
        resize cursor everywhere and suppress text selection. Pointer capture keeps
@@ -549,8 +611,8 @@
          title by exactly that title bar's height, so the badge overlaps it fully
          whatever the title's font/icon size is. boot.js measures #stdout h2 and
          mirrors its height into --badge-spill; the fallback covers first paint / no-JS. */
-      margin-top: -8%;
-      margin-bottom: calc(var(--badge-spill, 33px) * -1);
+      margin-top: -7%;
+      margin-bottom: calc(var(--badge-spill, 40px) * -1);
       transition: margin 0.25s ease;
     }
     /* When the screen is zoomed in, pull the badge back inside its container so
@@ -619,23 +681,6 @@
       flex-direction: column;
     }
 
-    /* Shared bar look lives in the "#file-panel h2, #stdout h2" rule below. */
-    #stdout h2 {
-      padding: 5px 12px;
-      justify-content: space-between;
-    }
-
-    /* clear-output button: shares the header action-button base (see
-       "#file-panel h2 button, #stdout button" below); only its padding and the
-       z-index lift are local. The badge spills down over this title bar; lifting
-       the button above it (the badge sits at #simulator's z-index 5) keeps it
-       clickable while the OUTPUT text itself stays covered. */
-    #stdout button {
-      padding: 0 2px;
-      position: relative;
-      z-index: 6;
-    }
-
     #stdout > div {   /* the scrolling log */
       flex: 1;
       overflow-y: auto;
@@ -681,40 +726,20 @@
       letter-spacing: 0.1em;
       border-bottom: 1px solid var(--border);
       display: flex;
-      align-items: center;
+      align-items: stretch;
       flex-shrink: 0;
       min-height: var(--bar);   /* lines the headings up across panels + mobile */
     }
-    #file-panel h2,
-    #gallery h3 { padding: 5px 8px 4px; }
+    #file-panel h2 > span:first-child,
+    #stdout h2 > span:first-child,
+    #gallery h3 > span:first-child { padding: 0 0 0 10px; align-content: center; }
     #file-panel h2 { gap: 2px; }
     #file-panel h2 > span:first-child,
     #stdout h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
-    #file-panel h2 .material-symbols-outlined { font-size: var(--icon-sm); }   /* System lock glyph */
 
-    /* Header action buttons: the file-explorer header controls and the output
-       "clear" button are one family across the two panels — same reset, same icon
-       size — so they read identically. Each only adds its own padding/shape. */
-    #file-panel h2 button,
-    #stdout button {
-      background: none;
-      border: none;
-      color: var(--dim);
-      cursor: pointer;
-      font-family: inherit;
-      line-height: 1;
-      transition: color 0.15s;
+    #stdout h2 button {
+      z-index: 6;
     }
-    #file-panel h2 button:hover,
-    #stdout button:hover { color: var(--white); }
-    #file-panel h2 button {
-      font-size: 0.875rem;
-      padding: 1px 3px;
-      border-radius: 3px;
-    }
-    #file-panel h2 button:hover { background: var(--hover); }
-    #file-panel h2 button .material-symbols-outlined,
-    #stdout button .material-symbols-outlined { font-size: var(--icon-md); display: block; }
 
     /* -- User section (resizable) ---------------------------------- */
     #fp-user {
@@ -748,10 +773,21 @@
       min-height: 60px;
     }
 
+    /* Padlock icon, not a button but should be the same width */
+    #fp-sys h2 span:last-child {
+      width: var(--bar);
+      text-align: center;
+      align-content: center;;
+    }
+
     #fp-sys-tree {
       flex: 1;
       overflow-y: auto;
       overflow-x: hidden;
+    }
+
+    #fp-sys-tree .row-badge, #fp-user .row-action span {
+      font-size: var(--icon-sm)
     }
 
     #fp-user-list::-webkit-scrollbar,
@@ -796,7 +832,7 @@
     .tree-row {
       display: flex;
       align-items: center;
-      padding: 2px 8px;
+      padding: 0;
       font-size: var(--text-sm);
       color: var(--faint);
       cursor: pointer;
@@ -804,6 +840,9 @@
       white-space: nowrap;
       overflow: hidden;
       user-select: none;
+    }
+    .tree-row > span:first-child {
+      padding: 2px 8px;
     }
     .tree-row:hover { background: var(--hover); color: var(--white); }
     .tree-row.active { background: var(--faint-orange); color: var(--orange); }
@@ -846,7 +885,6 @@
     }
     .row-action:hover { opacity: 1; }
     .row-action[data-action="delete"]:hover { color: rgba(240,141,73,1); }
-    .row-action .material-symbols-outlined { font-size: var(--icon-sm); display: block; }
 
     /* Lock badge (system files + the "System" header) sized for the Material glyph. */
     .row-badge.material-symbols-outlined { font-size: var(--icon-sm); }

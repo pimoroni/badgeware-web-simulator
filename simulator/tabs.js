@@ -19,6 +19,7 @@ import { userFS } from './fs.js';
 import { idbKv } from './util.js';
 import { ppfParse, ppfPreview } from './ppf.js';
 import { afParse, afPreview } from './af.js';
+import { delegate } from './util.js';
 
 const APP_BASE = new URL('.', import.meta.url).href;
 
@@ -600,6 +601,11 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
   // Don't lose the last debounce window of edits / tab state on tab close/reload.
   window.addEventListener('beforeunload', flushPendingSave);
   addEventListener('pagehide', () => { clearTimeout(sessionTimer); if (!restoring) sessionStore.save(snapshotSession()); });
+
+  const actions = {
+    'new-file': () => newScratch()
+  };
+  delegate(panes.tabBar, actions);   // shared dispatcher — see simulator/util.js
 
   return {
     // File-browser host callbacks (app.js passes these to createFileBrowser):

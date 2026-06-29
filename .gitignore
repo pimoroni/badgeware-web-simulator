@@ -43,3 +43,4 @@
 # noise
 .vscode/
 .DS_Store
+*.pyc

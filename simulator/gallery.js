@@ -1,10 +1,11 @@
-/* -- Example gallery (home view) --------------------------------------------
-   Builds the example cards from examples/manifest.json. Thumbnails and hover
-   animations are produced by the simulator itself (see preview.js): each card's
+/* -- Example gallery (its own page, examples.html) --------------------------
+   Builds the example cards from examples/manifest.json. Thumbnails and the live
+   playback are produced by the simulator itself (see preview.js): each card's
    still is captured + cached on demand (a spinner shows until it lands), and
-   hovering a card plays the example LIVE in a shared canvas. No baked screenshots,
-   so there's no build step to keep in sync. The "Examples" toolbar button that
-   RETURNS to this view is wired in app.js to tabs.showGallery. */
+   clicking/tapping a card plays the example LIVE in its thumbnail using one shared
+   canvas. No baked screenshots, so there's no build step to keep in sync. Click is
+   the run action (works on touch, unlike a hover preview); Edit hands the example
+   off to the main editor via index.html?file=examples/<name> (see examples.js). */
 import { createPreviewEngine } from './preview.js';
 
 const APP_BASE = new URL('.', import.meta.url).href;
@@ -17,12 +18,11 @@ const SPINNER = 'data:image/svg+xml,' + encodeURIComponent(
   `<animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20" dur="0.7s" repeatCount="indefinite"/>` +
   `</path></svg>`);
 
-/* galleryEl is the home-view container (app.js owns the lookup). deps:
-   { runProgram, openExample, setStatus } - runProgram(code, opts) from boot;
-   openExample(name, code) opens the example as a transient editor tab and returns
-   its tab key (app.js wires it to tabs.openScratchTab); setStatus(text) writes the
-   shared status line (boot owns it) so we never poke that node directly. */
-export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
+/* galleryEl is the grid container (examples.js owns the lookup). deps:
+   { openExample, setStatus } - openExample(file) navigates to the main editor
+   (index.html?file=examples/<file>) to edit/run it there; setStatus(text) writes the
+   page's status line (used only for the rare "couldn't load" message). */
+export function initGallery(galleryEl, { openExample, setStatus }) {
   const engine = createPreviewEngine();
   let version = 'dev';                 // manifest version, busts the still cache
 
@@ -38,14 +38,14 @@ export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
 
   const card = (ex) => `
     <figure class="example" data-file="${ex.file}">
-      <button class="example-open" data-act="open" title="Open &amp; run">
+      <button class="example-open" data-act="play" title="Play ${ex.file}">
         <img class="spinner" src="${SPINNER}" alt="" aria-hidden="true">
         <img class="still" alt="">
+        <span class="example-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
       </button>
-      <figcaption><b>${ex.file}</b><span>${ex.description}</span></figcaption>
-      <div class="example-actions">
-        <button data-act="edit">Edit</button>
-        <button data-act="run">Run<span class="material-symbols-outlined">play_arrow</span></button>
+      <div class="example-meta">
+        <figcaption><b>${ex.file}</b><span>${ex.description}</span></figcaption>
+        <button data-act="edit" title="Edit in the editor">Edit<span class="material-symbols-outlined">edit</span></button>
       </div>
     </figure>`;
 
@@ -55,11 +55,7 @@ export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
     try { manifest = await fetch(APP_BASE + 'examples/manifest.json', { cache: 'no-cache' }).then((r) => r.json()); }
     catch { galleryEl.innerHTML = '<p class="gallery-empty">Couldn’t load the example list.</p>'; return; }
     version = manifest.version || 'dev';
-    // A floating Stop (data-action="stop", so boot's document-level dispatcher and
-    // its run-state sync both pick it up) pinned to the gallery's top-right. The
-    // sticky wrapper is zero-height so it never displaces the grid. Hidden on mobile.
     galleryEl.innerHTML =
-      `<div class="gallery-controls"><button class="gallery-stop" data-action="stop" title="Stop" aria-label="Stop"><span class="material-symbols-outlined">stop</span></button></div>` +
       manifest.categories.map((cat) =>
         `<h3>${cat.name}</h3>` +
         `<div class="gallery-grid">${cat.examples.map(card).join('')}</div>`,
@@ -93,46 +89,93 @@ export function initGallery(galleryEl, { runProgram, openExample, setStatus }) {
     galleryEl.querySelectorAll('.example').forEach((fig) => io.observe(fig));
   }
 
-  /* -- Live hover preview ----------------------------------------------------
-     Move the shared preview canvas into the hovered card and play the example;
-     leave on mouseout (or when a click navigates away). One delegated pair of
-     listeners covers every card. */
-  let hovered = null;
-  function leaveHover() {
-    if (!hovered) return;
-    hovered.classList.remove('previewing');
-    hovered = null;
+  /* -- Live in-card playback -------------------------------------------------
+     Clicking/tapping a card plays the example LIVE in its thumbnail, moving the
+     shared preview canvas (preview.js) into it. One card plays at a time; clicking
+     another switches. There's no separate simulator, so this IS the run action -
+     and unlike a hover preview it works on touch. */
+  let playing = null;
+  // Stop a playing card once it scrolls out of view: that frees the shared sim to
+  // resume capturing the stills below (the engine pauses captures while live) and
+  // doesn't leave an offscreen example running.
+  const offscreenStop = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.target === playing && !e.isIntersecting) stopPlaying();
+  }, { root: galleryEl });
+  function stopPlaying() {
+    if (!playing) return;
+    offscreenStop.unobserve(playing);
+    playing.classList.remove('previewing', 'playing');
+    playing = null;
     engine.stopLive();
     engine.canvas.remove();
   }
-  galleryEl.addEventListener('mouseover', (e) => {
-    const fig = e.target.closest('.example');
-    if (!fig || fig === hovered) return;
-    leaveHover();
-    hovered = fig;
+  function playCard(fig) {
+    if (fig === playing) return;           // already live
+    stopPlaying();
+    playing = fig;
+    offscreenStop.observe(fig);
+    fig.classList.add('playing');          // hides the play badge while it runs
     fig.querySelector('.example-open').appendChild(engine.canvas);
     // Reveal (.previewing) only once the first live frame paints - until then the
     // still shows through, so the shared canvas's stale frame never flashes.
     loadCode(fig.dataset.file).then((code) => {
-      if (code != null && hovered === fig) engine.play(code, () => { if (hovered === fig) fig.classList.add('previewing'); });
+      if (playing !== fig) return;
+      if (code == null) { stopPlaying(); setStatus(`Could not load ${fig.dataset.file}`); return; }
+      engine.play(code, () => { if (playing === fig) fig.classList.add('previewing'); });
     });
-  });
-  galleryEl.addEventListener('mouseout', (e) => {
-    const fig = e.target.closest('.example');
-    if (fig && fig === hovered && !fig.contains(e.relatedTarget)) leaveHover();
+  }
+
+  // data-act (not data-action) keeps card buttons out of any document-level handler.
+  galleryEl.addEventListener('click', (e) => {
+    const fig = e.target.closest('.example[data-file]');
+    if (!fig) return;
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'edit') { stopPlaying(); openExample(fig.dataset.file); return; }  // -> main editor
+    playCard(fig);   // the image / play badge / anywhere else on the card runs it in place
   });
 
-  // data-act (not data-action) keeps these out of boot's document-level dispatcher.
-  galleryEl.addEventListener('click', async (e) => {
-    const fig = e.target.closest('.example[data-file]');
-    const act = e.target.closest('[data-act]')?.dataset.act;
-    if (!fig || !act) return;
-    leaveHover();                          // navigating away: free the preview sim
-    const file = fig.dataset.file;
-    const code = await loadCode(file);
-    if (code == null) { setStatus(`Could not load ${file}`); return; }
-    if (act === 'run') { runProgram(code, { status: file }); return; }   // run only, stay on the gallery
-    const key = openExample(file, code);                                 // edit -> opens the editor view
-    if (act === 'open') runProgram(code, { tabKey: key, status: file }); // image -> also run it
+  /* -- Badge input for the playing card --------------------------------------
+     Drive the live example like the real badge. The engine ignores all of this
+     unless a card is actually playing. */
+
+  // Keyboard (desktop): arrows = D-pad, space = B, escape = Home - the same map the
+  // main app's badge uses. preventDefault while playing so the keys don't also
+  // scroll the page out from under the example.
+  const KEY_TO_BTN = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    ' ': 'select', Escape: 'home',
+  };
+  window.addEventListener('keydown', (e) => {
+    const name = playing ? KEY_TO_BTN[e.key] : null;
+    if (name && engine.setButton(name, true)) e.preventDefault();
   });
+  window.addEventListener('keyup', (e) => {
+    const name = playing ? KEY_TO_BTN[e.key] : null;
+    if (name && engine.setButton(name, false)) e.preventDefault();
+  });
+
+  // Touch (mobile): the playing thumbnail becomes a gamepad, mirroring the main
+  // simulator's zoomed-in D-pad - swipe left/right/up/down = A/C/Up/Down, tap = B.
+  // Only the playing card's screen captures gestures (touch-action:none in CSS);
+  // every other card still scrolls/taps-to-play normally. Mouse uses the keyboard.
+  const SWIPE_MIN = 24;        // px; a shorter drag counts as a tap
+  let gesture = null;          // { x0, y0, x, y } while a touch is down on the live card
+  galleryEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    const open = e.target.closest('.example-open');
+    if (!open || !playing || !playing.contains(open)) return;
+    gesture = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+  });
+  galleryEl.addEventListener('pointermove', (e) => { if (gesture) { gesture.x = e.clientX; gesture.y = e.clientY; } });
+  function endGesture(allowTap) {
+    if (!gesture) return;
+    const dx = gesture.x - gesture.x0, dy = gesture.y - gesture.y0;
+    gesture = null;
+    if (Math.hypot(dx, dy) >= SWIPE_MIN)
+      engine.pulseButton(Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down'));
+    else if (allowTap)
+      engine.pulseButton('select');   // tap = B
+  }
+  galleryEl.addEventListener('pointerup', () => endGesture(true));
+  galleryEl.addEventListener('pointercancel', () => endGesture(false));
 }

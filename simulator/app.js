@@ -10,30 +10,28 @@ import { bootSimulator } from './boot.js';
 import { createFileBrowser } from './filebrowser.js';
 import { createTabs } from './tabs.js';
 import { createEditor } from './editor.js';
-import { initGallery } from './gallery.js';
 import { initResizeHandlers } from './resize.js';
 
 const APP_BASE = new URL('.', import.meta.url).href;
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { trace, startupFile, run: runCurrent, runProgram, setRunProvider, notifyRunTarget, setStatus, flashStatus, addActions } = await bootSimulator();
+  const { trace, startupFile, run: runCurrent, setRunProvider, notifyRunTarget, setStatus, flashStatus, addActions } = await bootSimulator();
   const mobileNav = document.getElementById('mobile-nav');
 
   // app.js is the wiring layer: it resolves the DOM by id and injects elements into
   // the leaf modules (which never reach into the document for identity themselves).
-  // #editor and #gallery are each shared by two consumers, so they're named here.
   const editorEl  = document.getElementById('editor');
-  const galleryEl = document.getElementById('gallery');
 
   // Editor instance + its language/theme/completions all live in editor.js.
   const editor = createEditor(editorEl);
 
   /* -- Mobile tabs ----------------------------------------------------------
-     On mobile the panels stack and a top icon bar switches between Gallery /
+     On mobile the panels stack and a top icon bar switches between Examples /
      Files / Code / Output. selectMobilePanel() flips the visible panel + nav
-     highlight; tabs.js calls it (focusTab → 'code', showGallery → 'gallery'), so
-     opening a file or example jumps to the Code view. No-ops on desktop. */
+     highlight; tabs.js calls it (focusTab → 'code'), so opening a file jumps to
+     the Code view. The Examples tab leaves for examples.html (see setMobileTab).
+     No-ops on desktop. */
   const isMobile = () => matchMedia('(max-width: 767px)').matches;
   function selectMobilePanel(tab) {
     document.body.dataset.mobileTab = tab;
@@ -46,7 +44,6 @@ async function initApp() {
   const tabs = createTabs(
     {
       tabBar:     document.getElementById('tab-bar'),
-      gallery:    galleryEl,
       editorPane: editorEl,
       imgPreview: document.getElementById('img-preview'),
       help:       document.getElementById('help'),
@@ -55,7 +52,7 @@ async function initApp() {
   );
 
   function setMobileTab(tab) {
-    if (tab === 'gallery') return tabs.showGallery();
+    if (tab === 'gallery') { location.href = 'examples.html'; return; }   // gallery is its own page
     if (tab === 'code')    return tabs.focusCodeOrNew();
     selectMobilePanel(tab);   // files / output
   }
@@ -107,14 +104,9 @@ async function initApp() {
   });
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, tabs.saveCurrentFile);
 
-  // Example gallery (home view, gallery.js). The "Examples" toolbar button returns
-  // here via boot's action map; the cards open/run examples through these seams.
-  addActions({ gallery: tabs.showGallery, help: tabs.toggleHelp, editor: tabs.focusCodeOrNew });
-  initGallery(galleryEl, {
-    runProgram,
-    openExample: (name, code) => tabs.openScratchTab(name, code, { transient: true }),
-    setStatus,
-  });
+  // Toolbar actions handled here. Examples leaves for its own page (examples.html);
+  // Help toggles the overlay; Editor focuses the code view.
+  addActions({ gallery: () => { location.href = 'examples.html'; }, help: tabs.toggleHelp, editor: tabs.focusCodeOrNew });
 
   // Commit the home view FIRST: reopen the saved workspace + honour any ?file= /
   // #name deep-link. bootstrap() picks the view itself (a restored tab, or the

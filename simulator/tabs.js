@@ -31,15 +31,15 @@ const sessionStore = (() => {
 })();
 
 /* panes: the editor-area elements tabs switches between (app.js owns the lookups) —
-   { tabBar, gallery, editorPane, imgPreview }. deps: { editor, setStatus, flashStatus,
+   { tabBar, editorPane, imgPreview, help }. deps: { editor, setStatus, flashStatus,
    notifyRunTarget, selectMobilePanel } — things tabs can't import or query itself
    (setStatus/flashStatus write boot's status line). The file browser is wired in
    later via connect(), since tabs and the browser are mutually dependent. */
 export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTarget, selectMobilePanel }) {
   let fb = null;   // file browser, late-bound (syncRows / refresh); see connect()
 
-  let currentTabKey   = null;   // id of the active tab, or null when the gallery is up
-  let currentView     = 'gallery';  // editor-area view; applyView is its only writer
+  let currentTabKey   = null;   // id of the active tab, or null before bootstrap opens one
+  let currentView     = 'editor';   // editor-area view; applyView is its only writer
   let transientTabKey = null;   // id of the one transient (preview) tab, if any
   const openModels    = new Map();  // id → tab record (see file header)
   const openOrder     = [];         // ordered list of ids
@@ -61,14 +61,13 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     const sys = source === 'sys' ? 'sys:' : '';
     return view === 'image' ? binPrefix(path) + ':' + sys + path : sys + path;
   }
-  // Single owner of the editor-area view switch: 'gallery' | 'editor' | 'image' | 'help'.
+  // Single owner of the editor-area view switch: 'editor' | 'image' | 'help'.
   function applyView(view) {
     currentView = view;
     panes.editorPane.style.display = view === 'editor' ? '' : 'none';
     panes.imgPreview.style.display = view === 'image'  ? 'flex' : 'none';
-    panes.gallery.style.display    = view === 'gallery' ? 'block' : 'none';
     panes.help.style.display       = view === 'help'   ? 'block' : 'none';
-    panes.tabBar.style.display     = (view === 'gallery' || view === 'help') ? 'none' : '';
+    panes.tabBar.style.display     = view === 'help'   ? 'none' : '';
   }
 
   const langForPath = (p) => (p.endsWith('.py') ? 'python' : p.endsWith('.json') ? 'json' : 'plaintext');
@@ -207,7 +206,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
 
   /* -- Tab rendering + lifecycle -------------------------------------------- */
   // renderTabs() is pure (no persistence). saveSession() lives at the tab-state
-  // mutation sites — focusTab/showGallery/close/promote/rename/delete/etc. — so
+  // mutation sites — focusTab/close/promote/rename/delete/etc. — so
   // it's tied to changes, not to re-renders.
   function renderTabs() {
     const bar = panes.tabBar;
@@ -259,7 +258,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     const t = openModels.get(key);
     if (!t) return;
     currentTabKey = key;
-    applyView(t.view);   // 'editor' or 'image' — owns the gallery/tab-bar/pane toggles
+    applyView(t.view);   // 'editor' or 'image' — owns the tab-bar/pane toggles
 
     if (t.view === 'image') {
       const imgEl  = panes.imgPreview;
@@ -336,7 +335,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     openModels.set(key, { source: 'scratch', view: 'editor', path: null, name, model, dirty: false, transient });
     openOrder.push(key);
     if (transient) transientTabKey = key;
-    focusTab(key);   // sets editor/model/currentTabKey, hides the gallery, renders
+    focusTab(key);   // sets editor/model/currentTabKey, switches view, renders
     return key;
   }
 
@@ -488,25 +487,15 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     focusTab(path);
   }
 
-  /* -- Gallery (home) view ------------------------------------------------- */
-  function showGallery() {
-    applyView('gallery');
-    currentTabKey = null;
-    renderTabs();      // clears the active highlight + syncs row decorations (fb.syncRows)
-    saveSession();     // active view changed (→ gallery)
-    notifyRunTarget(null);   // Run would launch the OS now (no active tab)
-    selectMobilePanel('gallery');
-  }
-
   /* -- Help (overlay view) ------------------------------------------------- */
   // The toolbar's ? toggles a static help panel over the editor area without
   // touching the open tabs; toggling off returns to whatever was showing (the
-  // active tab, or the gallery). It's a pure view switch, so the run target and
-  // editor model are left exactly as they were.
+  // active tab). It's a pure view switch, so the run target and editor model are
+  // left exactly as they were.
   function toggleHelp() {
     if (currentView === 'help') {
       const t = activeTab();
-      applyView(t ? t.view : 'gallery');
+      applyView(t ? t.view : 'editor');
     } else {
       applyView('help');
     }
@@ -549,7 +538,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
 
   /* -- Run provider: hand the simulator the current code to run ------------ */
   // Flush any pending autosave, persist the active user file, return code + tab +
-  // status (null when there's nothing to run, e.g. the gallery). Side-effecting,
+  // status (null when there's no active tab to run). Side-effecting,
   // so it's NOT used for the passive Run-icon state (see notifyRunTarget).
   function getRunRequest() {
     const t = activeTab();
@@ -573,14 +562,17 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     const restored = await restoreSession();
     if (startupFile) {
       // Explicit ?file= / #name wins the active view, layered over the restored tabs.
-      if (startupFile.system) await openSysFile(startupFile.path, false);
-      else                    openUserFile(startupFile.path, false);
+      if (startupFile.scratch)     openScratchTab(startupFile.name, startupFile.code, { transient: true });
+      else if (startupFile.system) await openSysFile(startupFile.path, false);
+      else                         openUserFile(startupFile.path, false);
     } else if (restored && restored.active && openModels.has(restored.active)) {
       focusTab(restored.active);   // restore the previously-active tab
+    } else if (openOrder.length) {
+      focusTab(openOrder[openOrder.length - 1]);   // restored tabs but no saved active → last one
     } else {
-      // Nothing saved, or the gallery was the active view, or the saved active tab
-      // is gone. (Reopening tabs above focuses the last one, so reassert the gallery.)
-      showGallery();
+      // Nothing to restore and no deep-link: open a blank buffer so the editor is
+      // never empty (the gallery lives on its own page now, examples.html).
+      newUntitled();
     }
     restoring = false;   // bootstrap done — interactions persist from here
     saveSession();       // capture the initial state (e.g. a fresh deep-link tab)
@@ -611,7 +603,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
 
   return {
     // File-browser host callbacks (app.js passes these to createFileBrowser):
-    // The active file's path (any source/view), or null for scratch/gallery — so the
+    // The active file's path (any source/view), or null for scratch — so the
     // highlight composes with open/transient on whichever tree the file lives in.
     activePath: () => activeTab()?.path ?? null,
     openPaths, transientPath,
@@ -621,7 +613,7 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     // Late-bind the file browser (syncRows / refresh) once it exists.
     connect: (filebrowser) => { fb = filebrowser; },
     // App-facing operations:
-    showGallery, toggleHelp, openScratchTab, saveCurrentFile, focusCodeOrNew, bootstrap,
+    toggleHelp, openScratchTab, saveCurrentFile, focusCodeOrNew, bootstrap,
     getRunRequest, clearMarkers: clearRuntimeMarkers, applyMarkers: applyTracebackMarkers,
   };
 }

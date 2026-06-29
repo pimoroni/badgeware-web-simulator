@@ -56,6 +56,7 @@ export function createPreviewEngine() {
   // run's token so callers can detect being preempted by a later run.
   async function startRun(code) {
     const s = await ensureSim();
+    s.buttons = 0;           // clear any badge buttons held over from a prior run
     const token = ++runToken;
     frameHook = null;
     await s.run(code, []);
@@ -150,9 +151,34 @@ export function createPreviewEngine() {
     return storeStill(file, version, dataUrl);
   }
 
+  /* -- Badge button input (only meaningful while a live preview plays) -------
+     The host (gallery.js) maps keyboard keys + touch swipes onto these. The wire
+     protocol matches the main simulator: a button bitmask posted to the worker as
+     simulator.buttons (see badgeware.js / badge3d.js). Names: up/down/left/right/
+     select(B)/home. No-ops unless a card is actually playing (live). */
+  const buttonMask = (name) => sim && ({
+    up:    sim.BUTTON_UP,   down:  sim.BUTTON_DOWN,
+    left:  sim.BUTTON_LEFT, right: sim.BUTTON_RIGHT,
+    select: sim.BUTTON_SELECT, home: sim.BUTTON_HOME,
+  })[name];
+  function setButton(name, down) {
+    if (!live) return false;
+    const mask = buttonMask(name);
+    if (!mask) return false;
+    if (down) sim.buttons |= mask; else sim.buttons &= ~mask;
+    sim.micropython?.postMessage({ buttons: sim.buttons });
+    return true;
+  }
+  // A brief press->release, for discrete swipe/tap gestures (matches badge3d.js).
+  function pulseButton(name, ms = 120) {
+    if (!setButton(name, true)) return false;
+    setTimeout(() => setButton(name, false), ms);
+    return true;
+  }
+
   // Build the simulator object early so the first real run only pays worker +
   // WASM spin-up, not object construction. (The worker itself spawns on first run.)
   function prewarm() { ensureSim(); }
 
-  return { canvas, play, stopLive, requestStill, cachedStill, prewarm };
+  return { canvas, play, stopLive, requestStill, cachedStill, prewarm, setButton, pulseButton };
 }

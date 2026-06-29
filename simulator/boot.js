@@ -192,23 +192,34 @@ export function bootSimulator() {
 
     // Startup program: a `?file=NAME` / `#NAME` URL override deep-links a specific
     // file to run + open in the editor; otherwise the system boot script (which
-    // launches the menu). NAME resolves against the user FS first, then the system
-    // filesystem (so `?file=blink.py` or `?file=/system/apps/clock/main.py`).
+    // launches the menu). `examples/<name>` loads a gallery example (examples.html
+    // links here) as an editable scratch buffer; anything else resolves against the
+    // user FS first, then the system filesystem (so `?file=blink.py` or
+    // `?file=/system/apps/clock/main.py`).
     const qFile = new URLSearchParams(location.search).get('file');
     const hFile = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
     const override = (qFile || hFile || '').trim();
 
     let defaultCode = null, startupFile = null, warn = null;
     if (override) {
-      const path  = override.startsWith('/') ? override : '/' + override;
-      const entry = userFS.get(path);
-      if (entry && !entry.binary && !entry.isDir) {
-        defaultCode = entry.text;
-        startupFile = { path, tabKey: path, system: false };
-      } else if (!entry) {
-        defaultCode = await fetch(BOOT_BASE + 'filesystem' + path)
+      const exMatch = override.match(/^\/?examples\/(.+)$/);
+      if (exMatch) {
+        // A gallery example — not a real FS file, so it opens as a scratch tab.
+        const name = exMatch[1];
+        defaultCode = await fetch(BOOT_BASE + 'examples/' + name)
           .then(r => r.ok ? r.text() : null).catch(() => null);
-        if (defaultCode != null) startupFile = { path, tabKey: 'sys:' + path, system: true };
+        if (defaultCode != null) startupFile = { scratch: true, name, code: defaultCode, tabKey: 'scratch:' + name };
+      } else {
+        const path  = override.startsWith('/') ? override : '/' + override;
+        const entry = userFS.get(path);
+        if (entry && !entry.binary && !entry.isDir) {
+          defaultCode = entry.text;
+          startupFile = { path, tabKey: path, system: false };
+        } else if (!entry) {
+          defaultCode = await fetch(BOOT_BASE + 'filesystem' + path)
+            .then(r => r.ok ? r.text() : null).catch(() => null);
+          if (defaultCode != null) startupFile = { path, tabKey: 'sys:' + path, system: true };
+        }
       }
       if (defaultCode == null) warn = `⚠ Could not load "${override}" — running the default instead.`;
     }

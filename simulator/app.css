@@ -152,6 +152,8 @@
       font-weight: 400;
       border: 1px solid var(--border);
     }
+    /* The current page's nav button (examples.html marks Examples .active). */
+    #toolbar button.active { border-color: var(--orange); color: var(--orange); }
 
     /* "Help" - an icon-only utility button, parked at the far right. margin-left:auto
        pushes it past the badge-spill gap; z-index lifts it above the badge (z-index 5)
@@ -342,7 +344,10 @@
        size as the name for now — drop this rule to visually de-emphasise them. */
     #img-preview figcaption small { font-size: inherit; }
 
-    /* -- Example gallery (home view, sits where #editor does) ---------------- */
+    /* -- Example gallery -----------------------------------------------------
+       Lives on its own page now (examples.html), where it fills #editor-panel.
+       Hidden by default so a stray #gallery elsewhere stays collapsed; the
+       examples page opts it back in. */
     #gallery {
       display: none;
       flex: 1;
@@ -351,8 +356,9 @@
       padding: 0;
       background: rgba(0, 0, 0, 0.15);
     }
+    .examples-page #gallery { display: block; }
     #gallery::-webkit-scrollbar {
-      display: none;  /* Redundant and overlaps our lovely stop button placement */
+      display: none;  /* The page scrolls the grid; hide the chrome scrollbar. */
     }
     /* Category header before each grid uses the shared section-title look
        (see "#file-panel h2, #stdout h2, #gallery h3" below); only the spacing
@@ -360,9 +366,9 @@
     .gallery-grid + h3 { margin-top: 24px; }   /* space between sections */
     .gallery-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 14px;
-      padding: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 18px;
+      padding: 18px;
     }
     .example {
       display: flex;
@@ -372,10 +378,11 @@
       border-radius: 0.5rem;
       overflow: hidden;
     }
-    /* The screenshot is a button: click = open + run. The still and the live hover
-       canvas are produced by the simulator itself (preview.js): a spinner shows
-       centred until the still is captured, then fades in; on hover the shared
-       preview canvas is moved in on top and plays the example live. */
+    /* The screenshot is a button: click/tap = play the example in place. The still
+       and the live canvas are produced by the simulator itself (preview.js): a
+       spinner shows centred until the still is captured, then fades in; a big play
+       badge overlays the still until a click moves the shared preview canvas in on
+       top and plays it live. */
     .example-open {
       display: block; padding: 0; border: none; cursor: pointer;
       position: relative; aspect-ratio: 4 / 3;
@@ -394,56 +401,43 @@
       width: 34px; height: 34px; image-rendering: auto;
     }
     .example.ready .example-open .spinner { display: none; }
-    /* Live preview canvas: moved into the hovered card by gallery.js, faded in. */
+    /* Live preview canvas: moved into the clicked card by gallery.js, faded in. */
     .example-open .preview-canvas { opacity: 0; transition: opacity 0.12s; }
     .example.previewing .example-open .preview-canvas { opacity: 1; }
     .example-open:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
 
-    .example figcaption { padding: 6px 8px 2px; }
-    .example figcaption b    { display: block; font-size: var(--text-sm); font-weight: 700; color: var(--white); }
-    .example figcaption span { display: block; font-size: var(--text-xs); color: var(--dim); }
+    /* Big play badge over the still - the "tap to run" affordance. It fades out the
+       moment a card starts playing (.playing, set on click before the first frame). */
+    .example-open .example-play {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: flex; align-items: center; justify-content: center;
+      width: 3.4rem; height: 3.4rem; border-radius: 50%;
+      background: rgba(10, 20, 30, 0.55); color: var(--white);
+      font-size: 2rem; font-variation-settings: var(--glyph-filled);
+      backdrop-filter: blur(4px);
+      pointer-events: none; transition: opacity 0.15s, transform 0.15s, color 0.15s;
+    }
+    .example-open:hover .example-play { transform: translate(-50%, -50%) scale(1.08); color: var(--green); transition: opacity 0.2s; }
+    .example.playing .example-open .example-play { opacity: 0; }
+    /* While live, the thumbnail is a touch gamepad (swipe = D-pad, tap = B), so the
+       browser must not treat drags on it as scroll/zoom. Other cards scroll as usual. */
+    .example.playing .example-open { touch-action: none; }
 
-    .example-actions { display: flex; gap: 6px; padding: 6px 8px 8px; }
-    .example-actions button {
-      flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
-      font-family: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer;
-      padding: 4px 0; border-radius: 0.35rem; border: 1px solid var(--border);
+    /* Title + description on the left; Edit pinned to their right (click/tap the
+       card itself to run). */
+    .example-meta { display: flex; align-items: center; gap: 8px; padding: 7px 8px 8px; }
+    .example-meta figcaption { flex: 1; min-width: 0; }
+    .example-meta figcaption b    { display: block; font-size: var(--text-sm); font-weight: 700; color: var(--white); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .example-meta figcaption span { display: block; font-size: var(--text-xs); color: var(--dim);   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .example-meta button {
+      flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+      font-family: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      padding: 4px 12px; border-radius: 0.35rem; border: 1px solid var(--border);
       background: none; color: var(--faint);
-      transition: color 0.15s, background 0.15s, border-color 0.15s, filter 0.1s;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
     }
-    .example-actions button .material-symbols-outlined { font-size: 0.95rem; }
-    .example-actions button:hover { color: var(--white); border-color: var(--faint); }
-    /* Run matches the editor's green play control (filled icon, dark text on green). */
-    .example-actions button[data-act="run"] {
-      color: var(--green);
-    }
-    .example-actions button[data-act="run"] .material-symbols-outlined { font-variation-settings: var(--glyph-filled); }
-    .example-actions button[data-act="run"]:hover { filter: brightness(1.12); color: var(--green); }
-
-    /* Floating Stop pinned to the gallery's top-right, mirroring the editor's stop
-       button (red filled icon, dim when idle). The sticky wrapper is zero-height so
-       it never pushes the grid down - no layout jump as it pins on scroll. */
-    .gallery-controls {
-      position: sticky; top: 0; height: 0; z-index: 3;
-      display: flex; justify-content: flex-end; align-items: flex-start;
-    }
-    .gallery-stop {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0;
-      cursor: pointer;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--red);
-      transition: background 0.15s, color 0.15s;
-      width: var(--bar);
-      height: var(--bar);
-    }
-    .gallery-stop .material-symbols-outlined { font-size: var(--icon); font-variation-settings: var(--glyph-filled); }
-    .gallery-stop:hover { background: var(--faint-red); }
-    .gallery-stop:disabled { color: var(--dim); cursor: default; }
-    .gallery-stop:disabled:hover { background: var(--panel); }
+    .example-meta button .material-symbols-outlined { font-size: 0.95rem; }
+    .example-meta button:hover { color: var(--white); border-color: var(--faint); }
 
     .gallery-empty { padding: 20px; color: var(--dim); font-size: var(--text); }
 
@@ -694,7 +688,8 @@
     #file-panel h2,
     #gallery h3 { padding: 5px 8px 4px; }
     #file-panel h2 { gap: 2px; }
-    #file-panel h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
+    #file-panel h2 > span:first-child,
+    #stdout h2 > span:first-child { flex: 1; }     /* title text pushes controls right */
     #file-panel h2 .material-symbols-outlined { font-size: var(--icon-sm); }   /* System lock glyph */
 
     /* Header action buttons: the file-explorer header controls and the output
@@ -900,7 +895,6 @@
       #toolbar { display: none; }
       #statusbar { display: none; }
       #tab-controls { display: none; }
-      .gallery-controls { display: none; }   /* run/stop live on the badge on mobile */
 
       /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
       #mobile-nav { order: -2; }

@@ -33,7 +33,7 @@ outline_brush_bold = color.rgb(228, 220, 220, 200)
 
 # draw the background scenery
 def background():
-    _, _, _, current_hour, _, _, _ = rtc.datetime()
+    _, _, _, current_hour, _, _, _ = rtc.datetime()[:7]
 
     if current_hour < 5 or current_hour > 21:
         background_image = background_night

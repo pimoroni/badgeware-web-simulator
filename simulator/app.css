@@ -118,60 +118,37 @@
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      background: var(--orange);
-      color: rgb(10, 20, 30);
       border: none;
       padding: 4px 12px 4px 8px;
       font-size: var(--text-sm);
-      font-weight: 700;
       font-family: inherit;
       border-radius: 0.4rem;
       cursor: pointer;
       letter-spacing: 0.02em;
       text-decoration: none;
       transition: filter 0.1s;
+      height: var(--bar);
+
+      background: var(--panel);
+      color: var(--white);
+      font-weight: 400;
+      border: 1px solid var(--border);
     }
     #toolbar .help {
       margin-left: auto;
     }
     #toolbar button:hover,  #toolbar .buy:hover  { filter: brightness(1.3); }
     #toolbar button:active, #toolbar .buy:active { filter: brightness(0.9); }
-    #toolbar button[data-action="stop"] {
-      background: var(--red);
-      color: rgb(250, 240, 240);
-    }
-    #toolbar button[data-action="stop"]:disabled {
-      background: var(--panel);
-      color: var(--dim);
-      cursor: default;
-      filter: none;
-    }
 
-    /* "Examples" / "Editor" / "badgeOS" are navigation, not the primary action - secondary look. */
-    #toolbar button[data-action="gallery"],
-    #toolbar button[data-action="editor"],
-    #toolbar button[data-action="help"] {
-      background: var(--panel);
-      color: var(--white);
-      font-weight: 400;
-      border: 1px solid var(--border);
-    }
-    /* The current page's nav button (examples.html marks Examples .active). */
     #toolbar button.active { border-color: var(--orange); color: var(--orange); }
 
-    /* "Help" - an icon-only utility button, parked at the far right. margin-left:auto
-       pushes it past the badge-spill gap; z-index lifts it above the badge (z-index 5)
-       so it stays clickable where the badge overlaps the toolbar. */
     #toolbar button.help {
-      background: var(--panel);
-      color: var(--white);
-      border: 1px solid var(--border);
-      padding: 4px 6px;
       position: relative;
       z-index: 6;
+      width: var(--bar);
+      text-align: center;
     }
 
-    /* "Buy" - a green CTA linking out to the badge shop (external, not an app action). */
     #toolbar .buy { background: var(--pink); color: var(--white) }
 
     /* -- Main layout ----------------------------------------------- */
@@ -217,7 +194,7 @@
     }
     #tab-bar ul::-webkit-scrollbar { height: 0; }
 
-    /* -- Run / Stop controls docked to the right of the tab bar -- */
+    /* -- New / Run / Stop controls docked to the right of the tab bar -- */
     #tab-controls {
       display: flex;
       align-items: stretch;
@@ -787,7 +764,9 @@
     }
 
     #fp-sys-tree .row-badge, #fp-user .row-action span {
-      font-size: var(--icon-sm)
+      font-size: var(--icon-sm);
+      width: var(--bar);
+      text-align: center;
     }
 
     #fp-user-list::-webkit-scrollbar,

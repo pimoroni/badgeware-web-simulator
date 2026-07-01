@@ -565,8 +565,8 @@
     }
     .control-group input[type="range"] { accent-color: var(--orange); width: 120px; cursor: pointer; }
     .control-group .val { color: var(--white); min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
-    #filter-tabs { display: flex; gap: 4px; }
-    #filter-tabs button {
+    #filter-tabs, #res-tabs { display: flex; gap: 4px; }
+    #filter-tabs button, #res-tabs button {
       background: var(--panel);
       color: var(--faint);
       border: 1px solid var(--border);
@@ -577,8 +577,8 @@
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s;
     }
-    #filter-tabs button:hover { color: var(--white); }
-    #filter-tabs button.active { color: var(--orange); border-color: var(--orange); }
+    #filter-tabs button:hover, #res-tabs button:hover { color: var(--white); }
+    #filter-tabs button.active, #res-tabs button.active { color: var(--orange); border-color: var(--orange); }
 
     /* -- Font grid + cards ------------------------------------------- */
     .font-grid {
@@ -599,20 +599,21 @@
       cursor: pointer;
     }
     .font-card:hover { border-color: var(--faint); transform: translateY(-2px); }
+    /* The specimen is a badge screen: a fixed 240px-tall, 4:3 dark panel. The canvas
+       backing is the real badge resolution (320x240 / 160x120); object-fit shows it
+       1:1 at HIRES (and upscaled, pixelated, at LORES), centred, with long text
+       clipping at the screen edge. */
     .font-card .specimen {
       background: rgb(6, 10, 16);
-      height: 240px;
-      aspect-ratio: 4/3;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
       overflow: hidden;
-      padding: 14px 18px;
     }
-    /* Render the specimen at its natural size and let long text clip off the right
-       edge (the .specimen's overflow:hidden) rather than scaling the whole line down. */
-    .font-card .specimen canvas { display: block; flex: 0 0 auto; }
-    .font-card .specimen.pixel canvas { image-rendering: pixelated; }
+    .font-card .specimen canvas {
+      display: block;
+      object-fit: contain;
+      image-rendering: pixelated;
+      margin: 0 auto;
+      aspect-ratio: 4/3;
+    }
     .font-card .meta {
       display: flex;
       align-items: center;
@@ -691,12 +692,18 @@
       background: rgb(6, 10, 16);
       border: 1px solid var(--border);
       border-radius: 0.5rem;
-      padding: 20px;
-      overflow: auto;
+      overflow: hidden;
       margin-bottom: 18px;
     }
-    #modal-specimen canvas { display: block; }
-    #modal-specimen.pixel canvas { image-rendering: pixelated; }
+    /* Same badge-screen canvas as the cards, shown larger and centred. */
+    #modal-specimen canvas {
+      display: block;
+      width: 100%;
+      max-width: 520px;
+      height: auto;
+      margin: 0 auto;
+      image-rendering: pixelated;
+    }
     #modal .dims-row {
       display: flex;
       flex-wrap: wrap;

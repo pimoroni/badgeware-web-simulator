@@ -57,6 +57,10 @@
 
 <div id="controls">
   <input id="specimen-input" type="text" placeholder="Type to preview your own text…" aria-label="Specimen text">
+  <div id="res-tabs" role="tablist" aria-label="Badge screen resolution">
+    <button data-res="hires" class="active" title="320×240">HIRES</button>
+    <button data-res="lores" title="160×120">LORES</button>
+  </div>
   <div class="control-group">
     <span class="material-symbols-outlined" title="Zoom">format_size</span>
     <input id="size-input" type="range" min="1" max="4" step="0.1" value="1" aria-label="Preview zoom (multiplier)">

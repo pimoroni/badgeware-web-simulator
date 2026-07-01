@@ -10,8 +10,8 @@
  *   - open a font for a big specimen, a copy-paste code snippet, and a download.
  */
 
-import { afParse, afMeasure, afRender } from './af.js';
-import { ppfParse, ppfMeasure, ppfRender } from './ppf.js';
+import { afParse, afRender } from './af.js';
+import { ppfParse, ppfRender } from './ppf.js';
 
 const FG = '#f0e8d8';                 // glyph colour (matches badgeware specimens)
 const DEFAULT_TEXT = 'The quick brown fox 0123';
@@ -27,6 +27,7 @@ const entries = [];
 const state = {
   text: DEFAULT_TEXT,
   scale: 1,           // preview zoom multiplier (1x = native pixels / VECTOR_BASE_PX)
+  lores: false,       // badge screen: false = HIRES 320x240, true = LORES 160x120
   filter: 'all',      // 'all' | 'vector' | 'pixel'
 };
 
@@ -38,6 +39,7 @@ const input      = $('#specimen-input');
 const sizeInput  = $('#size-input');
 const sizeVal    = $('#size-val');
 const filterTabs = $('#filter-tabs');
+const resTabs    = $('#res-tabs');
 
 /* Font sources — the same files the simulator ships, loaded straight from the
    emulated filesystem so there's no vendored copy to keep in sync. Vector (.af)
@@ -80,38 +82,34 @@ function prettyName(kind, file, font) {
 }
 
 /* -- Specimen rendering --------------------------------------------------- */
-/* Draw `text` for one font into `canvas` at zoom multiplier `scale`. Vector fonts
-   render at VECTOR_BASE_PX * scale (at devicePixelRatio for crispness); pixel fonts
-   render at their native pixel size * scale and stay pixelated. */
-function drawSpecimen(entry, canvas, text, scale) {
-  const pad = 6;
+/* Draw `text` for one font into a badge-screen canvas — 320x240 (HIRES) or
+   160x120 (LORES) — vertically centred, at zoom multiplier `scale`. The canvas
+   backing IS the badge resolution; CSS scales it up to the card (pixelated), so
+   LORES reads chunkier and HIRES finer, exactly like the real display. Vector
+   fonts render at VECTOR_BASE_PX * scale px; pixel fonts at native size * scale
+   (snapped to a whole multiplier). Long lines clip at the screen's right edge. */
+function drawSpecimen(entry, canvas, text, scale, lores) {
+  const W = lores ? 160 : 320;      // badge screen resolution
+  const H = lores ? 120 : 240;
+  const hpad = lores ? 4 : 8;       // small left margin, in badge pixels
   const ctx = canvas.getContext('2d');
   const t   = text.length ? text : ' ';
 
+  canvas.width  = W;
+  canvas.height = H;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
   if (entry.kind === 'vector') {
     const sizePx = VECTOR_BASE_PX * scale;
-    const dpr = window.devicePixelRatio || 1;
-    const w   = Math.max(1, Math.ceil(afMeasure(entry.font, t, sizePx)));
-    const h   = Math.ceil(sizePx * 1.35);
-    canvas.width        = Math.ceil((w + pad * 2) * dpr);
-    canvas.height       = Math.ceil(h * dpr);
-    canvas.style.width  = (w + pad * 2) + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w + pad * 2, h);
-    afRender(entry.font, ctx, t, pad, (h - sizePx) / 2, sizePx, FG);
+    afRender(entry.font, ctx, t, hpad, (H - sizePx) / 2, sizePx, FG);
   } else {
-    const gh    = entry.font.glyphHeight;
+    const gh = entry.font.glyphHeight;
     // The multiplier IS the pixel scale: 1x = true pixels, so native sizes compare.
-    const px    = Math.max(1, Math.round(scale));
-    const w     = Math.max(1, ppfMeasure(entry.font, t));
-    canvas.width        = (w + pad * 2) * px;
-    canvas.height       = (gh + pad * 2) * px;
-    canvas.style.width  = (w + pad * 2) * px + 'px';
-    canvas.style.height = (gh + pad * 2) * px + 'px';
+    const px = Math.max(1, Math.round(scale));
+    ctx.imageSmoothingEnabled = false;
     ctx.setTransform(px, 0, 0, px, 0, 0);
-    ctx.clearRect(0, 0, w + pad * 2, gh + pad * 2);
-    ppfRender(entry.font, ctx, t, pad, pad, FG);
+    ppfRender(entry.font, ctx, t, Math.max(1, Math.round(hpad / px)), Math.round((H / px - gh) / 2), FG);
   }
 }
 
@@ -194,7 +192,7 @@ function card(entry) {
 function refreshSpecimens() {
   for (const entry of entries) {
     if (entry.canvas && entry.el.style.display !== 'none') {
-      drawSpecimen(entry, entry.canvas, state.text, state.scale);
+      drawSpecimen(entry, entry.canvas, state.text, state.scale, state.lores);
       const dims = entry.el.querySelector('.dims');   // vector px size tracks the zoom
       if (dims) dims.textContent = dimsText(entry);
     }
@@ -233,7 +231,7 @@ function openModal(entry) {
   const canvas = document.createElement('canvas');
   specimen.append(canvas);
   // Render the modal specimen a touch larger than the card thumbnails.
-  drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3));
+  drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3), state.lores);
 
   renderSnippet(entry);
 
@@ -350,7 +348,7 @@ function scheduleRefresh() {
       const entry = entries.find(e => e.file === backdrop.dataset.entry);
       if (entry) {
         const canvas = $('#modal-specimen canvas');
-        if (canvas) drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3));
+        if (canvas) drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3), state.lores);
         renderSnippet(entry);
       }
     }
@@ -371,6 +369,15 @@ function initControls() {
   sizeInput.addEventListener('input', () => {
     state.scale = +sizeInput.value;
     sizeVal.textContent = fmtScale(state.scale);
+    scheduleRefresh();
+  });
+
+  // HIRES (320x240) / LORES (160x120) badge-screen toggle.
+  resTabs.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    state.lores = btn.dataset.res === 'lores';
+    for (const b of resTabs.children) b.classList.toggle('active', b === btn);
     scheduleRefresh();
   });
 

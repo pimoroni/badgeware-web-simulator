@@ -201,6 +201,7 @@ import(new URL(`./${worker.async_backend}/micropython.mjs`, import.meta.url).hre
       worker.postMessage({ running: true })
 
       try {
+        await mp.runPython(`sys.path.insert(0, "/")`)
         await mp.runPython(`import badgeware`)
         await mp.runPython(program)
         // The program returned (it didn't block), so drive the frame loop.

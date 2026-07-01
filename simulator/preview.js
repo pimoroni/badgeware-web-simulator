@@ -16,7 +16,13 @@ const STILL_CACHE = 'badge-stills-v1';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const keyFor = (file, version) => `/_still/${encodeURIComponent(file)}?v=${version}`;
 
-export function createPreviewEngine() {
+/* freshWorkerPerRun: tear the worker down before every run so each program gets a
+   clean MicroPython VM. Needed for the apps gallery — apps are started with
+   launch(), and a launched app doesn't survive the in-place soft reset the warm
+   worker does between runs (the next launch() keeps showing the previous app), so
+   they must each boot fresh. Examples run fine in the warm worker, so they leave
+   this off and keep the fast path. */
+export function createPreviewEngine({ freshWorkerPerRun = false } = {}) {
   // The single canvas shared by live preview + still capture. The gallery moves it
   // into whichever card is hovered; when detached it still receives capture frames.
   const canvas = document.createElement('canvas');
@@ -56,6 +62,9 @@ export function createPreviewEngine() {
   // run's token so callers can detect being preempted by a later run.
   async function startRun(code) {
     const s = await ensureSim();
+    // Apps need a clean VM each time (see freshWorkerPerRun above); tearing the
+    // worker down here means s.run() below spawns a brand-new one.
+    if (freshWorkerPerRun && s.micropython) await s.terminate();
     s.buttons = 0;           // clear any badge buttons held over from a prior run
     const token = ++runToken;
     frameHook = null;

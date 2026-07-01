@@ -108,6 +108,7 @@ async function initApp() {
   // Help toggles the overlay; Editor focuses the code view.
   addActions({
     gallery: () => { location.href = 'examples.html'; },
+    apps:    () => { location.href = 'apps.html'; },
     fonts:   () => { location.href = 'fonts.html'; },
     help:    tabs.toggleHelp,
     editor:  tabs.focusCodeOrNew,

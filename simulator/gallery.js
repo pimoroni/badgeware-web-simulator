@@ -1,65 +1,47 @@
-/* -- Example gallery (its own page, examples.html) --------------------------
-   Builds the example cards from examples/manifest.json. Thumbnails and the live
-   playback are produced by the simulator itself (see preview.js): each card's
-   still is captured + cached on demand (a spinner shows until it lands), and
-   clicking/tapping a card plays the example LIVE in its thumbnail using one shared
-   canvas. No baked screenshots, so there's no build step to keep in sync. Click is
-   the run action (works on touch, unlike a hover preview); Edit hands the example
-   off to the main editor via index.html?file=examples/<name> (see examples.js). */
+/* -- In-card preview gallery (shared core) ---------------------------------
+   Powers both the examples gallery (examples.html) and the apps gallery
+   (apps.html). It captures a still thumbnail for each card and plays the program
+   LIVE in that thumbnail using one shared canvas (see preview.js), with the
+   keyboard + touch acting as the badge. Click is the run action (works on touch,
+   unlike a hover preview); Edit hands the item off to the main editor.
+
+   The host page supplies what differs between the two galleries:
+   - render(galleryEl): populate the grid with sections + `.example[data-key]`
+     cards (each carrying .spinner / .still / .example-play and data-act
+     play/edit buttons). Returns a `version` string that busts the still cache,
+     or null after writing its own error message.
+   - getCode(key): the program to run for a card, as a string (or a Promise of
+     one; null skips it). Examples fetch a source file; apps synthesise launch().
+   - onEdit(key): hand the item off (both navigate to the editor).
+   - setStatus(text): surface the rare "couldn't load" message.
+
+   Cards are keyed by data-key, which is opaque to the core. */
 import { createPreviewEngine } from './preview.js';
 
-const APP_BASE = new URL('.', import.meta.url).href;
-
 // Animated SVG spinner, shown centred until a card's still has been captured.
-const SPINNER = 'data:image/svg+xml,' + encodeURIComponent(
+// Exported so each host's card markup can drop it in.
+export const SPINNER = 'data:image/svg+xml,' + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">` +
   `<circle cx="20" cy="20" r="15" fill="none" stroke="rgba(180,190,200,0.18)" stroke-width="4"/>` +
   `<path d="M20 5a15 15 0 0 1 0 30" fill="none" stroke="rgb(224,137,32)" stroke-width="4" stroke-linecap="round">` +
   `<animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20" dur="0.7s" repeatCount="indefinite"/>` +
   `</path></svg>`);
 
-/* galleryEl is the grid container (examples.js owns the lookup). deps:
-   { openExample, setStatus } - openExample(file) navigates to the main editor
-   (index.html?file=examples/<file>) to edit/run it there; setStatus(text) writes the
-   page's status line (used only for the rare "couldn't load" message). */
-export function initGallery(galleryEl, { openExample, setStatus }) {
-  const engine = createPreviewEngine();
-  let version = 'dev';                 // manifest version, busts the still cache
+export function initGallery(galleryEl, { render, getCode, onEdit, setStatus, freshWorkerPerRun = false }) {
+  const engine = createPreviewEngine({ freshWorkerPerRun });
+  let version = 'dev';                 // stills cache version, busts on content change
 
-  // Per-file example source, fetched once and shared by hover preview + still capture.
+  // Per-card program, resolved once and shared by the live preview + still capture.
   const codeCache = new Map();
-  function loadCode(file) {
-    if (!codeCache.has(file)) {
-      codeCache.set(file, fetch(APP_BASE + 'examples/' + file, { cache: 'no-cache' })
-        .then((r) => (r.ok ? r.text() : null)).catch(() => null));
-    }
-    return codeCache.get(file);
+  function loadCode(key) {
+    if (!codeCache.has(key)) codeCache.set(key, Promise.resolve().then(() => getCode(key)));
+    return codeCache.get(key);
   }
 
-  const card = (ex) => `
-    <figure class="example" data-file="${ex.file}">
-      <button class="example-open" data-act="play" title="Play ${ex.file}">
-        <img class="spinner" src="${SPINNER}" alt="" aria-hidden="true">
-        <img class="still" alt="">
-        <span class="example-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
-      </button>
-      <div class="example-meta">
-        <figcaption><b>${ex.file}</b><span>${ex.description}</span></figcaption>
-        <button data-act="edit" title="Edit in the editor">Edit<span class="material-symbols-outlined">edit</span></button>
-      </div>
-    </figure>`;
-
-  // manifest.categories: [{ name, examples: [...] }] in rough difficulty order.
   async function build() {
-    let manifest;
-    try { manifest = await fetch(APP_BASE + 'examples/manifest.json', { cache: 'no-cache' }).then((r) => r.json()); }
-    catch { galleryEl.innerHTML = '<p class="gallery-empty">Couldn’t load the example list.</p>'; return; }
-    version = manifest.version || 'dev';
-    galleryEl.innerHTML =
-      manifest.categories.map((cat) =>
-        `<h3><span>${cat.name}</span></h3>` +
-        `<div class="gallery-grid">${cat.examples.map(card).join('')}</div>`,
-      ).join('');
+    const v = await render(galleryEl);
+    if (v == null) return;             // render wrote its own error message
+    version = v;
     wireStills();
     engine.prewarm();
   }
@@ -73,7 +55,7 @@ export function initGallery(galleryEl, { openExample, setStatus }) {
   }
 
   // Capture (or cache-load) each card's still the first time it nears the viewport,
-  // so we never run all examples at once. requestStill is cache-first, so cards seen
+  // so we never run everything at once. requestStill is cache-first, so cards seen
   // on a previous visit fill in instantly; the rest are rendered by the simulator.
   function wireStills() {
     const io = new IntersectionObserver((entries) => {
@@ -81,8 +63,8 @@ export function initGallery(galleryEl, { openExample, setStatus }) {
         if (!e.isIntersecting) continue;
         const fig = e.target;
         io.unobserve(fig);
-        loadCode(fig.dataset.file).then((code) => {
-          if (code != null) engine.requestStill(fig.dataset.file, code, version).then((url) => showStill(fig, url));
+        loadCode(fig.dataset.key).then((code) => {
+          if (code != null) engine.requestStill(fig.dataset.key, code, version).then((url) => showStill(fig, url));
         });
       }
     }, { root: galleryEl, rootMargin: '200px' });
@@ -90,14 +72,13 @@ export function initGallery(galleryEl, { openExample, setStatus }) {
   }
 
   /* -- Live in-card playback -------------------------------------------------
-     Clicking/tapping a card plays the example LIVE in its thumbnail, moving the
-     shared preview canvas (preview.js) into it. One card plays at a time; clicking
+     Clicking/tapping a card plays it LIVE in its thumbnail, moving the shared
+     preview canvas (preview.js) into it. One card plays at a time; clicking
      another switches. There's no separate simulator, so this IS the run action -
      and unlike a hover preview it works on touch. */
   let playing = null;
-  // Stop a playing card once it scrolls out of view: that frees the shared sim to
-  // resume capturing the stills below (the engine pauses captures while live) and
-  // doesn't leave an offscreen example running.
+  // Stop a playing card once it scrolls out of view: frees the shared sim to resume
+  // capturing the stills below and doesn't leave an offscreen program running.
   const offscreenStop = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.target === playing && !e.isIntersecting) stopPlaying();
   }, { root: galleryEl });
@@ -118,29 +99,29 @@ export function initGallery(galleryEl, { openExample, setStatus }) {
     fig.querySelector('.example-open').appendChild(engine.canvas);
     // Reveal (.previewing) only once the first live frame paints - until then the
     // still shows through, so the shared canvas's stale frame never flashes.
-    loadCode(fig.dataset.file).then((code) => {
+    loadCode(fig.dataset.key).then((code) => {
       if (playing !== fig) return;
-      if (code == null) { stopPlaying(); setStatus(`Could not load ${fig.dataset.file}`); return; }
+      if (code == null) { stopPlaying(); setStatus(`Could not load ${fig.dataset.key}`); return; }
       engine.play(code, () => { if (playing === fig) fig.classList.add('previewing'); });
     });
   }
 
   // data-act (not data-action) keeps card buttons out of any document-level handler.
   galleryEl.addEventListener('click', (e) => {
-    const fig = e.target.closest('.example[data-file]');
+    const fig = e.target.closest('.example[data-key]');
     if (!fig) return;
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'edit') { stopPlaying(); openExample(fig.dataset.file); return; }  // -> main editor
+    if (act === 'edit') { stopPlaying(); onEdit(fig.dataset.key); return; }  // -> main editor
     playCard(fig);   // the image / play badge / anywhere else on the card runs it in place
   });
 
   /* -- Badge input for the playing card --------------------------------------
-     Drive the live example like the real badge. The engine ignores all of this
+     Drive the live program like the real badge. The engine ignores all of this
      unless a card is actually playing. */
 
   // Keyboard (desktop): arrows = D-pad, space = B, escape = Home - the same map the
   // main app's badge uses. preventDefault while playing so the keys don't also
-  // scroll the page out from under the example.
+  // scroll the page out from under the card.
   const KEY_TO_BTN = {
     ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
     ' ': 'select', Escape: 'home',

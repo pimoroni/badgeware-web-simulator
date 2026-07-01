@@ -1,7 +1,9 @@
 import math
 import time
+import random
 
 NORMAL_MODE_104HZ = 3
+PERFORMANCE_MODE_416HZ = 4
 
 
 class LSM6DS3:
@@ -14,3 +16,7 @@ class LSM6DS3:
         ay = int(math.cos(t * 0.19) * 2000)
         az = 16384  # 1G on Z axis
         return (ax, ay, az, 0, 0, 0)
+    
+    def double_tap_detected(self):
+        return random.choice((True, False))
+

@@ -13,25 +13,26 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <title>Badgeware Font Explorer</title>
-
+  <title>Badgeware Apps</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;700&display=swap" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap" crossorigin>
   <link rel="stylesheet" href="simulator/app.css">
 
-  <!-- Font renderers are shared with the simulator (single source of truth). -->
-  <link rel="modulepreload" href="simulator/af.js">
-  <link rel="modulepreload" href="simulator/ppf.js">
-  <link rel="modulepreload" href="simulator/explorer.js">
+  <!-- Preload the apps-page module graph. The gallery plays each app in its own
+       thumbnail via the preview engine, so there's no editor/3D-badge/boot here. -->
+  <link rel="modulepreload" href="simulator/util.js">
+  <link rel="modulepreload" href="simulator/badgeware.js">
+  <link rel="modulepreload" href="simulator/preview.js">
+  <link rel="modulepreload" href="simulator/gallery.js">
 </head>
-<body class="fonts-page">
+<body class="examples-page apps-page">
 
-<!-- Sticky top chrome: brand nav + Playground toolbar + specimen controls stay
-     pinned while the font grid scrolls beneath. -->
+<!-- Sticky top chrome: brand nav + Playground toolbar stay pinned while the page
+     scrolls (same behaviour as the examples + font-explorer pages). -->
 <header class="topbar">
-<!-- Top brand nav, shared with the editor + examples pages. -->
+<!-- Top brand nav, shared with the editor + examples + font-explorer pages. -->
 <nav id="main">
   <div>
     <a href="https://badgewa.re/" style="padding-bottom: 0;">
@@ -49,56 +50,58 @@
 
 <div id="toolbar" role="toolbar" aria-label="Playground">
   <span class="toolbar-title">Playground</span>
-  <a class="navbtn" href="examples.html" title="Example gallery"><span class="material-symbols-outlined">grid_view</span><span class="label">Examples</span></a>
-  <a class="navbtn" href="apps.html" title="Apps"><span class="material-symbols-outlined">apps</span><span class="label">Apps</span></a>
-  <a class="navbtn" href="index.html" title="Open editor"><span class="material-symbols-outlined">code</span><span class="label">Editor</span></a>
-  <button class="navbtn active" aria-current="page" title="Font Explorer"><span class="material-symbols-outlined">font_download</span><span class="label">Font Explorer</span></button>
-</div>
-
-<div id="controls">
-  <input id="specimen-input" type="text" placeholder="Type to preview your own text…" aria-label="Specimen text">
-  <div class="control-group">
-    <span class="material-symbols-outlined" title="Size">format_size</span>
-    <input id="size-input" type="range" min="12" max="120" step="1" value="40" aria-label="Preview size">
-    <span class="val" id="size-val">40px</span>
-  </div>
-  <div id="filter-tabs" role="tablist" aria-label="Filter fonts">
-    <button data-filter="all" class="active">All</button>
-    <button data-filter="vector">Vector</button>
-    <button data-filter="pixel">Pixel</button>
-  </div>
+  <button data-action="gallery" title="Example gallery"><span class="material-symbols-outlined">grid_view</span>Examples</button>
+  <button data-action="apps" class="active" title="Apps" aria-current="page"><span class="material-symbols-outlined">apps</span>Apps</button>
+  <button data-action="editor" title="Open editor"><span class="material-symbols-outlined">code</span>Editor</button>
+  <button data-action="fonts" title="Font Explorer"><span class="material-symbols-outlined">font_download</span>Font Explorer</button>
+  <button class="help" data-action="help" title="Help" aria-label="Help"><span class="material-symbols-outlined">help</span></button>
 </div>
 </header>
 
-<main id="workspace">
-  <div id="loading">Loading fonts…</div>
-</main>
 
-<!-- Detail modal: big specimen, metadata, code snippet, and download. -->
-<div id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-name">
-  <div id="modal">
-    <div id="modal-header">
-      <span class="name" id="modal-name"></span>
-      <span class="badge" id="modal-badge"></span>
-      <button class="close" id="modal-close" aria-label="Close"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div id="modal-body">
-      <div id="modal-specimen"></div>
-      <div class="dims-row" id="modal-dims"></div>
+<div id="workspace">
 
-      <div class="modal-section-title">Load it on your badge</div>
-      <div class="code-block">
-        <button class="copy-btn" id="modal-copy"><span class="material-symbols-outlined">content_copy</span>Copy</button>
-        <pre id="modal-code"></pre>
+  <main id="editor-panel">
+    <div id="gallery"></div>
+    <div id="help">
+      <div class="help-doc">
+        <h2>Running the apps</h2>
+        <p>These are the apps that ship on the badge, plus community apps contributed by
+           other makers. Click a tile (or its play button) to run that app right here in
+           its own screen. Hit <b>Edit</b> to open its source in the
+           <a href="index.html">editor</a> and tinker. For the Python API and the full
+           guides, head to <a href="https://badgewa.re/docs" target="_blank" rel="noopener">badgewa.re/docs</a>.</p>
+
+        <h3>Pressing the badge's buttons</h3>
+        <p>While an app is playing, your keyboard becomes the badge:</p>
+        <ul class="help-keys">
+          <li><span class="k"><kbd>&larr;</kbd></span><span>A</span></li>
+          <li><span class="k"><kbd>Space</kbd></span><span>B</span></li>
+          <li><span class="k"><kbd>&rarr;</kbd></span><span>C</span></li>
+          <li><span class="k"><kbd>&uarr;</kbd> <kbd>&darr;</kbd></span><span>Up / Down</span></li>
+          <li><span class="k"><kbd>Esc</kbd></span><span>Home (returns to the launcher)</span></li>
+        </ul>
+
+        <h3>On a touchscreen</h3>
+        <p>Swipe across the playing tile to work the D-pad, or tap it:</p>
+        <ul class="help-keys">
+          <li><span class="k">Swipe &larr; / &rarr;</span><span>A / C</span></li>
+          <li><span class="k">Swipe &uarr; / &darr;</span><span>Up / Down</span></li>
+          <li><span class="k">Tap</span><span>B</span></li>
+        </ul>
       </div>
-
-      <div class="modal-actions">
-        <button class="btn primary" id="modal-download"><span class="material-symbols-outlined">download</span>Download font</button>
-      </div>
     </div>
-  </div>
+    <div id="statusbar"><output id="status"></output></div>
+  </main>
+
 </div>
 
-<script type="module" src="simulator/explorer.js"></script>
+<nav id="mobile-nav" aria-label="View">
+  <button data-tab="apps" class="active" title="Apps" aria-label="Apps"><span class="material-symbols-outlined">apps</span></button>
+  <button data-tab="code" title="Editor" aria-label="Editor"><span class="material-symbols-outlined">code</span></button>
+</nav>
+
+<!-- Apps page entry: builds the gallery (each card plays its app in its own thumbnail). -->
+<script type="module" src="simulator/apps.js"></script>
 </body>
 </html>

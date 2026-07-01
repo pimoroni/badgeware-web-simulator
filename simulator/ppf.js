@@ -67,7 +67,7 @@ export function ppfParse(arrayBuffer) {
  * Measure the pixel width of a string in the given font.
  * Space (U+0020) is treated as cell_width / 3, matching PicoVector's draw logic.
  */
-function ppfMeasure(font, text) {
+export function ppfMeasure(font, text) {
   const spaceW = Math.ceil(font.cellWidth / 3);
   let w = 0;
   for (const ch of text) {
@@ -84,7 +84,7 @@ function ppfMeasure(font, text) {
  * Each set pixel is drawn as a 1×1 fillRect — scale via ctx transforms if needed.
  * Returns the total advance width (px).
  */
-function ppfRender(font, ctx, text, x, y, color = '#ffffff') {
+export function ppfRender(font, ctx, text, x, y, color = '#ffffff') {
   const spaceW = Math.ceil(font.cellWidth / 3);
   let cx = x;
   ctx.fillStyle = color;

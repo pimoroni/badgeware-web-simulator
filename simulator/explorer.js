@@ -1,0 +1,388 @@
+/* explorer.js — Badgeware Font Explorer
+ *
+ * A Google-Fonts-style browser for the .af (vector) and .ppf (pixel) fonts
+ * shipped with Badgeware. Loads every font listed in simulator/fonts-manifest.json
+ * (the exact files the simulator ships, straight from its filesystem — nothing is
+ * vendored), renders a live specimen for each into a <canvas>, and lets you:
+ *   - type your own specimen text (updates every card live)
+ *   - scale the preview size
+ *   - filter by vector / pixel
+ *   - open a font for a big specimen, a copy-paste code snippet, and a download.
+ */
+
+import { afParse, afMeasure, afRender } from './af.js';
+import { ppfParse, ppfMeasure, ppfRender } from './ppf.js';
+
+const FG = '#f0e8d8';                 // glyph colour (matches badgeware specimens)
+const DEFAULT_TEXT = 'The quick brown fox 0123';
+
+/* All loaded fonts live here: { kind, file, path, name, font, buffer, el, canvas } */
+const entries = [];
+
+const state = {
+  text: DEFAULT_TEXT,
+  size: 40,           // target pixel height of the specimen
+  filter: 'all',      // 'all' | 'vector' | 'pixel'
+};
+
+/* -- DOM handles ---------------------------------------------------------- */
+const $ = sel => document.querySelector(sel);
+const main       = $('#workspace');
+const loadingEl  = $('#loading');
+const input      = $('#specimen-input');
+const sizeInput  = $('#size-input');
+const sizeVal    = $('#size-val');
+const filterTabs = $('#filter-tabs');
+
+/* Font sources — the same files the simulator ships, loaded straight from the
+   emulated filesystem so there's no vendored copy to keep in sync. Vector (.af)
+   live under the system assets; pixel (.ppf) live in the ROM. generate_manifest.py
+   scans these dirs and writes simulator/fonts-manifest.json. */
+const VECTOR_DIR = 'simulator/filesystem/system/assets/fonts/';
+const PIXEL_DIR  = 'simulator/filesystem/rom/fonts/';
+
+/* -- Font loading --------------------------------------------------------- */
+async function loadAll() {
+  const manifest = await (await fetch('simulator/fonts-manifest.json')).json();
+
+  const jobs = [];
+  for (const file of manifest.vector) jobs.push(load('vector', VECTOR_DIR + file, file));
+  for (const file of manifest.pixel)  jobs.push(load('pixel',  PIXEL_DIR  + file, file));
+  await Promise.all(jobs);
+
+  // Keep a stable, friendly order: vector first, then pixel, each alphabetical.
+  entries.sort((a, b) =>
+    a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === 'vector' ? -1 : 1));
+}
+
+async function load(kind, path, file) {
+  try {
+    const buffer = await (await fetch(path)).arrayBuffer();
+    const font   = kind === 'vector' ? afParse(buffer) : ppfParse(buffer);
+    const name   = prettyName(kind, file, font);
+    entries.push({ kind, file, path, name, font, buffer, el: null, canvas: null });
+  } catch (err) {
+    console.warn('Skipping', path, err);
+  }
+}
+
+/* .ppf files carry an embedded name; .af files don't, so derive from filename.
+   Pixel-font names end in the cap height (e.g. "Absolute 10") — drop that; the
+   size is already conveyed by the cell-size line. */
+function prettyName(kind, file, font) {
+  if (kind === 'pixel' && font.name) return font.name.replace(/\s+\d+[a-z]?$/i, '');
+  return file.replace(/\.(af|ppf)$/i, '').replace(/[-_]/g, ' ');
+}
+
+/* -- Specimen rendering --------------------------------------------------- */
+/* Draw `text` for one font into `canvas`, sized to fit its content at `sizePx`
+   target height. Vector fonts scale continuously (rendered at devicePixelRatio
+   for crispness); pixel fonts snap to an integer scale and stay pixelated. */
+function drawSpecimen(entry, canvas, text, sizePx) {
+  const pad = 6;
+  const ctx = canvas.getContext('2d');
+  const t   = text.length ? text : ' ';
+
+  if (entry.kind === 'vector') {
+    const dpr = window.devicePixelRatio || 1;
+    const w   = Math.max(1, Math.ceil(afMeasure(entry.font, t, sizePx)));
+    const h   = Math.ceil(sizePx * 1.35);
+    canvas.width        = Math.ceil((w + pad * 2) * dpr);
+    canvas.height       = Math.ceil(h * dpr);
+    canvas.style.width  = (w + pad * 2) + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w + pad * 2, h);
+    afRender(entry.font, ctx, t, pad, (h - sizePx) / 2, sizePx, FG);
+  } else {
+    const gh    = entry.font.glyphHeight;
+    const scale = Math.max(1, Math.round(sizePx / gh));
+    const w     = Math.max(1, ppfMeasure(entry.font, t));
+    canvas.width        = (w + pad * 2) * scale;
+    canvas.height       = (gh + pad * 2) * scale;
+    canvas.style.width  = (w + pad * 2) * scale + 'px';
+    canvas.style.height = (gh + pad * 2) * scale + 'px';
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, w + pad * 2, gh + pad * 2);
+    ppfRender(entry.font, ctx, t, pad, pad, FG);
+  }
+}
+
+function dimsText(entry) {
+  const f = entry.font;
+  return entry.kind === 'vector'
+    ? `vector · ${f.glyphCount} glyphs`
+    : `${f.cellWidth}×${f.glyphHeight} px · ${f.glyphCount} glyphs`;
+}
+
+/* -- Gallery -------------------------------------------------------------- */
+function buildGallery() {
+  loadingEl.remove();
+
+  const vector = entries.filter(e => e.kind === 'vector');
+  const pixel  = entries.filter(e => e.kind === 'pixel');
+
+  main.append(
+    section('Vector fonts', '.af', vector),
+    section('Pixel fonts', '.ppf', pixel),
+  );
+
+  refreshSpecimens();
+}
+
+function section(title, ext, list) {
+  const frag = document.createDocumentFragment();
+
+  const h = document.createElement('h2');
+  h.className = 'section-title';
+  h.dataset.kind = list[0]?.kind ?? '';
+  h.innerHTML = `${title} <span class="count">${ext} · ${list.length}</span>`;
+  frag.append(h);
+
+  const grid = document.createElement('div');
+  grid.className = 'font-grid';
+  grid.dataset.kind = list[0]?.kind ?? '';
+  for (const entry of list) grid.append(card(entry));
+  frag.append(grid);
+
+  return frag;
+}
+
+function card(entry) {
+  const el = document.createElement('div');
+  el.className = 'font-card';
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', `${entry.name} — open details`);
+
+  const specimen = document.createElement('div');
+  specimen.className = 'specimen' + (entry.kind === 'pixel' ? ' pixel' : '');
+  const canvas = document.createElement('canvas');
+  specimen.append(canvas);
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.innerHTML = `
+    <div class="name-block">
+      <span class="name">${escapeHtml(entry.name)}</span>
+      <span class="dims">${dimsText(entry)}</span>
+    </div>
+    <span class="badge ${entry.kind}">${entry.kind === 'vector' ? 'Vector' : 'Pixel'}</span>`;
+
+  el.append(specimen, meta);
+  el.addEventListener('click', () => openModal(entry));
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(entry); }
+  });
+
+  entry.el = el;
+  entry.canvas = canvas;
+  return el;
+}
+
+/* Redraw every visible card's specimen (after a text / size / filter change). */
+function refreshSpecimens() {
+  for (const entry of entries) {
+    if (entry.canvas && entry.el.style.display !== 'none') {
+      drawSpecimen(entry, entry.canvas, state.text, state.size);
+    }
+  }
+}
+
+function applyFilter() {
+  for (const entry of entries) {
+    const show = state.filter === 'all' || state.filter === entry.kind;
+    entry.el.style.display = show ? '' : 'none';
+  }
+  // Hide section headers/grids that have no visible members.
+  for (const grid of document.querySelectorAll('.font-grid')) {
+    const kind = grid.dataset.kind;
+    const visible = state.filter === 'all' || state.filter === kind;
+    grid.style.display = visible ? '' : 'none';
+    grid.previousElementSibling.style.display = visible ? '' : 'none';
+  }
+  refreshSpecimens();
+}
+
+/* -- Detail modal --------------------------------------------------------- */
+const backdrop = $('#modal-backdrop');
+
+function openModal(entry) {
+  $('#modal-name').textContent = entry.name;
+  const badge = $('#modal-badge');
+  badge.textContent = entry.kind === 'vector' ? 'Vector' : 'Pixel';
+  badge.className = 'badge ' + entry.kind;
+
+  $('#modal-dims').innerHTML = modalDims(entry);
+
+  const specimen = $('#modal-specimen');
+  specimen.className = entry.kind === 'pixel' ? 'pixel' : '';
+  specimen.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  specimen.append(canvas);
+  // Render the modal specimen a touch larger than the card thumbnails.
+  drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.size, 48));
+
+  renderSnippet(entry);
+
+  const dl = $('#modal-download');
+  dl.onclick = () => downloadFont(entry);
+
+  backdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  $('#modal-close').focus();
+  backdrop.dataset.entry = entry.file;   // for the live specimen refresh
+
+  // Deep-link the open font so the URL is shareable (like Google Fonts).
+  if (location.hash !== '#font=' + entry.file) {
+    history.replaceState(null, '', '#font=' + encodeURIComponent(entry.file));
+  }
+}
+
+function modalDims(entry) {
+  const f = entry.font;
+  const rows = [
+    ['Type',   entry.kind === 'vector' ? 'Vector (.af)' : 'Pixel (.ppf)'],
+    ['Glyphs', f.glyphCount],
+    ['File',   entry.file],
+  ];
+  if (entry.kind === 'pixel') {
+    rows.splice(2, 0, ['Cell size', `${f.cellWidth}×${f.glyphHeight} px`]);
+  }
+  const kb = (entry.buffer.byteLength / 1024).toFixed(1);
+  rows.push(['Size', `${kb} kB`]);
+  return rows.map(([k, v]) => `<span><b>${k}:</b> ${escapeHtml(String(v))}</span>`).join('');
+}
+
+function closeModal() {
+  backdrop.classList.remove('open');
+  document.body.style.overflow = '';
+  delete backdrop.dataset.entry;
+  if (location.hash.startsWith('#font=')) history.replaceState(null, '', location.pathname + location.search);
+}
+
+/* Open the font named in the URL hash (#font=<file>), if any. */
+function openFromHash() {
+  const m = /^#font=(.+)$/.exec(location.hash);
+  if (!m) return;
+  const entry = entries.find(e => e.file === decodeURIComponent(m[1]));
+  if (entry) openModal(entry);
+}
+
+/* -- Code snippet --------------------------------------------------------- */
+function snippetFor(entry) {
+  const name    = entry.file.replace(/\.(af|ppf)$/i, '');   // load_font drops the extension
+  const sample  = (state.text.length ? state.text : 'Hello, badge!').replace(/"/g, '\\"');
+  const sizeArg = entry.kind === 'vector' ? `, ${Math.round(state.size)}` : '';
+  const sizeCmt = entry.kind === 'vector' ? '  # size in px' : '';
+  return [
+    `# Copy the font to /system/assets/fonts on your badge, then:`,
+    `my_font = load_font("${name}")`,
+    `screen.font = my_font`,
+    `screen.pen = color.white`,
+    `screen.text("${sample}", 10, 10${sizeArg})${sizeCmt}`,
+  ].join('\n');
+}
+
+/* Very small Python-ish highlighter: comments, strings, and the load_font call. */
+function highlight(code) {
+  return escapeHtml(code)
+    .replace(/(#[^\n]*)/g, '<span class="tok-comment">$1</span>')
+    .replace(/(&quot;[^&]*&quot;)/g, '<span class="tok-str">$1</span>')
+    .replace(/\b(load_font)\b/g, '<span class="tok-fn">$1</span>');
+}
+
+function renderSnippet(entry) {
+  const code = snippetFor(entry);
+  $('#modal-code').innerHTML = highlight(code);
+  $('#modal-copy').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      flashCopied($('#modal-copy'));
+    } catch { /* clipboard blocked — no-op */ }
+  };
+}
+
+function flashCopied(btn) {
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="material-symbols-outlined">check</span>Copied';
+  setTimeout(() => { btn.innerHTML = orig; }, 1400);
+}
+
+/* -- Download ------------------------------------------------------------- */
+function downloadFont(entry) {
+  const blob = new Blob([entry.buffer], { type: 'application/octet-stream' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = entry.file;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* -- Utilities ------------------------------------------------------------ */
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let refreshRAF = 0;
+function scheduleRefresh() {
+  cancelAnimationFrame(refreshRAF);
+  refreshRAF = requestAnimationFrame(() => {
+    refreshSpecimens();
+    // Also keep an open modal in sync with the live text/size.
+    if (backdrop.dataset.entry) {
+      const entry = entries.find(e => e.file === backdrop.dataset.entry);
+      if (entry) {
+        const canvas = $('#modal-specimen canvas');
+        if (canvas) drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.size, 48));
+        renderSnippet(entry);
+      }
+    }
+  });
+}
+
+/* -- Wire up controls ----------------------------------------------------- */
+function initControls() {
+  input.value = state.text;
+  input.addEventListener('input', () => { state.text = input.value; scheduleRefresh(); });
+
+  sizeInput.value = state.size;
+  sizeVal.textContent = state.size + 'px';
+  sizeInput.addEventListener('input', () => {
+    state.size = +sizeInput.value;
+    sizeVal.textContent = state.size + 'px';
+    scheduleRefresh();
+  });
+
+  filterTabs.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    state.filter = btn.dataset.filter;
+    for (const b of filterTabs.children) b.classList.toggle('active', b === btn);
+    applyFilter();
+  });
+
+  $('#modal-close').addEventListener('click', closeModal);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && backdrop.classList.contains('open')) closeModal();
+  });
+}
+
+/* -- Boot ----------------------------------------------------------------- */
+(async function main_() {
+  initControls();
+  try {
+    await loadAll();
+    buildGallery();
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+  } catch (err) {
+    loadingEl.textContent = 'Could not load fonts: ' + err.message;
+    console.error(err);
+  }
+})();

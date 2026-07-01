@@ -102,10 +102,16 @@ async function initApp() {
     run:                runCurrent,
   });
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, tabs.saveCurrentFile);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, tabs.newScratch);
 
   // Toolbar actions handled here. Examples leaves for its own page (examples.html);
   // Help toggles the overlay; Editor focuses the code view.
-  addActions({ gallery: () => { location.href = 'examples.html'; }, help: tabs.toggleHelp, editor: tabs.focusCodeOrNew });
+  addActions({
+    gallery: () => { location.href = 'examples.html'; },
+    fonts:   () => { location.href = 'fonts.html'; },
+    help:    tabs.toggleHelp,
+    editor:  tabs.focusCodeOrNew,
+  });
 
   // Commit the home view FIRST: reopen the saved workspace + honour any ?file= /
   // #name deep-link. bootstrap() picks the view itself (a restored tab, or the

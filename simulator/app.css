@@ -65,33 +65,49 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
 
-    /* -- Toolbar --------------------------------------------------- */
-    #toolbar {
-      height: 69px;
-      background: rgba(10, 20, 30, 0.85);   /* toolbar-only tint; bars use --bar-bg */
-      border-bottom: 1px solid var(--border);
-      padding: 0 1.6rem;
-      display: flex;
-      align-items: center;
-      gap: 20px;
+    /* -- Top brand nav (ported from badgewa.re) --------------------------------
+       Same markup and look as the brand site: a full-width bar that turns glassy
+       once the page scrolls (.scrolling, toggled by the inline script in index.html).
+       Kept in normal flow (a flex child of body) rather than position:fixed so it
+       sits above the toolbar without overlapping the fixed-height app layout. */
+    nav#main {
       flex-shrink: 0;
+      z-index: 1000;
+      background-color: var(--bg);
+      border-bottom: 1px solid var(--border);
+      transition: background 1s;
       user-select: none;
-      /* No stacking context here (no z-index, no backdrop-filter): that lets the
-         help button's own z-index lift it above the spilled badge. The backdrop
-         blur was invisible anyway - the bar's background is the body colour. */
     }
-
-    /* badgewa.re wordmark (inlined, so it inherits a fill from CSS rather than
-       baking a colour). Links to the brand site in a new tab so the editor session
-       isn't lost. A touch of right margin sets it apart from the run controls. */
-    #toolbar .brand {
-      display: flex;
+    nav#main.scrolling {
+      -webkit-backdrop-filter: blur(2rem);
+      backdrop-filter: blur(2rem);
+      background-color: rgba(235, 245, 255, 0.1);
+    }
+    nav#main svg { height: 2.4rem; width: auto; display: block; fill: var(--white); }
+    nav#main > div {
+      font-size: 1.2rem;
+      padding: 0.5rem 2rem;
+      box-sizing: border-box;
+      margin: 0 auto;
+      display: grid;
+      grid-gap: 0rem;
+      grid-template-columns: 1fr auto auto auto;
       align-items: center;
-      margin-right: 4px;
-      transition: opacity 0.15s;
     }
-    #toolbar .brand:hover { opacity: 0.75; }
-    #toolbar .brand svg { height: 42px; width: auto; display: block; fill: var(--white); }
+    nav#main a {
+      color: var(--white);
+      text-decoration: none;
+      display: inline-block;
+      padding: 0.2rem 0.75rem 0.3rem 0.75rem;
+      border-radius: 1rem;
+    }
+    nav#main a:first-child { padding-left: 0; }
+    nav#main a:not(.buy):hover { text-decoration: underline; }
+    nav#main a.buy {
+      background-color: var(--pink);
+      color: var(--white);
+      margin-left: 0.5rem;
+    }
 
     /* Material Symbols Outlined (Google): the family + ligature setup come from
        Google's served rule; here we inherit the surrounding size (sized per use
@@ -111,6 +127,28 @@
     [data-action="stop"] .material-symbols-outlined { font-variation-settings: var(--glyph-filled); }
     #toolbar button .material-symbols-outlined,
     #toolbar .buy .material-symbols-outlined { font-size: var(--icon); }
+
+    /* Playground toolbar: a thin bar beneath the brand nav. Its title sits at the
+       left, the view buttons follow, and Help is pushed to the right (margin-auto,
+       which needs this flex container to bite). */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      padding: 6px 1.6rem;
+      background: rgba(10, 20, 30, 0.85);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    .toolbar-title {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-right: 8px;
+    }
 
     /* The Buy link shares the button shape (it's an <a>, hence text-decoration). */
     #toolbar button,
@@ -152,13 +190,26 @@
     #toolbar .buy { background: var(--pink); color: var(--white) }
 
     /* -- Main layout ----------------------------------------------- */
-    #main {
+    #workspace {
       display: flex;
       flex: 1;
       min-height: 0;
       /* visible so the 3D badge can spill up over the toolbar */
       overflow: visible;
       background: linear-gradient(45deg, rgba(65, 89, 208, 0.3) 0.000%, rgba(200, 79, 192, 0.3) 50.000%, rgba(255, 205, 112, 0.1) 100.000%)
+    }
+
+    /* -- Examples page: document-level scroll (like the font explorer) ---------
+       The editor keeps its fixed, non-scrolling shell; here the whole page scrolls
+       and the brand nav + Playground toolbar (wrapped in .topbar) stay pinned. The
+       panels grow to their content (min-height: auto) instead of clipping. Scoped
+       to .examples-page and desktop; mobile keeps the tabbed shell below. */
+    @media (min-width: 768px) {
+      .examples-page { height: auto; min-height: 100dvh; overflow: visible; }
+      .examples-page .topbar { position: sticky; top: 0; z-index: 1000; }
+      .examples-page #workspace    { min-height: auto; }
+      .examples-page #editor-panel { min-height: auto; overflow: visible; }
+      .examples-page #gallery      { min-height: auto; overflow: visible; }
     }
 
     /* -- Editor panel ---------------------------------------------- */
@@ -913,11 +964,15 @@
       #statusbar { display: none; }
       #tab-controls { display: none; }
 
+      /* Brand nav shrinks to match badgewa.re's small-screen bar. */
+      nav#main svg { height: 1.8rem; }
+      nav#main > div { padding: 0.5rem 0.5rem; }
+
       /* Tabs move to the TOP — mobile Safari overlays the bottom edge. */
       #mobile-nav { order: -2; }
 
       /* Main: stack vertically */
-      #main { flex-direction: column; overflow: hidden; }
+      #workspace { flex-direction: column; overflow: hidden; }
 
       /* Badge strip: always visible at the top of the content. */
       #side-panel {

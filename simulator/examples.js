@@ -34,6 +34,7 @@ document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-action]')?.dataset.action;
   const tab = e.target.closest('[data-tab]')?.dataset.tab;
   if (act === 'editor' || tab === 'code') { location.href = 'index.html'; return; }
+  if (act === 'fonts') { location.href = 'fonts.html'; return; }
   if (act === 'help') { toggleHelp(); return; }
   if (act === 'gallery' || tab === 'gallery') {
     if (helpOn) toggleHelp(false);

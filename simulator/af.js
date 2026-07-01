@@ -87,7 +87,7 @@ export function afParse(arrayBuffer) {
 /**
  * Measure the pixel width of a string at the given size.
  */
-function afMeasure(font, text, size) {
+export function afMeasure(font, text, size) {
   const scale = size / 128;
   let w = 0;
   for (const ch of text) {
@@ -105,7 +105,7 @@ function afMeasure(font, text, size) {
  * The caller sets ctx.fillStyle before calling if a single colour is desired,
  * or passes `color` to override it per-call.
  */
-function afRender(font, ctx, text, x, y, size, color = '#ffffff') {
+export function afRender(font, ctx, text, x, y, size, color = '#ffffff') {
   const scale = size / 128;
   let cx = x;
   ctx.fillStyle = color;

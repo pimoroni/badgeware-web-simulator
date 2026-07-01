@@ -15,13 +15,18 @@ import { ppfParse, ppfMeasure, ppfRender } from './ppf.js';
 
 const FG = '#f0e8d8';                 // glyph colour (matches badgeware specimens)
 const DEFAULT_TEXT = 'The quick brown fox 0123';
+// The size control is a whole-number zoom multiplier, not a px size. Pixel fonts
+// render at their native pixel size times the multiplier (1x = true pixels, so
+// their real sizes are comparable); vector fonts, which have no native size, use
+// VECTOR_BASE_PX per 1x. That same px is what the code snippet emits.
+const VECTOR_BASE_PX = 20;            // vector font px at 1x
 
 /* All loaded fonts live here: { kind, file, path, name, font, buffer, el, canvas } */
 const entries = [];
 
 const state = {
   text: DEFAULT_TEXT,
-  size: 40,           // target pixel height of the specimen
+  scale: 1,           // preview zoom multiplier (1x = native pixels / VECTOR_BASE_PX)
   filter: 'all',      // 'all' | 'vector' | 'pixel'
 };
 
@@ -75,15 +80,16 @@ function prettyName(kind, file, font) {
 }
 
 /* -- Specimen rendering --------------------------------------------------- */
-/* Draw `text` for one font into `canvas`, sized to fit its content at `sizePx`
-   target height. Vector fonts scale continuously (rendered at devicePixelRatio
-   for crispness); pixel fonts snap to an integer scale and stay pixelated. */
-function drawSpecimen(entry, canvas, text, sizePx) {
+/* Draw `text` for one font into `canvas` at zoom multiplier `scale`. Vector fonts
+   render at VECTOR_BASE_PX * scale (at devicePixelRatio for crispness); pixel fonts
+   render at their native pixel size * scale and stay pixelated. */
+function drawSpecimen(entry, canvas, text, scale) {
   const pad = 6;
   const ctx = canvas.getContext('2d');
   const t   = text.length ? text : ' ';
 
   if (entry.kind === 'vector') {
+    const sizePx = VECTOR_BASE_PX * scale;
     const dpr = window.devicePixelRatio || 1;
     const w   = Math.max(1, Math.ceil(afMeasure(entry.font, t, sizePx)));
     const h   = Math.ceil(sizePx * 1.35);
@@ -96,13 +102,14 @@ function drawSpecimen(entry, canvas, text, sizePx) {
     afRender(entry.font, ctx, t, pad, (h - sizePx) / 2, sizePx, FG);
   } else {
     const gh    = entry.font.glyphHeight;
-    const scale = Math.max(1, Math.round(sizePx / gh));
+    // The multiplier IS the pixel scale: 1x = true pixels, so native sizes compare.
+    const px    = Math.max(1, Math.round(scale));
     const w     = Math.max(1, ppfMeasure(entry.font, t));
-    canvas.width        = (w + pad * 2) * scale;
-    canvas.height       = (gh + pad * 2) * scale;
-    canvas.style.width  = (w + pad * 2) * scale + 'px';
-    canvas.style.height = (gh + pad * 2) * scale + 'px';
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    canvas.width        = (w + pad * 2) * px;
+    canvas.height       = (gh + pad * 2) * px;
+    canvas.style.width  = (w + pad * 2) * px + 'px';
+    canvas.style.height = (gh + pad * 2) * px + 'px';
+    ctx.setTransform(px, 0, 0, px, 0, 0);
     ctx.clearRect(0, 0, w + pad * 2, gh + pad * 2);
     ppfRender(entry.font, ctx, t, pad, pad, FG);
   }
@@ -110,9 +117,12 @@ function drawSpecimen(entry, canvas, text, sizePx) {
 
 function dimsText(entry) {
   const f = entry.font;
+  // Vector: the live rendered px size (tracks the zoom slider), in place of the
+  // word "vector". Pixel: just the native pixel height — the width is arbitrary
+  // (it varies per glyph), so it's misleading to show.
   return entry.kind === 'vector'
-    ? `vector · ${f.glyphCount} glyphs`
-    : `${f.cellWidth}×${f.glyphHeight} px · ${f.glyphCount} glyphs`;
+    ? `${Math.round(VECTOR_BASE_PX * state.scale)}px · ${f.glyphCount} glyphs`
+    : `${f.glyphHeight}px · ${f.glyphCount} glyphs`;
 }
 
 /* -- Gallery -------------------------------------------------------------- */
@@ -184,7 +194,9 @@ function card(entry) {
 function refreshSpecimens() {
   for (const entry of entries) {
     if (entry.canvas && entry.el.style.display !== 'none') {
-      drawSpecimen(entry, entry.canvas, state.text, state.size);
+      drawSpecimen(entry, entry.canvas, state.text, state.scale);
+      const dims = entry.el.querySelector('.dims');   // vector px size tracks the zoom
+      if (dims) dims.textContent = dimsText(entry);
     }
   }
 }
@@ -221,7 +233,7 @@ function openModal(entry) {
   const canvas = document.createElement('canvas');
   specimen.append(canvas);
   // Render the modal specimen a touch larger than the card thumbnails.
-  drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.size, 48));
+  drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3));
 
   renderSnippet(entry);
 
@@ -273,7 +285,7 @@ function openFromHash() {
 function snippetFor(entry) {
   const name    = entry.file.replace(/\.(af|ppf)$/i, '');   // load_font drops the extension
   const sample  = (state.text.length ? state.text : 'Hello, badge!').replace(/"/g, '\\"');
-  const sizeArg = entry.kind === 'vector' ? `, ${Math.round(state.size)}` : '';
+  const sizeArg = entry.kind === 'vector' ? `, ${Math.round(VECTOR_BASE_PX * state.scale)}` : '';
   const sizeCmt = entry.kind === 'vector' ? '  # size in px' : '';
   return [
     `# Copy the font to /system/assets/fonts on your badge, then:`,
@@ -338,7 +350,7 @@ function scheduleRefresh() {
       const entry = entries.find(e => e.file === backdrop.dataset.entry);
       if (entry) {
         const canvas = $('#modal-specimen canvas');
-        if (canvas) drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.size, 48));
+        if (canvas) drawSpecimen(entry, canvas, state.text.length ? state.text : DEFAULT_TEXT, Math.max(state.scale, 3));
         renderSnippet(entry);
       }
     }
@@ -350,11 +362,15 @@ function initControls() {
   input.value = state.text;
   input.addEventListener('input', () => { state.text = input.value; scheduleRefresh(); });
 
-  sizeInput.value = state.size;
-  sizeVal.textContent = state.size + 'px';
+  // Float multiplier; show one decimal without trailing-zero / float-noise ("1×",
+  // "1.5×"). Pixel fonts snap to a whole multiplier in drawSpecimen; vector fonts
+  // (and the code snippet) use the continuous value.
+  const fmtScale = (s) => (Math.round(s * 10) / 10) + '×';
+  sizeInput.value = state.scale;
+  sizeVal.textContent = fmtScale(state.scale);
   sizeInput.addEventListener('input', () => {
-    state.size = +sizeInput.value;
-    sizeVal.textContent = state.size + 'px';
+    state.scale = +sizeInput.value;
+    sizeVal.textContent = fmtScale(state.scale);
     scheduleRefresh();
   });
 

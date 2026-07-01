@@ -601,14 +601,17 @@
     .font-card:hover { border-color: var(--faint); transform: translateY(-2px); }
     .font-card .specimen {
       background: rgb(6, 10, 16);
-      min-height: 120px;
+      height: 240px;
+      aspect-ratio: 4/3;
       display: flex;
       align-items: center;
       justify-content: flex-start;
       overflow: hidden;
       padding: 14px 18px;
     }
-    .font-card .specimen canvas { display: block; max-width: 100%; height: auto; }
+    /* Render the specimen at its natural size and let long text clip off the right
+       edge (the .specimen's overflow:hidden) rather than scaling the whole line down. */
+    .font-card .specimen canvas { display: block; flex: 0 0 auto; }
     .font-card .specimen.pixel canvas { image-rendering: pixelated; }
     .font-card .meta {
       display: flex;

@@ -283,8 +283,12 @@ function openFromHash() {
 function snippetFor(entry) {
   const name    = entry.file.replace(/\.(af|ppf)$/i, '');   // load_font drops the extension
   const sample  = (state.text.length ? state.text : 'Hello, badge!').replace(/"/g, '\\"');
-  const sizeArg = entry.kind === 'vector' ? `, ${Math.round(VECTOR_BASE_PX * state.scale)}` : '';
-  const sizeCmt = entry.kind === 'vector' ? '  # size in px' : '';
+  // Vector fonts take a px size; pixel fonts take an integer scale (both in the
+  // same screen.text() argument slot) — matching what the preview shows.
+  const sizeArg = entry.kind === 'vector'
+    ? `, ${Math.round(VECTOR_BASE_PX * state.scale)}`
+    : `, ${Math.max(1, Math.round(state.scale))}`;
+  const sizeCmt = entry.kind === 'vector' ? '  # size in px' : '  # pixel scale';
   return [
     `# Copy the font to /system/assets/fonts on your badge, then:`,
     `my_font = load_font("${name}")`,

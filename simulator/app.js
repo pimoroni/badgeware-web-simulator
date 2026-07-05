@@ -16,7 +16,7 @@ const APP_BASE = new URL('.', import.meta.url).href;
 
 async function initApp() {
   // Adopt the (already in-flight) simulator boot.
-  const { trace, startupFile, run: runCurrent, setRunProvider, notifyRunTarget, setStatus, flashStatus, addActions } = await bootSimulator();
+  const { trace, startupFile, run: runCurrent, setRunProvider, notifyRunTarget, setStatus, flashStatus, addActions, setFsChangedHandler } = await bootSimulator();
   const mobileNav = document.getElementById('mobile-nav');
 
   // app.js is the wiring layer: it resolves the DOM by id and injects elements into
@@ -86,6 +86,16 @@ async function initApp() {
     },
   );
   tabs.connect(fb);
+
+  // Simulator -> editor file sync: when the running program writes/renames/deletes
+  // a user file, the worker mirrors it into the shared IndexedDB store and pings us.
+  // Reload the FS cache and repaint the tree, debounced so a burst of writes repaints
+  // once rather than per-file.
+  let fsReloadTimer = null;
+  setFsChangedHandler(() => {
+    clearTimeout(fsReloadTimer);
+    fsReloadTimer = setTimeout(async () => { await userFS.reload(); fb.refresh(); }, 150);
+  });
 
   // Run provider + traceback markers: boot.js calls these into tabs.
   setRunProvider(tabs.getRunRequest);

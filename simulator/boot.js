@@ -51,6 +51,11 @@ export function bootSimulator() {
     const simulator = await BadgewareSimulator();
     const { applyCanvasToScreen, pauseScreen, rotateView } = initBadge3D(simulator, appendOut, badge3dWrap);
 
+    // The editor half registers how to react when the running program changes user
+    // files (reload the FS cache + repaint the Files panel). Until then it's a no-op.
+    let fsChangedHandler = () => {};
+    simulator.onfschanged = () => fsChangedHandler();
+
     // The badge canvas spills down to overlap the OUTPUT title bar. CSS can't read
     // a sibling's height, so mirror #stdout h2's measured height into --badge-spill
     // (the margin reads it; see #badge-3d-wrap in app.css). A ResizeObserver keeps
@@ -253,6 +258,9 @@ export function bootSimulator() {
       setStatus, flashStatus,
       // Let the editor half register extra data-action commands (e.g. "gallery").
       addActions: (extra) => Object.assign(actions, extra),
+      // Register the reaction to a program changing user files (host reloads the
+      // userFS cache and repaints the Files panel).
+      setFsChangedHandler: (fn) => { fsChangedHandler = fn; },
     };
   })();
   return _bootCtx;

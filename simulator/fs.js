@@ -55,6 +55,12 @@ export const userFS = (() => {
 
   return {
     ready,
+    // Re-pull the whole store into the cache. The simulator worker writes user
+    // files straight into the same IndexedDB store (see micropython.worker.js);
+    // IndexedDB fires no cross-context change events, so the host calls this on the
+    // worker's {fsChanged} ping to pick those writes up. Flush our own pending
+    // writes first so a concurrent local edit isn't clobbered by a stale re-read.
+    reload: async () => { await ready; await writeChain; data = await loadAll(); },
     get:   (p)    => data[p] ?? null,
     set:   (p, v) => { data[p] = v; write((store) => store.put(v, p)); },
     del:   (p)    => { delete data[p]; write((store) => store.delete(p)); },

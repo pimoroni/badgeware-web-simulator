@@ -77,10 +77,18 @@ export const BadgewareSimulator = async (target = null) => {
             }
         }, { threshold: [0] })
 
-        const worker = new Worker(_simulatorBase + 'micropython.worker.js?v=2', { type: "module" })
+        const worker = new Worker(_simulatorBase + 'micropython.worker.js?v=3', { type: "module" })
         simulator.micropython = worker
 
-        worker.onmessage = async ({ data: { stdout, ready, running, caselights, frame, stuck } }) => {
+        worker.onmessage = async ({ data: { stdout, ready, running, caselights, frame, stuck, fsChanged } }) => {
+
+            if (fsChanged) {
+                // The running program wrote/renamed/deleted a user file, which the
+                // worker mirrored into the shared IndexedDB store. Let the host
+                // reload its cache and repaint the Files panel. Default is a no-op.
+                await simulator.onfschanged()
+                return
+            }
 
             if (frame !== undefined) {
                 // A fresh framebuffer for the 3D screen texture. Keep this fast —
@@ -216,6 +224,11 @@ export const BadgewareSimulator = async (target = null) => {
     // Called with { buffer, width, height } on every screen flip. Override in the
     // host (badge3d.js) to upload the framebuffer; default is a no-op.
     simulator.onframe = (_frame) => {}
+
+    // Called when the running program has changed user files (the worker mirrored
+    // them into the shared user store). Override in the host to reload + repaint the
+    // file browser; default is a no-op.
+    simulator.onfschanged = async () => {}
 
     return simulator
 }

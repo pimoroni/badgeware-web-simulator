@@ -3958,48 +3958,6 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
       throw new EmscriptenSjLj;
     };
 
-  var readEmAsmArgsArray = [];
-  var readEmAsmArgs = (sigPtr, buf) => {
-      // Nobody should have mutated _readEmAsmArgsArray underneath us to be something else than an array.
-      assert(Array.isArray(readEmAsmArgsArray));
-      // The input buffer is allocated on the stack, so it must be stack-aligned.
-      assert(buf % 16 == 0);
-      readEmAsmArgsArray.length = 0;
-      var ch;
-      // Most arguments are i32s, so shift the buffer pointer so it is a plain
-      // index into HEAP32.
-      while (ch = HEAPU8[sigPtr++]) {
-        var chr = String.fromCharCode(ch);
-        var validChars = ['d', 'f', 'i', 'p'];
-        // In WASM_BIGINT mode we support passing i64 values as bigint.
-        validChars.push('j');
-        assert(validChars.includes(chr), `Invalid character ${ch}("${chr}") in readEmAsmArgs! Use only [${validChars}], and do not specify "v" for void return argument.`);
-        // Floats are always passed as doubles, so all types except for 'i'
-        // are 8 bytes and require alignment.
-        var wide = (ch != 105);
-        wide &= (ch != 112);
-        buf += wide && (buf % 8) ? 4 : 0;
-        readEmAsmArgsArray.push(
-          // Special case for pointers under wasm64 or CAN_ADDRESS_2GB mode.
-          ch == 112 ? HEAPU32[((buf)>>2)] :
-          ch == 106 ? HEAP64[((buf)>>3)] :
-          ch == 105 ?
-            HEAP32[((buf)>>2)] :
-            HEAPF64[((buf)>>3)]
-        );
-        buf += wide ? 8 : 4;
-      }
-      return readEmAsmArgsArray;
-    };
-  var runEmAsmFunction = (code, sigPtr, argbuf) => {
-      var args = readEmAsmArgs(sigPtr, argbuf);
-      assert(ASM_CONSTS.hasOwnProperty(code), `No EM_ASM constant found at address ${code}.  The loaded WebAssembly file is likely out of sync with the generated JavaScript.`);
-      return ASM_CONSTS[code](...args);
-    };
-  var _emscripten_asm_const_int = (code, sigPtr, argbuf) => {
-      return runEmAsmFunction(code, sigPtr, argbuf);
-    };
-
   var _emscripten_get_now = () => performance.now();
 
   var getHeapMax = () =>
@@ -4313,139 +4271,8 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
   }
   
 
-  function _mp_js_fetch_body_copy(dest) { if (__mpFetch) { HEAPU8.set(__mpFetch.body, dest); } }
-
-  function _mp_js_fetch_body_len() { return __mpFetch ? __mpFetch.body.length : 0; }
-
-  function _mp_js_fetch_poll() { return __mpFetch ? __mpFetch.done : 2; }
-
-  function _mp_js_fetch_start(methodPtr, urlPtr, headersPtr, bodyPtr, bodyLen) {
-          var method = UTF8ToString(methodPtr);
-          var url = UTF8ToString(urlPtr);
-          var headerStr = UTF8ToString(headersPtr);
-  
-          var state = { done: 0, status: 0, reason: "", headers: "", body: new Uint8Array(0), error: "" };
-          __mpFetch = state;
-  
-          var opts = { method: method };
-          if (headerStr) {
-              var h = {};
-              headerStr.split("\n").forEach(function (line) {
-                  var i = line.indexOf(":");
-                  if (i > 0) { h[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
-              });
-              opts.headers = h;
-          }
-          if (bodyLen > 0) {
-              // Copy out of the WASM heap; the C buffer may be gone by the time
-              // fetch reads it.
-              opts.body = HEAPU8.slice(bodyPtr, bodyPtr + bodyLen);
-          }
-  
-          fetch(url, opts).then(function (r) {
-              state.status = r.status;
-              state.reason = r.statusText || "";
-              var hs = [];
-              r.headers.forEach(function (v, k) { hs.push(k + ": " + v); });
-              state.headers = hs.join("\r\n");
-              return r.arrayBuffer();
-          }).then(function (buf) {
-              state.body = new Uint8Array(buf);
-              state.done = 1;
-          }).catch(function (e) {
-              state.error = (e && e.message) ? e.message : ("" + e);
-              state.done = 2;
-          });
-      }
-
-  function _mp_js_fetch_status() { return __mpFetch ? __mpFetch.status : 0; }
-
-  function _mp_js_fetch_str(which) {
-          var s = "";
-          if (__mpFetch) { s = which === 0 ? __mpFetch.reason : which === 1 ? __mpFetch.headers : __mpFetch.error; }
-          return stringToNewUTF8(s || "");
-      }
-
   var _mp_js_random_u32 = () =>
           globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
-
-  function _mp_js_sfetch_done() {
-          if (!__mpSFetch) { return 1; }
-          return (__mpSFetch.readDone && __mpSFetch.avail === 0) ? 1 : 0;
-      }
-
-  function _mp_js_sfetch_phase() { return __mpSFetch ? __mpSFetch.phase : 3; }
-
-  function _mp_js_sfetch_read(dest, maxlen) {
-          var st = __mpSFetch;
-          if (!st || st.avail === 0) { return 0; }
-          var written = 0;
-          while (written < maxlen && st.chunks.length > 0) {
-              var head = st.chunks[0];
-              var take = Math.min(head.length, maxlen - written);
-              HEAPU8.set(head.subarray(0, take), dest + written);
-              written += take;
-              if (take === head.length) { st.chunks.shift(); }
-              else { st.chunks[0] = head.subarray(take); }
-          }
-          st.avail -= written;
-          return written;
-      }
-
-  function _mp_js_sfetch_start(methodPtr, urlPtr, headersPtr, bodyPtr, bodyLen) {
-          var method = UTF8ToString(methodPtr);
-          var url = UTF8ToString(urlPtr);
-          var headerStr = UTF8ToString(headersPtr);
-  
-          // phase: 0 pending, 1 response received (streaming), 3 error.
-          var st = { phase: 0, status: 0, reason: "", headers: "", chunks: [], avail: 0, readDone: false, error: "" };
-          __mpSFetch = st;
-  
-          var opts = { method: method };
-          if (headerStr) {
-              var h = {};
-              headerStr.split("\n").forEach(function (line) {
-                  var i = line.indexOf(":");
-                  if (i > 0) { h[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
-              });
-              opts.headers = h;
-          }
-          if (bodyLen > 0) { opts.body = HEAPU8.slice(bodyPtr, bodyPtr + bodyLen); }
-  
-          fetch(url, opts).then(function (r) {
-              st.status = r.status;
-              st.reason = r.statusText || "";
-              var hs = [];
-              r.headers.forEach(function (v, k) { hs.push(k + ": " + v); });
-              st.headers = hs.join("\r\n");
-              st.phase = 1;
-              if (!r.body) { st.readDone = true; return; }
-              var reader = r.body.getReader();
-              var pump = function () {
-                  reader.read().then(function (res) {
-                      if (res.done) { st.readDone = true; return; }
-                      st.chunks.push(res.value);
-                      st.avail += res.value.length;
-                      pump();
-                  }).catch(function (e) {
-                      st.error = (e && e.message) ? e.message : ("" + e);
-                      st.readDone = true;
-                  });
-              };
-              pump();
-          }).catch(function (e) {
-              st.error = (e && e.message) ? e.message : ("" + e);
-              st.phase = 3;
-          });
-      }
-
-  function _mp_js_sfetch_status() { return __mpSFetch ? __mpSFetch.status : 0; }
-
-  function _mp_js_sfetch_str(which) {
-          var s = "";
-          if (__mpSFetch) { s = which === 0 ? __mpSFetch.reason : which === 1 ? __mpSFetch.headers : __mpSFetch.error; }
-          return stringToNewUTF8(s || "");
-      }
 
   var _mp_js_ticks_ms = () => Date.now() - MP_JS_EPOCH;
 
@@ -4857,15 +4684,6 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
     };
 
 
-  
-  
-  var stringToNewUTF8 = (str) => {
-      var size = lengthBytesUTF8(str) + 1;
-      var ret = _malloc(size);
-      if (ret) stringToUTF8(str, ret, size);
-      return ret;
-    };
-
 
 
 
@@ -4877,9 +4695,7 @@ var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.preloadFile = FS_preloadFile;
   FS.staticInit();;
-var __mpFetch = null;;
 if (globalThis.crypto === undefined) { globalThis.crypto = require('crypto'); };
-var __mpSFetch = null;;
 var MP_JS_EPOCH = Date.now();
 // End JS library code
 
@@ -4937,7 +4753,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   Module['UTF8ToString'] = UTF8ToString;
   Module['stringToUTF8'] = stringToUTF8;
   Module['lengthBytesUTF8'] = lengthBytesUTF8;
-  Module['stringToNewUTF8'] = stringToNewUTF8;
   Module['FS'] = FS;
   var missingLibrarySymbols = [
   'writeI53ToI64',
@@ -4960,7 +4775,7 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'inetNtop6',
   'readSockaddr',
   'writeSockaddr',
-  'runMainThreadEmAsm',
+  'readEmAsmArgs',
   'jstoi_q',
   'getExecutableName',
   'autoResumeAudioContext',
@@ -4990,6 +4805,7 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'UTF32ToString',
   'stringToUTF32',
   'lengthBytesUTF32',
+  'stringToNewUTF8',
   'registerKeyEventCallback',
   'maybeCStringToJsString',
   'findEventTarget',
@@ -5133,8 +4949,6 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'timers',
   'warnOnce',
   'readEmAsmArgsArray',
-  'readEmAsmArgs',
-  'runEmAsmFunction',
   'dynCallLegacy',
   'dynCall',
   'handleException',
@@ -5350,27 +5164,12 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('onFree');
   ignoredModuleProp('onSbrkGrow');
 }
-var ASM_CONSTS = {
-  223512: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 320 * 240 * 4); WorkerGlobalScope.worker.flip_hires(data); },  
- 223615: ($0) => { let data = Module.HEAPU8.slice($0, $0 + 160 * 120 * 4); WorkerGlobalScope.worker.flip_lores(data); },  
- 223718: ($0) => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.backlight = $0 / 255; } },  
- 223846: () => { var w = (typeof WorkerGlobalScope !== 'undefined') ? WorkerGlobalScope.worker : null; return (w && w.running && w.paused) ? 1 : 0; },  
- 223981: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return $1 ? 1 : 0; if(s.machine.gpio_in[$0] !== undefined) return s.machine.gpio_in[$0] | 0; if($1 && (s.input & $1)) return 0; if($1) return 1; return s.machine.gpio[$0] | 0; },  
- 224388: ($0, $1) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; s.machine.gpio[$0] = $1 ? 1 : 0; },  
- 224660: ($0, $1, $2) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(!s) return; var p = s.machine.pwm[$0]; if(!p) { p = {}; s.machine.pwm[$0] = p; } p.freq = $1; p.duty = $2; if($0 >= 0 && $0 < 4) { s.machine.caselights[$0] = $2 / 65535; if(s.update_caselights) s.update_caselights(); } },  
- 225106: ($0) => { var s=(typeof WorkerGlobalScope!=='undefined'&&WorkerGlobalScope.worker)?WorkerGlobalScope.worker:null; if(s&&!s.machine){var m={};m.gpio={};m.gpio_in={};m.pwm={};m.caselights=new Array(4).fill(0);m.adc={};s.machine=m;} if(s && s.machine.adc[$0] !== undefined) return s.machine.adc[$0] | 0; if($0 === 0) return 39700; if($0 === 2) return 21845; if($0 === 3) return 40000; return 0; },  
- 225492: () => { return new Date().getFullYear(); },  
- 225529: () => { return new Date().getMonth() + 1; },  
- 225567: () => { return new Date().getDate(); },  
- 225600: () => { return (new Date().getDay() + 6) % 7; },  
- 225642: () => { return new Date().getHours(); },  
- 225676: () => { return new Date().getMinutes(); },  
- 225712: () => { return new Date().getSeconds(); },  
- 225748: () => { if(typeof WorkerGlobalScope !== 'undefined' && WorkerGlobalScope.worker) { WorkerGlobalScope.worker.postMessage({reset: true}); } }
-};
 function proxy_convert_mp_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); proxy_convert_js_to_mp_obj_jsside_force_double_proxy(ret, out); }
 function proxy_convert_mp_to_js_then_js_to_js_then_js_to_mp_obj_jsside(out) { const ret = proxy_convert_mp_to_js_obj_jsside(out); const js_obj = PyProxy.toJs(ret); proxy_convert_js_to_mp_obj_jsside(js_obj, out); }
 function js_get_proxy_js_ref_info(out) { let used = 0; for (const elem of proxy_js_ref) { if (elem !== undefined) { ++used; } } Module.setValue(out, proxy_js_ref.length, "i32"); Module.setValue(out + 4, used, "i32"); }
+function mp_js_run_sync_start(ref) { if (!Module.__mpRunSync) { Module.__mpRunSync = new Map(); Module.__mpRunSyncNext = 1; } const id = Module.__mpRunSyncNext++; const slot = { done: 0, value: undefined }; Module.__mpRunSync.set(id, slot); Promise.resolve(proxy_js_ref[ref]).then( (v) => { slot.value = v; slot.done = 1; }, (e) => { slot.value = e; slot.done = 2; }, ); return id; }
+function mp_js_run_sync_poll(id) { return Module.__mpRunSync.get(id).done; }
+function mp_js_run_sync_take(id,out) { const slot = Module.__mpRunSync.get(id); Module.__mpRunSync.delete(id); proxy_convert_js_to_mp_obj_jsside(slot.value, out); }
 function has_attr(jsref,str) { const base = proxy_js_ref[jsref]; const attr = UTF8ToString(str); if (attr in base) { return true; } else { return false; } }
 function lookup_attr(jsref,str,out) { const base = proxy_js_ref[jsref]; const attr = UTF8ToString(str); let value = base[attr]; if (value !== undefined || attr in base) { proxy_convert_js_to_mp_obj_jsside(value, out); if (typeof value === "function" && !("_ref" in value)) { return 2; } else { return 1; } } else { return 0; } }
 function store_attr(jsref,attr_ptr,value_ref) { const attr = UTF8ToString(attr_ptr); const value = proxy_convert_mp_to_js_obj_jsside(value_ref); proxy_js_ref[jsref][attr] = value; }
@@ -5414,34 +5213,32 @@ var _proxy_c_to_js_has_attr = Module['_proxy_c_to_js_has_attr'] = makeInvalidEar
 var _proxy_c_to_js_lookup_attr = Module['_proxy_c_to_js_lookup_attr'] = makeInvalidEarlyAccess('_proxy_c_to_js_lookup_attr');
 var _proxy_c_to_js_store_attr = Module['_proxy_c_to_js_store_attr'] = makeInvalidEarlyAccess('_proxy_c_to_js_store_attr');
 var _proxy_c_to_js_delete_attr = Module['_proxy_c_to_js_delete_attr'] = makeInvalidEarlyAccess('_proxy_c_to_js_delete_attr');
-var _proxy_c_to_js_get_type = Module['_proxy_c_to_js_get_type'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_type');
-var _proxy_c_to_js_get_array = Module['_proxy_c_to_js_get_array'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_array');
-var _proxy_c_to_js_get_dict = Module['_proxy_c_to_js_get_dict'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_dict');
+var _proxy_c_to_js_get_type_and_data = Module['_proxy_c_to_js_get_type_and_data'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_type_and_data');
 var _proxy_c_to_js_get_iter = Module['_proxy_c_to_js_get_iter'] = makeInvalidEarlyAccess('_proxy_c_to_js_get_iter');
 var _proxy_c_to_js_iternext = Module['_proxy_c_to_js_iternext'] = makeInvalidEarlyAccess('_proxy_c_to_js_iternext');
 var _proxy_c_to_js_resume = Module['_proxy_c_to_js_resume'] = makeInvalidEarlyAccess('_proxy_c_to_js_resume');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var _fflush = makeInvalidEarlyAccess('_fflush');
-var _strerror = makeInvalidEarlyAccess('_strerror');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
+var _strerror = makeInvalidEarlyAccess('_strerror');
 var _setThrew = makeInvalidEarlyAccess('_setThrew');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
-var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
+var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
+var dynCall_vii = makeInvalidEarlyAccess('dynCall_vii');
+var dynCall_viiii = makeInvalidEarlyAccess('dynCall_viiii');
+var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
 var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
-var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
-var dynCall_vii = makeInvalidEarlyAccess('dynCall_vii');
-var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
-var dynCall_viiii = makeInvalidEarlyAccess('dynCall_viiii');
-var dynCall_iiiii = makeInvalidEarlyAccess('dynCall_iiiii');
 var dynCall_i = makeInvalidEarlyAccess('dynCall_i');
+var dynCall_iiiii = makeInvalidEarlyAccess('dynCall_iiiii');
 var dynCall_dd = makeInvalidEarlyAccess('dynCall_dd');
 var dynCall_ddd = makeInvalidEarlyAccess('dynCall_ddd');
+var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
 var dynCall_viiiiii = makeInvalidEarlyAccess('dynCall_viiiiii');
 var dynCall_iiiiii = makeInvalidEarlyAccess('dynCall_iiiiii');
 var dynCall_viiiii = makeInvalidEarlyAccess('dynCall_viiiii');
@@ -5478,34 +5275,32 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['proxy_c_to_js_lookup_attr'] != 'undefined', 'missing Wasm export: proxy_c_to_js_lookup_attr');
   assert(typeof wasmExports['proxy_c_to_js_store_attr'] != 'undefined', 'missing Wasm export: proxy_c_to_js_store_attr');
   assert(typeof wasmExports['proxy_c_to_js_delete_attr'] != 'undefined', 'missing Wasm export: proxy_c_to_js_delete_attr');
-  assert(typeof wasmExports['proxy_c_to_js_get_type'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_type');
-  assert(typeof wasmExports['proxy_c_to_js_get_array'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_array');
-  assert(typeof wasmExports['proxy_c_to_js_get_dict'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_dict');
+  assert(typeof wasmExports['proxy_c_to_js_get_type_and_data'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_type_and_data');
   assert(typeof wasmExports['proxy_c_to_js_get_iter'] != 'undefined', 'missing Wasm export: proxy_c_to_js_get_iter');
   assert(typeof wasmExports['proxy_c_to_js_iternext'] != 'undefined', 'missing Wasm export: proxy_c_to_js_iternext');
   assert(typeof wasmExports['proxy_c_to_js_resume'] != 'undefined', 'missing Wasm export: proxy_c_to_js_resume');
   assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
-  assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
   assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
+  assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
   assert(typeof wasmExports['setThrew'] != 'undefined', 'missing Wasm export: setThrew');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
-  assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
+  assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
+  assert(typeof wasmExports['dynCall_vii'] != 'undefined', 'missing Wasm export: dynCall_vii');
+  assert(typeof wasmExports['dynCall_viiii'] != 'undefined', 'missing Wasm export: dynCall_viiii');
+  assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
   assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
-  assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
-  assert(typeof wasmExports['dynCall_vii'] != 'undefined', 'missing Wasm export: dynCall_vii');
-  assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
-  assert(typeof wasmExports['dynCall_viiii'] != 'undefined', 'missing Wasm export: dynCall_viiii');
-  assert(typeof wasmExports['dynCall_iiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiii');
   assert(typeof wasmExports['dynCall_i'] != 'undefined', 'missing Wasm export: dynCall_i');
+  assert(typeof wasmExports['dynCall_iiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiii');
   assert(typeof wasmExports['dynCall_dd'] != 'undefined', 'missing Wasm export: dynCall_dd');
   assert(typeof wasmExports['dynCall_ddd'] != 'undefined', 'missing Wasm export: dynCall_ddd');
+  assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
   assert(typeof wasmExports['dynCall_viiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiii');
   assert(typeof wasmExports['dynCall_iiiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiiii');
   assert(typeof wasmExports['dynCall_viiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiii');
@@ -5538,34 +5333,32 @@ function assignWasmExports(wasmExports) {
   _proxy_c_to_js_lookup_attr = Module['_proxy_c_to_js_lookup_attr'] = createExportWrapper('proxy_c_to_js_lookup_attr', 3);
   _proxy_c_to_js_store_attr = Module['_proxy_c_to_js_store_attr'] = createExportWrapper('proxy_c_to_js_store_attr', 3);
   _proxy_c_to_js_delete_attr = Module['_proxy_c_to_js_delete_attr'] = createExportWrapper('proxy_c_to_js_delete_attr', 2);
-  _proxy_c_to_js_get_type = Module['_proxy_c_to_js_get_type'] = createExportWrapper('proxy_c_to_js_get_type', 1);
-  _proxy_c_to_js_get_array = Module['_proxy_c_to_js_get_array'] = createExportWrapper('proxy_c_to_js_get_array', 2);
-  _proxy_c_to_js_get_dict = Module['_proxy_c_to_js_get_dict'] = createExportWrapper('proxy_c_to_js_get_dict', 2);
+  _proxy_c_to_js_get_type_and_data = Module['_proxy_c_to_js_get_type_and_data'] = createExportWrapper('proxy_c_to_js_get_type_and_data', 2);
   _proxy_c_to_js_get_iter = Module['_proxy_c_to_js_get_iter'] = createExportWrapper('proxy_c_to_js_get_iter', 1);
   _proxy_c_to_js_iternext = Module['_proxy_c_to_js_iternext'] = createExportWrapper('proxy_c_to_js_iternext', 2);
   _proxy_c_to_js_resume = Module['_proxy_c_to_js_resume'] = createExportWrapper('proxy_c_to_js_resume', 2);
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   _fflush = createExportWrapper('fflush', 1);
-  _strerror = createExportWrapper('strerror', 1);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
+  _strerror = createExportWrapper('strerror', 1);
   _setThrew = createExportWrapper('setThrew', 2);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
-  dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', 2);
+  dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', 3);
+  dynCall_vii = dynCalls['vii'] = createExportWrapper('dynCall_vii', 3);
+  dynCall_viiii = dynCalls['viiii'] = createExportWrapper('dynCall_viiii', 5);
+  dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', 2);
   dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
-  dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
-  dynCall_vii = dynCalls['vii'] = createExportWrapper('dynCall_vii', 3);
-  dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', 3);
-  dynCall_viiii = dynCalls['viiii'] = createExportWrapper('dynCall_viiii', 5);
-  dynCall_iiiii = dynCalls['iiiii'] = createExportWrapper('dynCall_iiiii', 5);
   dynCall_i = dynCalls['i'] = createExportWrapper('dynCall_i', 1);
+  dynCall_iiiii = dynCalls['iiiii'] = createExportWrapper('dynCall_iiiii', 5);
   dynCall_dd = dynCalls['dd'] = createExportWrapper('dynCall_dd', 2);
   dynCall_ddd = dynCalls['ddd'] = createExportWrapper('dynCall_ddd', 3);
+  dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
   dynCall_viiiiii = dynCalls['viiiiii'] = createExportWrapper('dynCall_viiiiii', 7);
   dynCall_iiiiii = dynCalls['iiiiii'] = createExportWrapper('dynCall_iiiiii', 6);
   dynCall_viiiii = dynCalls['viiiii'] = createExportWrapper('dynCall_viiiii', 6);
@@ -5627,8 +5420,6 @@ var wasmImports = {
   calln_kwarg,
   /** @export */
   create_promise,
-  /** @export */
-  emscripten_asm_const_int: _emscripten_asm_const_int,
   /** @export */
   emscripten_get_now: _emscripten_get_now,
   /** @export */
@@ -5696,31 +5487,13 @@ var wasmImports = {
   /** @export */
   lookup_attr,
   /** @export */
-  mp_js_fetch_body_copy: _mp_js_fetch_body_copy,
-  /** @export */
-  mp_js_fetch_body_len: _mp_js_fetch_body_len,
-  /** @export */
-  mp_js_fetch_poll: _mp_js_fetch_poll,
-  /** @export */
-  mp_js_fetch_start: _mp_js_fetch_start,
-  /** @export */
-  mp_js_fetch_status: _mp_js_fetch_status,
-  /** @export */
-  mp_js_fetch_str: _mp_js_fetch_str,
-  /** @export */
   mp_js_random_u32: _mp_js_random_u32,
   /** @export */
-  mp_js_sfetch_done: _mp_js_sfetch_done,
+  mp_js_run_sync_poll,
   /** @export */
-  mp_js_sfetch_phase: _mp_js_sfetch_phase,
+  mp_js_run_sync_start,
   /** @export */
-  mp_js_sfetch_read: _mp_js_sfetch_read,
-  /** @export */
-  mp_js_sfetch_start: _mp_js_sfetch_start,
-  /** @export */
-  mp_js_sfetch_status: _mp_js_sfetch_status,
-  /** @export */
-  mp_js_sfetch_str: _mp_js_sfetch_str,
+  mp_js_run_sync_take,
   /** @export */
   mp_js_ticks_ms: _mp_js_ticks_ms,
   /** @export */
@@ -5746,32 +5519,10 @@ function invoke_ii(index,a1) {
   }
 }
 
-function invoke_iiii(index,a1,a2,a3) {
+function invoke_iii(index,a1,a2) {
   var sp = stackSave();
   try {
-    return dynCall_iiii(index,a1,a2,a3);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_v(index) {
-  var sp = stackSave();
-  try {
-    dynCall_v(index);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_viii(index,a1,a2,a3) {
-  var sp = stackSave();
-  try {
-    dynCall_viii(index,a1,a2,a3);
+    return dynCall_iii(index,a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -5790,10 +5541,32 @@ function invoke_iiiii(index,a1,a2,a3,a4) {
   }
 }
 
-function invoke_iii(index,a1,a2) {
+function invoke_v(index) {
   var sp = stackSave();
   try {
-    return dynCall_iii(index,a1,a2);
+    dynCall_v(index);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiii(index,a1,a2,a3) {
+  var sp = stackSave();
+  try {
+    return dynCall_iiii(index,a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_vii(index,a1,a2) {
+  var sp = stackSave();
+  try {
+    dynCall_vii(index,a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -5812,10 +5585,10 @@ function invoke_vi(index,a1) {
   }
 }
 
-function invoke_vii(index,a1,a2) {
+function invoke_viii(index,a1,a2,a3) {
   var sp = stackSave();
   try {
-    dynCall_vii(index,a1,a2);
+    dynCall_viii(index,a1,a2,a3);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -6122,7 +5895,7 @@ export async function loadMicroPython(options) {
 
     const invoke = (name, argTypes, args) =>
         asyncMode === "jspi"
-            ? Module["_" + name].apply(null, args)
+            ? Module[`_${name}`].apply(null, args)
             : Module.ccall(
                   name,
                   "number",
@@ -6153,14 +5926,13 @@ export async function loadMicroPython(options) {
 
     const pyimport = (name) => {
         const value = Module._malloc(3 * 4);
-        const len = Module.lengthBytesUTF8(name);
-        const _name = Module._malloc(len + 1);
-        Module.stringToUTF8(name, _name, len + 1);
-        return settle(
-            invoke("mp_js_do_import", ["pointer", "pointer"], [_name, value]),
-            value,
-            () => Module._free(_name),
+        Module.ccall(
+            "mp_js_do_import",
+            "null",
+            ["string", "pointer"],
+            [name, value],
         );
+        return proxy_convert_mp_to_js_obj_jsside_with_free(value);
     };
 
     Module.ccall(
@@ -6171,16 +5943,12 @@ export async function loadMicroPython(options) {
     );
     Module.ccall("proxy_c_init", "null", [], []);
 
-    // pyimport returns a Promise under JSPI; `await` is a no-op on a plain value,
-    // so this resolves __main__ correctly for every build before building globals.
-    const mainModule = await pyimport("__main__");
-
     return {
         _module: Module,
         PyProxy: PyProxy,
         FS: Module.FS,
         globals: {
-            __dict__: mainModule.__dict__,
+            __dict__: pyimport("__main__").__dict__,
             get(key) {
                 return this.__dict__[key];
             },
@@ -6209,7 +5977,11 @@ export async function loadMicroPython(options) {
             Module.stringToUTF8(code, buf, len + 1);
             const value = Module._malloc(3 * 4);
             return settle(
-                invoke("mp_js_do_exec", ["pointer", "number", "pointer"], [buf, len, value]),
+                invoke(
+                    "mp_js_do_exec",
+                    ["pointer", "number", "pointer"],
+                    [buf, len, value],
+                ),
                 value,
                 () => Module._free(buf),
             );
@@ -6219,14 +5991,34 @@ export async function loadMicroPython(options) {
             const buf = Module._malloc(len + 1);
             Module.stringToUTF8(code, buf, len + 1);
             const value = Module._malloc(3 * 4);
+            // Top-level await is driven by the returned coroutine thenable, so a
+            // plain build issues a synchronous ccall (as upstream does) and lets
+            // that thenable do the awaiting. invoke() adds ccall({async: true})
+            // or the JSPI promising call only where the build can also suspend
+            // mid-execution for the cooperative yield.
             const ret = settle(
-                invoke("mp_js_do_exec_async", ["pointer", "number", "pointer"], [buf, len, value]),
+                invoke(
+                    "mp_js_do_exec_async",
+                    ["pointer", "number", "pointer"],
+                    [buf, len, value],
+                ),
                 value,
                 () => Module._free(buf),
             );
-            const wrap = (r) =>
-                r instanceof PyProxyThenable ? Promise.resolve(r) : r;
-            return isThenable(ret) ? ret.then(wrap) : wrap(ret);
+            // A synchronously-returned top-level coroutine is a PyProxyThenable;
+            // adopt it with Promise.resolve so its `then` is driven with both the
+            // resolve and reject callbacks (calling it with only one is an arity
+            // error). A real Promise (a build whose call suspended) is awaited and
+            // its result adopted the same way.
+            if (ret instanceof PyProxyThenable) {
+                return Promise.resolve(ret);
+            }
+            if (isThenable(ret)) {
+                return ret.then((r) =>
+                    r instanceof PyProxyThenable ? Promise.resolve(r) : r,
+                );
+            }
+            return ret;
         },
         // Schedule a KeyboardInterrupt on the running VM. Safe to call while an
         // mp_js_do_exec* call is suspended (JSPI/Asyncify): it only sets the
@@ -6403,25 +6195,20 @@ class PyProxy {
             return js_obj;
         }
 
+        const obj_data = Module._malloc(2 * 4);
         const type = Module.ccall(
-            "proxy_c_to_js_get_type",
+            "proxy_c_to_js_get_type_and_data",
             "number",
-            ["number"],
-            [js_obj._ref],
+            ["number", "pointer"],
+            [js_obj._ref, obj_data],
         );
 
+        let js_obj_out;
         if (type === 1 || type === 2) {
             // List or tuple.
-            const array_ref = Module._malloc(2 * 4);
             const item = Module._malloc(3 * 4);
-            Module.ccall(
-                "proxy_c_to_js_get_array",
-                "null",
-                ["number", "pointer"],
-                [js_obj._ref, array_ref],
-            );
-            const len = Module.getValue(array_ref, "i32");
-            const items_ptr = Module.getValue(array_ref + 4, "i32");
+            const len = Module.getValue(obj_data, "i32");
+            const items_ptr = Module.getValue(obj_data + 4, "i32");
             const js_array = [];
             for (let i = 0; i < len; ++i) {
                 Module.ccall(
@@ -6433,23 +6220,13 @@ class PyProxy {
                 const js_item = proxy_convert_mp_to_js_obj_jsside(item);
                 js_array.push(PyProxy.toJs(js_item));
             }
-            Module._free(array_ref);
             Module._free(item);
-            return js_array;
-        }
-
-        if (type === 3) {
+            js_obj_out = js_array;
+        } else if (type === 3) {
             // Dict.
-            const map_ref = Module._malloc(2 * 4);
             const item = Module._malloc(3 * 4);
-            Module.ccall(
-                "proxy_c_to_js_get_dict",
-                "null",
-                ["number", "pointer"],
-                [js_obj._ref, map_ref],
-            );
-            const alloc = Module.getValue(map_ref, "i32");
-            const table_ptr = Module.getValue(map_ref + 4, "i32");
+            const alloc = Module.getValue(obj_data, "i32");
+            const table_ptr = Module.getValue(obj_data + 4, "i32");
             const js_dict = {};
             for (let i = 0; i < alloc; ++i) {
                 const mp_key = Module.getValue(table_ptr + i * 8, "i32");
@@ -6480,13 +6257,20 @@ class PyProxy {
                     js_dict[js_key] = PyProxy.toJs(js_value);
                 }
             }
-            Module._free(map_ref);
             Module._free(item);
-            return js_dict;
+            js_obj_out = js_dict;
+        } else if (type === 4) {
+            // Buffer protocol; create a copy of the data to a new Uint8Array.
+            const len = Module.getValue(obj_data, "i32");
+            const buf = Module.getValue(obj_data + 4, "i32");
+            js_obj_out = Module.HEAPU8.slice(buf, buf + len);
+        } else {
+            // Cannot convert to JS, leave as a PyProxy.
+            js_obj_out = js_obj;
         }
 
-        // Cannot convert to JS, leave as a PyProxy.
-        return js_obj;
+        Module._free(obj_data);
+        return js_obj_out;
     }
 }
 

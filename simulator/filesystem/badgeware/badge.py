@@ -5,8 +5,8 @@ import machine
 import powman
 import binascii
 
-MODEL = "tufty"  # os.uname().machine[9:-17].lower()
-UID = ""         # binascii.hexlify(machine.unique_id()).decode("ASCII")
+MODEL = os.uname().machine[9:-17].lower()
+UID = binascii.hexlify(machine.unique_id()).decode("ASCII")
 
 builtins.LORES = 0b00
 builtins.HIRES = 0b01

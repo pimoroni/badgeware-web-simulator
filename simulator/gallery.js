@@ -58,6 +58,10 @@ export function initGallery(galleryEl, { render, getCode, onEdit, setStatus, fre
   // so we never run everything at once. requestStill is cache-first, so cards seen
   // on a previous visit fill in instantly; the rest are rendered by the simulator.
   function wireStills() {
+    // Observe against the viewport (root: null), NOT galleryEl: the examples page
+    // scrolls the document, not the grid (#gallery is overflow:visible there), so a
+    // galleryEl root would see every card as permanently intersecting - firing all
+    // captures at once instead of as each nears the viewport.
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
@@ -67,7 +71,7 @@ export function initGallery(galleryEl, { render, getCode, onEdit, setStatus, fre
           if (code != null) engine.requestStill(fig.dataset.key, code, version).then((url) => showStill(fig, url));
         });
       }
-    }, { root: galleryEl, rootMargin: '200px' });
+    }, { root: null, rootMargin: '200px' });
     galleryEl.querySelectorAll('.example').forEach((fig) => io.observe(fig));
   }
 
@@ -79,9 +83,12 @@ export function initGallery(galleryEl, { render, getCode, onEdit, setStatus, fre
   let playing = null;
   // Stop a playing card once it scrolls out of view: frees the shared sim to resume
   // capturing the stills below and doesn't leave an offscreen program running.
+  // Root is the viewport (null), not galleryEl: the examples page scrolls the
+  // document, so a galleryEl root would never see the card leave (it's always inside
+  // galleryEl) and the played card would block still generation forever.
   const offscreenStop = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.target === playing && !e.isIntersecting) stopPlaying();
-  }, { root: galleryEl });
+  }, { root: null });
   function stopPlaying() {
     if (!playing) return;
     offscreenStop.unobserve(playing);

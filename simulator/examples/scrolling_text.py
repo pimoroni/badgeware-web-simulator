@@ -3,7 +3,7 @@
 
 badge.mode(HIRES)
 
-scroller = text.scroll("Badgeware  *  scrolling marquee  *  ", speed=40)
+scroller = text.scroll("Badgeware  *  scrolling marquee  *  ", speed=40, font_size=4)
 
 while True:
     screen.pen = color.rgb(0, 255, 160)

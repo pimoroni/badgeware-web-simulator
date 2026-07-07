@@ -13,19 +13,14 @@ worker.stopping = false     // true while interrupting the run on purpose
 worker.servicing = false    // true while the request serialiser is draining
 worker.pendingRequest = null // latest stop/run request awaiting service
 
-// Simulated `machine` peripheral state, shared with the WASM module.
-// The C `machine` module reads/writes this object via EM_ASM:
-//   gpio       - last value driven by Pin.value(x), keyed by gpio number
-//   gpio_in    - input states the host may set, keyed by gpio number
-//   pwm        - {freq, duty} keyed by gpio number (duty is a u16, 0..65535)
-//   caselights - normalised 0..1 duty for CL0..CL3 (GPIO0..3)
-//   adc        - ADC sample values (u16) keyed by channel, host-settable
+// Case-light state, mirrored to the host for visualisation. The simulated
+// hardware is now pure MicroPython (simulator/modules in badgeware-wasm), not a
+// C module: machine.py drives the CL0..CL3 PWM channels (GPIO0..3) and forwards
+// each duty change here via js.sim_pwm_set() -> globalThis.sim_pwm_set (below).
+// We keep only the normalised 0..1 caselight levels; the old C bridge that
+// mirrored gpio/pwm/adc via EM_ASM is gone.
 worker.machine = {
-  gpio: {},
-  gpio_in: {},
-  pwm: {},
   caselights: [0, 0, 0, 0],
-  adc: {},
 }
 
 // Snapshot used to avoid posting unchanged caselight values every frame.
@@ -317,29 +312,47 @@ import(new URL(`./${worker.async_backend}/micropython.mjs`, import.meta.url).hre
       }
     }
 
-    // Send the raw RGBA framebuffer to the host for the 3D screen texture. We
-    // transfer a copy so the host can upload it directly (DataTexture) instead
-    // of re-reading our canvas every frame. See badge3d.js uploadFrame().
-    worker.send_frame = (data, width, height) => {
-      const copy = data.slice(0, width * height * 4)   // own, exact-size buffer to transfer
-      worker.postMessage({ frame: { buffer: copy.buffer, width, height } }, [copy.buffer])
+    /* -- Host contract for the pure-Python hardware shims ---------------------
+       The simulated hardware (simulator/modules in badgeware-wasm) is now
+       MicroPython, not C. st7789.py / machine.py / picovector_io.py reach the
+       host through the emscripten `js` module, which proxies to this worker's
+       globalThis (worker === self === globalThis here). We expose the functions
+       those shims call. The build sets globalThis.Module itself, so its HEAPU8
+       is available below. (The old C build called worker.flip_* and read
+       worker.machine directly via EM_ASM; that contract is gone.) */
+
+    // Display: st7789.update() -> js.blitrgba(addr, w, h). `addr` points at the
+    // driver's RGBA framebuffer in the wasm heap; we copy w*h*4 bytes out (the
+    // heap can move when memory grows) and ship them to the host as a frame to
+    // transfer, so it can upload straight to the screen texture (see badge3d.js
+    // uploadFrame). Lores flips are 160x120, hires 320x240 - the host already
+    // handles both sizes.
+    worker.blitrgba = (addr, w, h) => {
+      const heap = globalThis.Module.HEAPU8
+      const copy = heap.slice(addr, addr + w * h * 4)   // own, exact-size buffer to transfer
+      worker.postMessage({ frame: { buffer: copy.buffer, width: w, height: h } }, [copy.buffer])
     }
 
-    // Handle a flip from a 160x120x4 byte buffer
-    worker.flip_lores = (data) => {
-      worker.update_caselights();
-      worker.send_frame(data, 160, 120);
+    // Buttons: machine.py reads js.sim_buttons() as an active-high pressed
+    // bitmask. The host posts the same bitmask via { buttons } (see badgeware.js)
+    // and its bit layout already matches the shim (A=0x10, B=0x08, C=0x04,
+    // UP=0x02, DOWN=0x01, HOME=0x20), so no remapping is needed.
+    worker.sim_buttons = () => worker.input
+
+    // PWM: machine.py's PWM.duty_u16() -> js.sim_pwm_set(gpio, freq, duty).
+    // GPIO0..3 are the case-light channels (CL0..CL3); normalise the u16 duty to
+    // 0..1 and forward changes to the host. Other channels have no host effect.
+    worker.sim_pwm_set = (gpio, freq, duty) => {
+      if (gpio >= 0 && gpio <= 3) {
+        worker.machine.caselights[gpio] = Math.max(0, Math.min(65535, duty)) / 65535
+        worker.update_caselights()
+      }
     }
 
-    // Forward case-light values [v0..v3] (0.0–1.0) to the host
-    worker.set_case_lights = (v0, v1, v2, v3) => {
-      worker.postMessage({ caselights: [v0, v1, v2, v3] });
-    }
-
-    // Handle a flip from a 320x240x4 byte buffer
-    worker.flip_hires = (data) => {
-      worker.update_caselights();
-      worker.send_frame(data, 320, 240);
+    // Backlight: st7789.backlight(value) -> js.backlight(0..1). Forwarded for
+    // host visualisation; the host ignores it if it doesn't dim the screen.
+    worker.backlight = (value) => {
+      worker.postMessage({ backlight: value })
     }
 
     // How long to wait for an interrupted program to actually unwind before we
@@ -448,11 +461,7 @@ except NameError:
     // the user globals added to __main__. Relies on the boot snapshot taken once
     // the instance is ready (see below).
     const softReset = async () => {
-      worker.machine.gpio = {}
-      worker.machine.gpio_in = {}
-      worker.machine.pwm = {}
       worker.machine.caselights = [0, 0, 0, 0]
-      worker.machine.adc = {}
       worker._caselights_last = "0,0,0,0"
       if (worker.update_caselights) worker.update_caselights()
       try {

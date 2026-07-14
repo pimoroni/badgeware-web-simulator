@@ -419,6 +419,26 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
     focusTab(key);
   }
 
+  // Fetch a system file resiliently. Safari can transiently fail a cache-served
+  // fetch during page load (reload button serves subresources from cache without
+  // revalidating); the symptom was the editor staying on its "# Loading…"
+  // placeholder because the swallowed failure left the tab unopened - only cleared
+  // by a fresh address-bar navigation or with the cache disabled (dev tools). Retry,
+  // bypassing the HTTP cache on later attempts, and return null (logged) instead of
+  // failing silently.
+  async function fetchSysFile(path, as) {
+    const url = APP_BASE + 'filesystem' + path;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await fetch(url, attempt ? { cache: 'reload' } : undefined);
+        if (r.ok) return as === 'buffer' ? await r.arrayBuffer() : await r.text();
+      } catch (_) { /* network error - retry below */ }
+      await new Promise((res) => setTimeout(res, 60));
+    }
+    console.warn('openSysFile: could not load', path);
+    return null;
+  }
+
   async function openSysFile(path, transient = false) {
     const ext     = path.slice(path.lastIndexOf('.'));
     const handler = FILE_HANDLERS[ext];
@@ -433,20 +453,20 @@ export function createTabs(panes, { editor, setStatus, flashStatus, notifyRunTar
         return;
       }
       if (transient) evictTransient(key);
+      const text = await fetchSysFile(path, 'text');
+      if (text === null) return;
       try {
-        const text  = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.text(); });
         const uri   = monaco.Uri.parse('badgeware:///sys' + encodeURIComponent(path));
         const model = monaco.editor.createModel(formatForPreview(path, text), langForPath(path), uri);
         openModels.set(key, { source: 'sys', view: 'editor', path, name: baseName(path), model, dirty: false, transient });
         openOrder.push(key);
         if (transient) transientTabKey = key;
-      } catch (_) { return; }
+      } catch (e) { console.warn('openSysFile: could not create model for', path, e); return; }
       focusTab(key);
     } else {
-      try {
-        const buf = await fetch(APP_BASE + 'filesystem' + path).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-        openBinaryTab({ source: 'sys', path }, buf, handler, transient);
-      } catch (_) {}
+      const buf = await fetchSysFile(path, 'buffer');
+      if (buf === null) return;
+      openBinaryTab({ source: 'sys', path }, buf, handler, transient);
     }
     setStatus(path + ' — read-only');
   }

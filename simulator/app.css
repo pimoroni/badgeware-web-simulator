@@ -27,19 +27,20 @@
       /* -- Metrics ------------------------------------------------------ */
       --bar: 40px;   /* height of the chrome bars; square edge of their controls */
 
-      /* Type scale (px->rem conversions live here, not inline). */
-      --text-lg:  1.10rem;   /* help heading */
-      --text:     0.80rem;   /* body */
-      --text-sm:  0.75rem;   /* buttons, tabs, tree rows */
-      --text-xs:  0.65rem;   /* captions, status, fine print */
-      --text-2xs: 0.60rem;   /* section-title labels */
-      --text-3xs: 0.55rem;   /* row badges */
+      /* Type scale. Rem base is 13pt (in line with the brand nav); the old
+         16pt-base values scaled by 16/13, snapped to tidy 0.05 steps. */
+      --text-lg:  1.35rem;   /* help heading */
+      --text:     1rem;      /* body */
+      --text-sm:  0.9rem;    /* buttons, tabs, tree rows */
+      --text-xs:  0.8rem;    /* captions, status, fine print */
+      --text-2xs: 0.75rem;   /* section-title labels */
+      --text-3xs: 0.7rem;    /* row badges */
 
       /* Material Symbols glyph sizes — one set, shared across the UI. */
-      --icon-sm: 0.80rem;    /* inline lock glyphs */
-      --icon:    1.00rem;    /* control-bar icons (run/stop, gallery stop) */
-      --icon-md: 1.10rem;    /* panel-header action icons */
-      --icon-lg: 1.20rem;    /* touch targets (nav arrows, mobile bars) */
+      --icon-sm: 1rem;       /* inline lock glyphs */
+      --icon:    1.25rem;    /* control-bar icons (run/stop, gallery stop) */
+      --icon-md: 1.35rem;    /* panel-header action icons */
+      --icon-lg: 1.5rem;     /* touch targets (nav arrows, mobile bars) */
 
       /* Material Symbols variable-axis presets (set once, referenced below). */
       --glyph:        'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -47,7 +48,7 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html { font-size: 16pt; }   /* rem base — nudge this to scale the whole UI */
+    html { font-size: 13pt; }   /* rem base (matches the brand nav's 1.2rem) — nudge to scale the whole UI */
 
     body {
       background: var(--bg);
@@ -83,15 +84,16 @@
       backdrop-filter: blur(2rem);
       background-color: rgba(235, 245, 255, 0.1);
     }
-    nav#main svg { height: 2.4rem; width: auto; display: block; fill: var(--white); }
+    nav#main svg { height: 2.4rem; width: auto; fill: var(--white); }
     nav#main > div {
       font-size: 1.2rem;
+      line-height: 1.35;
       padding: 0.5rem 2rem;
       box-sizing: border-box;
       margin: 0 auto;
       display: grid;
       grid-gap: 0rem;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto;
       align-items: center;
     }
     nav#main a {
@@ -99,14 +101,23 @@
       text-decoration: none;
       display: inline-block;
       padding: 0.2rem 0.75rem 0.3rem 0.75rem;
-      border-radius: 1rem;
+      border-radius: 2rem;
     }
     nav#main a:first-child { padding-left: 0; }
     nav#main a:not(.buy):hover { text-decoration: underline; }
+    nav#main a .nav-new {
+      vertical-align: -0.2em;
+      margin-left: 0.15rem;
+      font-size: 1.15rem;
+      line-height: 1;
+      color: var(--pink);
+    }
     nav#main a.buy {
       background-color: var(--pink);
       color: var(--white);
       margin-left: 0.5rem;
+      font-weight: 600;
+      padding: 0.3rem 1.1rem 0.4rem;
     }
 
     /* Material Symbols Outlined (Google): the family + ligature setup come from
@@ -323,7 +334,7 @@
     #tab-bar li.transient > span:first-child { font-style: italic; }
     /* dot for unsaved scratch tabs */
     #tab-bar li.dirty > span:first-child::after {
-      content: '●'; font-size: 0.4375rem; color: var(--orange);
+      content: '●'; font-size: 0.55rem; color: var(--orange);
       margin-left: 4px; vertical-align: super;
     }
     /* read-only lock glyph */
@@ -473,7 +484,7 @@
       display: flex; align-items: center; justify-content: center;
       width: 3.4rem; height: 3.4rem; border-radius: 50%;
       background: rgba(255, 255, 255, 0.1); color: var(--white);
-      font-size: 2rem; font-variation-settings: var(--glyph-filled);
+      font-size: 2.45rem; font-variation-settings: var(--glyph-filled);
       backdrop-filter: blur(8px);
       pointer-events: none; transition: opacity 0.15s, transform 0.15s, color 0.15s;
       opacity: 0;   /* hidden until the still has loaded, so the spinner shows through */
@@ -494,12 +505,12 @@
     .example-meta figcaption span { display: block; font-size: var(--text-xs); color: var(--dim);   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .example-meta button {
       flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
-      font-family: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
       padding: 4px 12px; border-radius: 0.35rem; border: 1px solid var(--border);
       background: none; color: var(--faint);
       transition: color 0.15s, background 0.15s, border-color 0.15s;
     }
-    .example-meta button .material-symbols-outlined { font-size: 0.95rem; }
+    .example-meta button .material-symbols-outlined { font-size: 1.15rem; }
     .example-meta button:hover { color: var(--white); border-color: var(--faint); }
 
     /* App cards (apps.html) reuse the example card; the launcher icon sits in the
@@ -759,7 +770,7 @@
       transition: color 0.15s, border-color 0.15s;
     }
     .code-block .copy-btn:hover { color: var(--white); border-color: var(--faint); }
-    .code-block .copy-btn .material-symbols-outlined { font-size: 0.9rem; }
+    .code-block .copy-btn .material-symbols-outlined { font-size: 1.1rem; }
     .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
     .btn {
       display: inline-flex;
@@ -995,7 +1006,7 @@
       border-radius: 25%;
       color: var(--faint);
       font-family: inherit;
-      font-size: 1rem;
+      font-size: 1.25rem;
       line-height: 1;
       cursor: pointer;
       transition: color 0.15s, background 0.15s;
@@ -1243,7 +1254,7 @@
     details.tree-dir > summary:hover { background: var(--hover); color: var(--white); }
 
     .dir-arrow {
-      font-size: 1rem;
+      font-size: 1.25rem;
       color: var(--dim);
       flex-shrink: 0;
       transition: transform 0.12s;

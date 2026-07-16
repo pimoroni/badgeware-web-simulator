@@ -1,5 +1,6 @@
 {
     "files": {
+        "/.DS_Store": 6148,
         "/badgeware/__init__.py": 5420,
         "/badgeware/badge.py": 6399,
         "/badgeware/filesystem.py": 362,
@@ -50,6 +51,7 @@
         "/rom/fonts/yesterday.ppf": 10800,
         "/rom/fonts/yolk.ppf": 7970,
         "/rom/fonts/ziplock.ppf": 13630,
+        "/system/.DS_Store": 6148,
         "/system/apps/30_minutes_to_alpha_centauri/__init__.py": 26306,
         "/system/apps/30_minutes_to_alpha_centauri/assets/cargo.png": 6935,
         "/system/apps/30_minutes_to_alpha_centauri/assets/game_over.png": 37074,
@@ -219,7 +221,7 @@
         "/system/apps/tennis/icon.png": 191,
         "/system/apps/tomato/__init__.py": 5807,
         "/system/apps/tomato/icon.png": 594,
-        "/system/assets/cards.png": 6306,
+        "/system/assets/cards.png": 5877,
         "/system/assets/fonts/DynaPuff-Medium.af": 9688,
         "/system/assets/fonts/IndieFlower-Regular.af": 9756,
         "/system/assets/fonts/MonaSans-Medium.af": 66270,

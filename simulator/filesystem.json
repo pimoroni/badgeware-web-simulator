@@ -1,6 +1,5 @@
 {
     "files": {
-        "/.DS_Store": 6148,
         "/badgeware/__init__.py": 5420,
         "/badgeware/badge.py": 6546,
         "/badgeware/filesystem.py": 362,
@@ -51,7 +50,6 @@
         "/rom/fonts/yesterday.ppf": 10800,
         "/rom/fonts/yolk.ppf": 7970,
         "/rom/fonts/ziplock.ppf": 13630,
-        "/system/.DS_Store": 6148,
         "/system/apps/30_minutes_to_alpha_centauri/__init__.py": 24721,
         "/system/apps/30_minutes_to_alpha_centauri/assets/cargo.png": 6935,
         "/system/apps/30_minutes_to_alpha_centauri/assets/game_over.png": 37074,

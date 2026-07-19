@@ -7,7 +7,7 @@ ROOT = pathlib.Path("simulator/filesystem")
 
 def walk_files(root):
     for path in sorted(root.rglob("*")):
-        if path.is_file():
+        if path.is_file() and not str(path).startswith("."):
             yield path
 
 

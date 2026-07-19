@@ -1,8 +1,6 @@
 # Eat the wakeup button press to prevent it leaking into the menu
 badge.poll()
 
-badge.mode(LORES)
-
 # We expect a launcher menu to be at /system/apps/menu
 # (temporarily auto-launching the world app for rasteriser testing)
 app_to_launch = launch("/system/apps/menu")

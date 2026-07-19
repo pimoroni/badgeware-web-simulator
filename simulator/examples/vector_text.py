@@ -10,7 +10,7 @@ skull = image.load("/system/assets/skull.png")
 mona_sans = font.load("/system/assets/fonts/DynaPuff-Medium.af")
 size = 24
 
-def pen_glyph_renderer(image, parameters, _cursor, measure):
+def pen_glyph_renderer(image, parameters, measure):
   if measure:
     return 0
 
@@ -21,18 +21,18 @@ def pen_glyph_renderer(image, parameters, _cursor, measure):
   return None
 
 
-def skull_glyph_renderer(image, _parameters, cursor, measure):
+def skull_glyph_renderer(image, _parameters, measure):
   if measure:
     return 24
-  image.blit(skull, cursor)
+  image.blit(skull, image.cursor)
   return None
 
 
-def circle_glyph_renderer(image, _parameters, cursor, measure):
+def circle_glyph_renderer(image, _parameters, measure):
   if measure:
     return 12
 
-  image.shape(shape.circle(cursor.x + 6, cursor.y + 7, 6))
+  image.shape(shape.circle(image.cursor.x + 6, image.cursor.y + 7, 6))
   return None
 
 

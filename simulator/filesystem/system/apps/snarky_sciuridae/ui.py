@@ -1,15 +1,15 @@
 
 # load user interface sprites
-icons = SpriteSheet("assets/ui/icons.png", 4, 1)
+icons = image.load("assets/ui/icons.png").spritesheet(4, 1)
 background_day = image.load("assets/background/background_day.png")
 background_dusk = image.load("assets/background/background_dusk.png")
 background_night = image.load("assets/background/background_night.png")
 surround = image.load("assets/ui/tufty_frame_beige.png")
-buttons = SpriteSheet("assets/ui/buttons_48x14.png", 4, 2)
+buttons = image.load("assets/ui/buttons_48x14.png").spritesheet(4, 2)
 scanlines = image.load("assets/ui/overlay_scanlines.png")
 
 # load in the font - font sheet generated from
-screen.font = rom_font.ark
+screen.font = font.ark
 
 # brushes to match pets stats
 stats_brushes = {
@@ -33,7 +33,7 @@ outline_brush_bold = color.rgb(228, 220, 220, 200)
 
 # draw the background scenery
 def background():
-    _, _, _, current_hour, _, _, _ = rtc.datetime()[:7]
+    _, _, _, current_hour, _, _, _ = rtc.datetime()
 
     if current_hour < 5 or current_hour > 21:
         background_image = background_night

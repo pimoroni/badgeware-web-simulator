@@ -1,6 +1,6 @@
 import random
 
-sprites = SpriteSheet("assets/obstacles.png", 2, 1)
+sprites = image.load("assets/obstacles.png").spritesheet(2, 1)
 
 
 class Obstacle:

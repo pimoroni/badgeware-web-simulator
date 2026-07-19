@@ -1,4 +1,4 @@
-import picovector_io as _input
+import _input
 import os
 import builtins
 import machine
@@ -6,7 +6,7 @@ import powman
 import binascii
 
 MODEL = os.uname().machine[9:-17].lower()
-UID = binascii.hexlify(machine.unique_id()).decode("ASCII")
+UID = binascii.hexlify(machine.unique_id()).decode("ascii")
 
 builtins.LORES = 0b00
 builtins.HIRES = 0b01
@@ -17,12 +17,12 @@ builtins.FULL_UPDATE = 0 << 4
 builtins.MEDIUM_UPDATE = 2 << 4
 builtins.DITHER = 1 << 8
 
-builtins.BUTTON_A = 0b010000
-builtins.BUTTON_B = 0b001000
-builtins.BUTTON_C = 0b000100
-builtins.BUTTON_UP = 0b000010
-builtins.BUTTON_DOWN = 0b000001
-builtins.BUTTON_HOME = 0b100000
+builtins.BUTTON_A = machine.Pin.board.BUTTON_A
+builtins.BUTTON_B = machine.Pin.board.BUTTON_B
+builtins.BUTTON_C = machine.Pin.board.BUTTON_C
+builtins.BUTTON_UP = machine.Pin.board.BUTTON_UP
+builtins.BUTTON_DOWN = machine.Pin.board.BUTTON_DOWN
+builtins.BUTTON_HOME = machine.Pin.board.BUTTON_HOME
 
 
 VBAT_SENSE = machine.ADC(machine.Pin.board.VBAT_SENSE)
@@ -122,15 +122,16 @@ class Badge():
         if MODEL == "tufty":
             display.fullres(bool(mode & HIRES))
             display.set_vsync(bool(mode & VSYNC))
+            display.set_framerate(90)
 
         elif MODEL == "badger":
             display.speed((self._current_mode >> 4) & 0xf)
 
         if MODEL == "tufty" or getattr(builtins, "screen", None) is None:
-            font = getattr(getattr(builtins, "screen", None), "font", None)
+            prev_font = getattr(getattr(builtins, "screen", None), "font", None)
             brush = getattr(getattr(builtins, "screen", None), "pen", None)
             builtins.screen = image(display.WIDTH, display.HEIGHT, memoryview(display))
-            screen.font = font if font is not None else rom_font.sins
+            screen.font = prev_font if prev_font is not None else font.sins
             screen.pen = brush if brush is not None else self.default_pen
 
         return None

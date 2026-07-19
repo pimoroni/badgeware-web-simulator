@@ -281,7 +281,7 @@ function openFromHash() {
 
 /* -- Code snippet --------------------------------------------------------- */
 function snippetFor(entry) {
-  const name    = entry.file.replace(/\.(af|ppf)$/i, '');   // load_font drops the extension
+  const name    = entry.file.replace(/\.(af|ppf)$/i, '');   // bare name, no extension
   const sample  = (state.text.length ? state.text : 'Hello, badge!').replace(/"/g, '\\"');
   // Vector fonts take a px size; pixel fonts take an integer scale (both in the
   // same screen.text() argument slot) — matching what the preview shows.
@@ -289,21 +289,30 @@ function snippetFor(entry) {
     ? `, ${Math.round(VECTOR_BASE_PX * state.scale)}`
     : `, ${Math.max(1, Math.round(state.scale))}`;
   const sizeCmt = entry.kind === 'vector' ? '  # size in px' : '  # pixel scale';
+  // Pixel fonts are the built-in ROM set: `font.<name>` loads /rom/fonts/<name>.ppf
+  // directly. Vector fonts are assets, loaded by name via font.load(). (A pixel
+  // name that isn't a valid identifier falls back to font.load.)
+  const isPixel  = entry.kind === 'pixel';
+  const useAttr  = isPixel && /^[A-Za-z_]\w*$/.test(name);
+  const comment  = isPixel
+    ? `# ${name} is a built-in ROM pixel font:`
+    : `# Copy the font to /system/assets/fonts on your badge, then:`;
+  const loadLine = useAttr ? `my_font = font.${name}` : `my_font = font.load("${name}")`;
   return [
-    `# Copy the font to /system/assets/fonts on your badge, then:`,
-    `my_font = load_font("${name}")`,
+    comment,
+    loadLine,
     `screen.font = my_font`,
     `screen.pen = color.white`,
     `screen.text("${sample}", 10, 10${sizeArg})${sizeCmt}`,
   ].join('\n');
 }
 
-/* Very small Python-ish highlighter: comments, strings, and the load_font call. */
+/* Very small Python-ish highlighter: comments, strings, and font.* calls. */
 function highlight(code) {
   return escapeHtml(code)
     .replace(/(#[^\n]*)/g, '<span class="tok-comment">$1</span>')
     .replace(/(&quot;[^&]*&quot;)/g, '<span class="tok-str">$1</span>')
-    .replace(/\b(load_font)\b/g, '<span class="tok-fn">$1</span>');
+    .replace(/\b(font\.\w+)\b/g, '<span class="tok-fn">$1</span>');
 }
 
 function renderSnippet(entry) {

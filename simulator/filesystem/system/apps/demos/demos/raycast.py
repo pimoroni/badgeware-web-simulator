@@ -77,7 +77,7 @@ def clear(buf, length):
 d_proj = (screen.width / 2) / math.tan(player.fov * (math.pi / 180) / 2)
 
 
-# @micropython.native  - also unavailable in the WASM build; runs as plain Python.
+@micropython.native
 def update():
   player.pos = vec2(
     math.sin(badge.ticks / 2000) * 2 + 11,

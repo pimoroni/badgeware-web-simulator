@@ -7,4 +7,5 @@ class PCF85063A:
     def datetime(self, *args, **kwargs):
         if len(args):
             pass
-        return time.localtime()
+        year, month, day, hour, minute, second, weekday, _ = time.localtime()
+        return (year, month, day, hour, minute, second, weekday)

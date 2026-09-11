@@ -608,6 +608,8 @@ export const MEMBERS = {
       doc: 'Regular polygon. Args: centre, radius, sides (int). Sides clamp to 30-120.' },
     { label: 'custom',           kind: 'Function', insertText: 'custom(${1:contour})',
       doc: 'Custom shape from one or more contours (one positional arg per contour; extra contours are holes). Each is a list of vec2, or an array("f") of flat x, y pairs.' },
+    { label: 'combine',          kind: 'Function', insertText: 'combine(${1:shapes})',
+      doc: 'One compound shape from several, each source transform baked into its copy. Draw with fill_rule = image.NON_ZERO to fill the union (EVEN_ODD leaves overlaps hollow). Rasterises in one pass, capped at 1024 points.' },
     // -- Shape instance methods ------------------------------------------------
     { label: 'stroke',           kind: 'Method', insertText: 'stroke(${1:width})',
       doc: 'Replace this shape with its stroked outline. Returns self.\nArgs: width (float), flags (OR of ALIGN_*/PATH_*/JOIN_*/CAP_*), miter_limit=4.0.' },
@@ -757,6 +759,12 @@ export const MEMBERS = {
   image: [
     { label: 'load',       kind: 'Method',   insertText: 'load(${1:path_or_bytes})',
       doc: 'Load a PNG/JPEG/GIF from a path or buffer. Returns an image, or an indexed_image when palettised. Optional width, height decode straight to that size (PNG/JPEG only).' },
+    { label: 'qr',         kind: 'Method',   insertText: 'qr(${1:text})',
+      doc: 'Encode text as a QR code: a two-colour palette image, one pixel per module, with a border-module quiet zone. Scale it up when blitting rather than here. Args: text, ecc=image.QR_MEDIUM, border=4. Raises ValueError if the text is too long.',
+      signature: { label: 'qr(text, ecc=image.QR_MEDIUM, border=4)', params: [
+        { label: 'text', doc: 'The string to encode.' },
+        { label: 'ecc=image.QR_MEDIUM', doc: 'Error correction level: image.QR_LOW / QR_MEDIUM / QR_QUARTILE / QR_HIGH (ascending redundancy, larger code).' },
+        { label: 'border=4', doc: 'Quiet-zone width in modules on each side (default 4).' } ] } },
     { label: 'load_into',  kind: 'Method', insertText: 'load_into(${1:path_or_bytes})',
       doc: 'Load a PNG/JPEG into this buffer in place (no allocation).' },
     { label: 'window',     kind: 'Method', insertText: 'window(${1:area})',
@@ -860,6 +868,10 @@ export const MEMBERS = {
     { label: 'BOTTOM',    kind: 'Constant', doc: 'Text align: bottom (vertical).' },
     { label: 'CLIP',      kind: 'Constant', doc: 'Text overflow: clip to bounds.' },
     { label: 'ELLIPSES',  kind: 'Constant', doc: 'Text overflow: truncate with an ellipsis.' },
+    { label: 'QR_LOW',      kind: 'Constant', doc: 'QR error correction: recovers ~7%.' },
+    { label: 'QR_MEDIUM',   kind: 'Constant', doc: 'QR error correction: recovers ~15% (image.qr default).' },
+    { label: 'QR_QUARTILE', kind: 'Constant', doc: 'QR error correction: recovers ~25%.' },
+    { label: 'QR_HIGH',     kind: 'Constant', doc: 'QR error correction: recovers ~30%.' },
   ],
 
   // -- Badgeware: loop --------------------------------------------------------

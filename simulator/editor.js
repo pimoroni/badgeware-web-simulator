@@ -166,6 +166,7 @@ function configureMonaco(monaco) {
       case 'screen': {
         if (method === 'load' || method === 'window' || method === 'sprite') return MEMBERS.image;
         if (method === 'spritesheet') return MEMBERS.spritesheet;
+        if (method === 'qr') return MEMBERS.indexed_image;
         return null;
       }
       default:           return null;

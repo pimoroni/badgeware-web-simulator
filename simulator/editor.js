@@ -279,7 +279,7 @@ function configureMonaco(monaco) {
         return { suggestions: [] };
       }
 
-      // Global completions
+      // Global + keyword-argument completions
       const word  = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber,
@@ -287,7 +287,37 @@ function configureMonaco(monaco) {
         endLineNumber:   position.lineNumber,
         endColumn:       word.endColumn,
       };
-      return { suggestions: BADGEWARE_GLOBALS.map(m => toCompletionItem(m, range, monaco)) };
+
+      // Inside a call, offer its keyword arguments (name=) ahead of the globals,
+      // taken from the explicit signature's defaulted parameters.
+      const kwargItems = [];
+      const call = findCall(linePrefix);
+      if (call) {
+        const entry = entryForCall(call, model.getValue());
+        const sigs  = entry && signaturesForEntry(entry);
+        if (sigs) {
+          const seen = new Set();
+          for (const sig of sigs) {
+            for (const param of sig.parameters) {
+              if (typeof param.label !== 'string' || !param.label.includes('=')) continue;
+              const name = param.label.slice(0, param.label.indexOf('=')).trim();
+              if (seen.has(name)) continue;
+              seen.add(name);
+              kwargItems.push({
+                label:         name + '=',
+                kind:          monaco.languages.CompletionItemKind.Property,
+                documentation: param.documentation,
+                insertText:    name + '=',
+                sortText:      '0' + name,
+                range,
+              });
+            }
+          }
+        }
+      }
+
+      const globalItems = BADGEWARE_GLOBALS.map(m => toCompletionItem(m, range, monaco));
+      return { suggestions: [...kwargItems, ...globalItems] };
     },
   });
 

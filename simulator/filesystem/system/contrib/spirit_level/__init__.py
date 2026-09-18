@@ -24,7 +24,7 @@ samples = []
 
 level = rect(40, 20, screen.width - 80, 70)
 
-screen.font = rom_font.futile
+screen.font = font.futile
 BACKGROUND = color.rgb(238, 170, 2)
 
 def update():

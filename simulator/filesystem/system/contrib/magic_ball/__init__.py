@@ -95,7 +95,7 @@ def update():
     screen.clear()
 
     die_image = image(150, 150)
-    die_image.font = rom_font.nope
+    die_image.font = font.nope
 
     for ball in balls:
         ball.update()

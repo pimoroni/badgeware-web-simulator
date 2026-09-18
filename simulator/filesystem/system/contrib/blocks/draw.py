@@ -31,8 +31,8 @@ D_BY = (SH - D_BH) // 2
 CX = SW // 2
 CY = SH // 2
 
-small_font = rom_font.winds
-large_font = rom_font.ignore
+small_font = font.winds
+large_font = font.ignore
 
 # Dr. Mario fixed colours: red, blue, yellow — always the same
 DR_COLORS = [

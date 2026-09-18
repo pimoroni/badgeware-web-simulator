@@ -5,7 +5,7 @@
 import math
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 while True:
   screen.antialias = image.X4

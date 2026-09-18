@@ -4,7 +4,7 @@
 import math
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 def backdrop():
   # colourful spinning blobs for the effect to chew on

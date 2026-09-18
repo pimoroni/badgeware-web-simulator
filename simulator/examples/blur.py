@@ -5,7 +5,7 @@ import math
 import random
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 while True:
   random.seed(1)

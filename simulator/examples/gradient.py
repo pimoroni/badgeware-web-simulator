@@ -5,7 +5,7 @@
 import math
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 # colour stops are constant, so define them once. each stop is (position, color)
 # with position 0..1, up to 16 stops.

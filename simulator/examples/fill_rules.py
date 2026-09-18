@@ -5,7 +5,7 @@
 import math
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 # A unit 5-point star traced as a single self-intersecting path (a pentagram,
 # the {5/2} star polygon): each edge skips a point, so the centre pentagon is

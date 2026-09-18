@@ -5,7 +5,7 @@
 import math
 
 badge.mode(LORES | VSYNC)
-screen.font = rom_font.sins
+screen.font = font.sins
 
 def chevron(cx, cy, s):
   # a sharp down-pointing V; the apex makes the line join obvious

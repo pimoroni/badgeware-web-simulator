@@ -1,33 +1,19 @@
-# text.tokenise() + text.draw() lay out word-wrapped rich text inside a rect.
-# [tags] in the string call your glyph_renderers - here to change pen colour
-# mid-sentence and to blit an inline skull image.
+# screen.text() word-wraps rich text inside a rect. [tags] in the string call
+# inline glyph renderers - the built-in [pen:r,g,b] changes pen colour
+# mid-sentence, [sprite:name] blits an image registered with add_sprite(), and
+# add_glyph() registers your own.
 
 import math
 
 badge.mode(HIRES)
 
 skull = image.load("/system/assets/skull.png")
-screen.font = rom_font.compass
+add_sprite("skull", skull)
+screen.font = font.compass
 
 
-def pen_glyph_renderer(_image, parameters, measure):
-  if measure:
-    return 0
-
-  r = int(parameters[0])
-  g = int(parameters[1])
-  b = int(parameters[2])
-  screen.pen = color.rgb(r, g, b)
-  return None
-
-
-def skull_glyph_renderer(image, _parameters, measure):
-  if measure:
-    return 24
-  image.blit(skull, image.cursor)
-  return None
-
-
+# A renderer is fn(image, params, measure): it returns its advance width when
+# measuring, else draws at image.cursor and returns None.
 def circle_glyph_renderer(image, _parameters, measure):
   if measure:
     return 12
@@ -36,21 +22,11 @@ def circle_glyph_renderer(image, _parameters, measure):
   return None
 
 
-nope = rom_font.nope
-
-
-glyph_renderers = {
-  "skull": skull_glyph_renderer,
-  "pen": pen_glyph_renderer,
-  "circle": circle_glyph_renderer
-}
+add_glyph("circle", circle_glyph_renderer)
 
 
 while True:
-  i = round(badge.ticks / 200)
-  i %= 10
-
-  message = """[pen:180,150,120]Upon the mast I gleam and grin, A sentinel of bone and sin. Wind and thunder, night and hull- None fear the sea like a [pen:230,220,200]pirate skull[pen:180,150,120][skull].
+  message = """[pen:180,150,120]Upon the mast I gleam and grin, A sentinel of bone and sin. Wind and thunder, night and hull- None fear the sea like a [pen:230,220,200]pirate skull[pen:180,150,120][sprite:skull].
 """
 
   screen.pen = color.rgb(100, 255, 100, 150)
@@ -59,9 +35,8 @@ while True:
   y = 5
   width = math.sin(badge.ticks / 500) * 50 + 200
   height = 220
-  tokens = text.tokenise(screen, message, glyph_renderers)
   bounds = rect(x, y, width, height)
-  text.draw(screen, tokens, bounds, line_spacing=1, word_spacing=1.05)
+  screen.text(message, bounds, line_height=1, word_spacing=1.05)
 
   screen.pen = color.rgb(60, 80, 100, 100)
   screen.line(bounds.x, bounds.y, bounds.x + bounds.w, bounds.y)
